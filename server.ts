@@ -89,7 +89,7 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY, ROMANCE_KEYWORDS, FRIENDSHIP_KEYWORDS, SARCASM_INDICATORS, BANTER_MARKERS, SARCASM_INDICATORS, BANTER_NICKNAMES, SARCASM_INDICATORS, BANTER_INSULT_PATTERNS, INSULT_ATTACK_PATTERNS } from './server/modules/constants.js';
+import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY, ROMANCE_KEYWORDS, FRIENDSHIP_KEYWORDS, SARCASM_INDICATORS, BANTER_MARKERS, BANTER_NICKNAMES, BANTER_INSULT_PATTERNS, INSULT_ATTACK_PATTERNS, AUTONOMY_CYCLE_MS, IDLE_SKIP_MIN, CONTACT_BASE_THRESHOLD, CONTACT_IGNORE_PENALTY, CONTACT_MAX_THRESHOLD, CONTACT_RELIEF, CONTACT_DAILY_CAP, QUIET_HOURS_RATE_MULTIPLIER, QUIET_HOURS_THRESHOLD_BOOST, RHYTHM_WINDOW_DAYS, RHYTHM_EMA_ALPHA, MAX_PENDING_UNREAD, CLOSURE_GRACE_MIN, CLOSURE_RATE_MULTIPLIER, POST_QUIET_COOLDOWN_MIN, POST_QUIET_THRESHOLD_BOOST, POST_QUIET_MAX_MSGS } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -192,8 +192,6 @@ let _lastTemperature: number = 0.7;
 let _strategyHistory: StrategyType[] = [];  // v1.1: 策略多样性保护
 
 // ── v1.5: 冲突频率追踪 (Conflict Frequency Tracking) ──
-const CONFLICT_WINDOW_MS = 15 * 60_000;     // 15 分钟窗口
-const CONFLICT_ABUSE_THRESHOLD = 3;          // 窗口内 3 次触发边界升级
 let _recentConflictTimestamps: number[] = [];
 let _boundaryEscalated = false;
 
@@ -227,7 +225,6 @@ const valueSystem: ValueSystem = createValueSystem();
 // 语气自主学习
 const toneState = loadToneState();
 let _lastConsolidationRound = 0;
-const CONSOLIDATION_INTERVAL = 10; // 每 10 轮对话整合一次
 
 // ==================== 语义记忆 & 三阶段学习 ====================
 const semanticMemory = new Map<string, MemoryRecord>();
@@ -4264,7 +4261,6 @@ const _recentMessages: string[] = []; // 最近消息缓冲，供双向性分析
 
 // ==================== Autonomy Pilot v2.0：自主循环（节律感知版） ====================
 const AUTONOMY_STATE_FILE = './memories/autonomy_state.json';
-const AUTONOMY_CYCLE_MS = 10 * 60 * 1000; // 10 分钟
 const IDLE_SKIP_MIN = 8;                   // 空闲不足此分钟数跳过（v1.3: 5→8）
 
 // ── v2.0 调校参数 ──
@@ -4295,8 +4291,6 @@ const DEFAULT_RHYTHM: Record<number, number> = {
 };
 
 // v2.1: 持续追踪每小时活跃模式 — 14天滚动窗口 + EMA平滑
-const RHYTHM_WINDOW_DAYS = 14;
-const RHYTHM_EMA_ALPHA = 0.25;
 
 let _activityTracker: HourlyActivityTracker = {
     activeDays: Array.from({ length: 24 }, () => new Set<string>()),
