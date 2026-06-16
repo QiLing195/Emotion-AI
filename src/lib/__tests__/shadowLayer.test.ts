@@ -284,7 +284,7 @@ describe('ShadowLayer — Phase 1: 策略证据', () => {
     const stats = {
       'empathize': { uses: 15, successes: 10 },
       'boundary': { uses: 2, successes: 1 },
-      'boundary': { uses: 1, successes: 0 },
+    };
     shadow.detectTraits(ts, null, stats, 50);
 
     const swd = shadow.getState().traits.find(t => t.id === 'self_worth_doubt')!;
@@ -495,5 +495,54 @@ describe('ShadowLayer — Phase 3: 持久化', () => {
     const restored = s2.getState().traits.find(t => t.id === 'abandonment_fear')!;
     expect(restored.confidence).toBe(original.confidence);
     expect(restored.evidence.length).toBe(original.evidence.length);
+  });
+});
+
+
+// ════════════════════════════════════════════════════════════
+// Phase 3: 自我模型关联
+// ════════════════════════════════════════════════════════════
+
+describe('ShadowLayer — Phase 3: 自我模型关联', () => {
+  it('无活跃 Shadow → 一致性高', () => {
+    const shadow = new ShadowLayer();
+    const patterns = [
+      { label: '善于表达', category: 'expression', confidence: 0.8 },
+      { label: '渴望亲密', category: 'desire', confidence: 0.7 },
+    ];
+    const report = shadow.getSelfShadowContrast(patterns);
+    expect(report.consistencyScore).toBeGreaterThanOrEqual(0.7);
+    expect(report.unknownShadows).toHaveLength(0);
+    expect(report.knownStrengths.length).toBeGreaterThan(0);
+  });
+
+  it('有证据但未激活 → 报告仍可生成', () => {
+    const shadow = new ShadowLayer();
+    // 积累一些证据（但不足以激活）
+    for (let round = 50; round <= 200; round += 50) {
+      const ts = makeThoughtNodes([
+        { type: 'doubt', emotionalWeight: 0.9, content: `d-${round}-1` },
+        { type: 'doubt', emotionalWeight: 0.9, content: `d-${round}-2` },
+        { type: 'doubt', emotionalWeight: 0.9, content: `d-${round}-3` },
+      ]);
+      shadow.detectTraits(ts, null, null, round);
+    }
+
+    const fon = shadow.getState().traits.find(t => t.id === 'fear_of_neglect')!;
+    expect(fon.evidence.length).toBeGreaterThan(0);
+
+    const patterns = [{ label: '逻辑分析', category: 'expression', confidence: 0.8 }];
+    const report = shadow.getSelfShadowContrast(patterns);
+    expect(typeof report.consistencyScore).toBe('number');
+    expect(report.knownStrengths.length).toBeGreaterThan(0);
+  });
+
+  it('getRelatedSelfCategories 映射正确', () => {
+    const shadow = new ShadowLayer();
+    // 无活跃 trait 时 consistency 高
+    const report = shadow.getSelfShadowContrast([]);
+    expect(report.consistencyScore).toBe(0.8);
+    expect(report.blindSpots).toHaveLength(0);
+    expect(report.unknownShadows).toHaveLength(0);
   });
 });

@@ -500,10 +500,65 @@ export class ShadowLayer {
       return sum + val * t.confidence;
     }, 0) / totalConf;
   }
+  // ── Phase 3: 自我模型关联 ──
+
+  getSelfShadowContrast(selfPatterns: { label: string; category: string; confidence: number }[]): SelfShadowReport {
+    const active = this.getActiveTraits();
+    const report: SelfShadowReport = {
+      knownStrengths: [],
+      unknownShadows: [],
+      blindSpots: [],
+      consistencyScore: 0,
+    };
+    const positiveCategories = ['expression', 'desire', 'vulnerability'];
+    report.knownStrengths = selfPatterns
+      .filter(p => positiveCategories.includes(p.category) && p.confidence > 0.5)
+      .map(p => p.label);
+    report.unknownShadows = active.map(t => t.label);
+    for (const trait of active) {
+      const relatedCategories = this.getRelatedSelfCategories(trait.id);
+      const hasAwareness = selfPatterns.some(
+        p => relatedCategories.includes(p.category) && p.confidence > 0.4
+      );
+      if (!hasAwareness) {
+        report.blindSpots.push({
+          shadow: trait.label, missingAwareness: relatedCategories, tension: trait.confidence,
+        });
+      }
+    }
+    if (active.length === 0) {
+      report.consistencyScore = 0.8;
+    } else {
+      const awarenessRatio = (active.length - report.blindSpots.length) / Math.max(active.length, 1);
+      report.consistencyScore = Math.round(Math.max(0.2, awarenessRatio) * 100) / 100;
+    }
+    return report;
+  }
+
+  private getRelatedSelfCategories(traitId: string): string[] {
+    const map: Record<string, string[]> = {
+      control: ['boundary', 'expression'],
+      fear_of_neglect: ['vulnerability', 'desire'],
+      intimacy_ambivalence: ['vulnerability', 'desire'],
+      self_worth_doubt: ['vulnerability', 'expression'],
+      repetition_ennui: ['expression', 'desire'],
+      abandonment_fear: ['vulnerability', 'reaction'],
+    };
+    return map[traitId] || [];
+  }
+
 }
 
 // ════════════════════════════════════════════════════════════
 // 4. 全局单例
 // ════════════════════════════════════════════════════════════
+
+
+export interface SelfShadowReport {
+  knownStrengths: string[];
+  unknownShadows: string[];
+  blindSpots: { shadow: string; missingAwareness: string[]; tension: number }[];
+  consistencyScore: number;
+}
 
 export const shadowLayer = new ShadowLayer();
