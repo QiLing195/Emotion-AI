@@ -274,3 +274,13 @@ export const CONTACT_IGNORE_PENALTY = 0.05;
 export const CONTACT_MAX_THRESHOLD = 0.85;
 export const CONTACT_RELIEF = 0.15;
 export const CONTACT_DAILY_CAP = 3;
+
+// ═══ 更多自主循环常量 ═══
+export const QUIET_HOURS_RATE_MULTIPLIER = 0.2;
+export const QUIET_HOURS_THRESHOLD_BOOST = 0.15;
+export const MAX_PENDING_UNREAD = 2;
+export const CLOSURE_GRACE_MIN = 180;
+export const CLOSURE_RATE_MULTIPLIER = 0.3;
+export const POST_QUIET_COOLDOWN_MIN = 60;
+export const POST_QUIET_THRESHOLD_BOOST = 0.15;
+export const POST_QUIET_MAX_MSGS = 1;
