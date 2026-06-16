@@ -1312,7 +1312,7 @@ curl -X POST http://localhost:3000/event \
 | **S5/S8 强连接激活** | ✅ 已实现 | aiCoordinator 已直接调用 conflictManager + contextAwareness，pipelineHooks 提供便捷封装 |
 | **S7 价值→策略连接** | ✅ 已实现 | extractActiveValues() -> StrategyContext -> 价值观调制策略权重 |
 | **W7/W8 弱连接** | ✅ 已实现 | coordinator 管道中 conflict->repair + pendingDiscoveries->share 已串联 |
-| **emotionEngine alpha 动态化** | 🟢 低 | S6 仅完成 lossAversion 个性化，alpha 值仍为全局常量 |
+| **emotionEngine alpha 动态化** | ✅ 已实现 | computePersonalizedAlphas() — alphaV/alphaA/alphaE 由 empathy/resilience/sensitivity/trust 动态计算 |
 | **global state 消除** | 🟢 低 | `curiosity/` 模块仍有模块级依赖注入变量 |
 | **public/index.html** | ✅ 已修复 | 旧版 v0.8 原型已删除 (2026-06-16) |
 | **data/ 清理** | 🟢 低 | 45MB root-owned 文件，需 `sudo rm -rf data/`（跳过，无 sudo 权限） |
