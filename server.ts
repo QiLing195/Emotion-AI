@@ -205,10 +205,6 @@ function detectConflictSignals(userText: string): number {
   return count;
 }
 
-function hasRecoverySignal(userText: string): boolean {
-  return RECOVERY_KEYWORDS.some(p => p.test(userText));
-}
-
 function updateConflictFrequency(signalCount: number, now: number): number {
   if (signalCount > 0) {
     _recentConflictTimestamps.push(now);
