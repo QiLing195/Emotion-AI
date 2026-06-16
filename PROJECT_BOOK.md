@@ -1313,7 +1313,7 @@ curl -X POST http://localhost:3000/event \
 | **S7 价值→策略连接** | ✅ 已实现 | extractActiveValues() -> StrategyContext -> 价值观调制策略权重 |
 | **W7/W8 弱连接** | ✅ 已实现 | coordinator 管道中 conflict->repair + pendingDiscoveries->share 已串联 |
 | **emotionEngine alpha 动态化** | ✅ 已实现 | computePersonalizedAlphas() — alphaV/alphaA/alphaE 由 empathy/resilience/sensitivity/trust 动态计算 |
-| **global state 消除** | 🟢 低 | `curiosity/` 模块仍有模块级依赖注入变量 |
+| **global state 消除** | ✅ 已实现 | curiosity/state.ts 新增 getCuriosityInstance()/resetCuriosityState() 访问器，消除不可测试的模块级绑定 |
 | **public/index.html** | ✅ 已修复 | 旧版 v0.8 原型已删除 (2026-06-16) |
 | **data/ 清理** | 🟢 低 | 45MB root-owned 文件，需 `sudo rm -rf data/`（跳过，无 sudo 权限） |
 | **emotionOptimizer 注释偏差** | ✅ 已修复 | `computeArousalUpdate` L85 注释写"唤醒适度降低（放松）"，但公式 `alphaA * error * 0.8` 在 error>0 时产出正增量（唤醒上升）。实际语义：正面事件也提升唤醒，只是幅度为负面的 80%。2026-06-16 修正注释。 |

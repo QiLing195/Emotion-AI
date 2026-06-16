@@ -75,7 +75,13 @@ export class CuriosityState {
 // 全局单例 — 向后兼容旧代码
 const _instance = new CuriosityState();
 
-// 兼容旧 API 的导出
+// 🆕 访问器函数（可测试、可重置）
+export function getCuriosityInstance(): CuriosityState { return _instance; }
+export function getDiscoveries() { return _instance.discoveries; }
+export function getInterestModel() { return _instance.interestModel; }
+export function resetCuriosityState(): void { _instance.reset(); }
+
+// 兼容旧 API 的直接导出（过渡期保留，新代码请用访问器）
 export const discoveries = _instance.discoveries;
 export const interestModel = _instance.interestModel;
 
