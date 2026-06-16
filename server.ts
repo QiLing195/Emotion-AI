@@ -213,6 +213,7 @@ let _memSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let _memPeriodicTimer: ReturnType<typeof setInterval> | null = null;
 
 import { saveMemory, loadMemory, saveEpisodicMemory, saveValueSystem, saveWorldModel, loadWorldModel, saveSelfModel, loadSelfModel, saveLayer4State, loadLayer4State, saveAutonomyState, loadAutonomyState } from './server/modules/persistence.js';
+import { consequentValence } from './server/modules/conflictUtils.js';
 
 
 

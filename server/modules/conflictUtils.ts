@@ -20,3 +20,10 @@ export function getPhase(tick: number): number {
     if (tick < 2000) return 2;
     return 3;
 }
+
+export function consequentValence(consequent: string): number {
+    if (consequent.includes('关怀') || consequent.includes('在乎') || consequent.includes('爱')) return 1;
+    if (consequent.includes('疏远') || consequent.includes('冷落') || consequent.includes('抛弃')) return -1;
+    if (consequent.includes('操控') || consequent.includes('利用')) return -0.8;
+    return 0;
+}
