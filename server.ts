@@ -487,12 +487,6 @@ function updateMemory(phrase: string, valence: number): void {
     saveMemory();
 }
 
-function getPhase(tick: number): number {
-    if (tick < 500) return 1;
-    if (tick < 2000) return 2;
-    return 3;
-}
-
 function canSelfUnderstand(phrase: string, tick: number): boolean {
     const record = semanticMemory.get(phrase);
     if (!record) return false;
