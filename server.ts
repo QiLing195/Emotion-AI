@@ -173,26 +173,7 @@ let _strategyHistory: StrategyType[] = [];  // v1.1: 策略多样性保护
 let _recentConflictTimestamps: number[] = [];
 let _boundaryEscalated = false;
 
-function detectConflictSignals(userText: string): number {
-  let count = 0;
-  for (const pat of CONFLICT_KEYWORDS) {
-    if (pat.test(userText)) { count++; break; } // 只计最强信号
-  }
-  return count;
-}
 
-function updateConflictFrequency(signalCount: number, now: number): number {
-  if (signalCount > 0) {
-    _recentConflictTimestamps.push(now);
-  }
-  // 清理窗口外旧记录
-  _recentConflictTimestamps = _recentConflictTimestamps.filter(
-    t => now - t < CONFLICT_WINDOW_MS,
-  );
-  // 恢复检测：用户表达善意 → 重置
-  // （在 chat handler 中调用 hasRecoverySignal 后手动重置）
-  return _recentConflictTimestamps.length;
-}
 
 /** 策略效果评分：key = "strategy:valence_bucket" */
 const strategyEffectiveness: Map<string, StrategyScore> = new Map();
@@ -813,11 +794,6 @@ function extractBeliefsFromPatterns(): void {
 }
 
 /** 信念后果描述的情感方向 */
-function consequentValence(consequent: string): number {
-    if (consequent.includes('疏远') || consequent.includes('操纵') || consequent.includes('被伤') || consequent.includes('失望')) return -1;
-    if (consequent.includes('关怀') || consequent.includes('信任') || consequent.includes('温暖') || consequent.includes('安全')) return 1;
-    return 0;
-}
 
 // ==================== v0.8: 因果推理 ====================
 
