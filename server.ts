@@ -2872,13 +2872,6 @@ interface NegationRule {
     flipTo: 'negative' | 'positive';
 }
 
-const NEGATION_RULES: NegationRule[] = [
-    { negWords: ['不', '没', '没有', '别', '不要'], targetWords: ['爱', '喜欢', '可爱', '好', '想', '要', '开心', '漂亮', '棒', '善良', '温柔', '重要'], flipTo: 'negative' },
-    { negWords: ['不能不', '不得不', '不会不'], targetWords: ['爱', '喜欢', '好'], flipTo: 'positive' },
-    { negWords: ['一点都不', '完全不', '根本不', '丝毫不'], targetWords: ['爱', '喜欢', '可爱', '好', '开心', '漂亮', '温柔', '重要'], flipTo: 'negative' },
-    { negWords: ['只会', '不过是', '只不过'], targetWords: ['装', '作', '假', '虚伪', '可爱', '撒娇'], flipTo: 'negative' },
-    { negWords: [], targetWords: ['讨厌', '恨', '烦死了', '恶心', '滚', '去死', '废物', '傻逼', '神经病', '脑残', '白痴', '智障', '蠢货', '垃圾', '混蛋'], flipTo: 'negative' },
-];
 
 function detectNegationAndCorrect(text: string, originalValence: number): number {
     let correctedValence = originalValence;
@@ -3475,12 +3468,6 @@ interface PhaseState {
     phaseKeyEvents: string[];      // 关键事件词记录
 }
 
-const PHASE_DURATION_THRESHOLDS = {
-    R1: { min: 0, max: 90 },     // 0-3个月
-    R2: { min: 90, max: 365 },   // 3-12个月
-    R3: { min: 180, max: 730 },  // 6个月-2年
-    R4: { min: 730, max: Infinity },
-};
 
 // 关键事件词 → 阶段转移暗示
 const PHASE_KEY_EVENTS: Record<string, PhaseId | null> = {
