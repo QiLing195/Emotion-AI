@@ -17,15 +17,16 @@ export function registerDataRoutes(
   clamp: (v: number, lo: number, hi: number) => number,
   _latestNarrative: string,
   computeNineEmotions: any,
-  readEmotion: any,
+  readEmotion: any
 ): void {
 app.get('/api/metrics', (req, res) => {
     const full = buildFullResponse(core, layer2);
-    res.json(metrics.getSnapshot(
+    const snap = metrics.getSnapshot(
         core.valence,
         core.arousal,
         full.dominant || 'neutral',
-    ));
+    );
+    res.json(snap);
 });
 
 // ==================== v1.1: 人格/记忆/价值/身份 API ====================
