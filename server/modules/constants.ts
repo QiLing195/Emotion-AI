@@ -87,3 +87,21 @@ export const FRIENDSHIP_KEYWORDS = [
     /约饭|开黑|逛街|喝酒|聚聚|好久不见|改天聚|出来坐坐/,
     /开黑|打游戏|上分|组队|团建|聚会/,
 ];
+
+export const BANTER_MARKERS = [/哈哈|233|😂|🤣|笑死|笑尿|我笑了|开玩笑|逗你(的|玩)/];;
+
+export const BANTER_NICKNAMES = [/兄弟|老铁|闺蜜|哥们|姐妹|大姐|老弟|同志/];;
+
+export const BANTER_INSULT_PATTERNS = [/你[个这].*[傻笨呆废]|菜鸡|弱鸡|垃圾.*(你|啊|了)|不行啊你/];;
+
+export const INSULT_ATTACK_PATTERNS = [/你.*(就是|真|太).*[傻笨蠢废烂]|你.*(不配|没资格|差远了)/];;
+
+export const SARCASM_INDICATORS: [RegExp, number][] = [
+    [/😅|🙃|🤡/,                             0.40],
+    [/呵呵/,                                  0.35],
+    [/[。！]\.{3,}|[。！]\.{2,}$/,            0.30],  // "厉害。。"
+    [/你[好真][棒行厉害牛]啊/,                0.25],   // "你好棒啊"（讽刺）
+    [/就这|就这就这/,                         0.30],
+    [/典|太典了|经典/,                        0.25],
+    [/不会吧不会吧/,                          0.30],
+];;

@@ -89,7 +89,7 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY, ROMANCE_KEYWORDS, FRIENDSHIP_KEYWORDS } from './server/modules/constants.js';
+import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY, ROMANCE_KEYWORDS, FRIENDSHIP_KEYWORDS, SARCASM_INDICATORS, BANTER_MARKERS, SARCASM_INDICATORS, BANTER_NICKNAMES, SARCASM_INDICATORS, BANTER_INSULT_PATTERNS, INSULT_ATTACK_PATTERNS } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -2123,15 +2123,6 @@ const EMOJI_MAP: Record<string, { valence: number; arousal: number; dominance: n
 };
 
 // ─── 阴阳怪气检测特征 ───
-const SARCASM_INDICATORS: [RegExp, number][] = [
-    [/😅|🙃|🤡/,                             0.40],
-    [/呵呵/,                                  0.35],
-    [/[。！]\.{3,}|[。！]\.{2,}$/,            0.30],  // "厉害。。"
-    [/你[好真][棒行厉害牛]啊/,                0.25],   // "你好棒啊"（讽刺）
-    [/就这|就这就这/,                         0.30],
-    [/典|太典了|经典/,                        0.25],
-    [/不会吧不会吧/,                          0.30],
-];
 
 /** Emoji提取 */
 function extractEmoji(text: string): { valence: number; arousal: number; dominance: number }[] {
@@ -2452,10 +2443,6 @@ function classifyRelationship(text: string): { romanceScore: number; friendshipS
 }
 
 // ─── 互损 vs 贬低区分 ───
-const BANTER_MARKERS = [/哈哈|233|😂|🤣|笑死|笑尿|我笑了|开玩笑|逗你(的|玩)/];
-const BANTER_NICKNAMES = [/兄弟|老铁|闺蜜|哥们|姐妹|大姐|老弟|同志/];
-const BANTER_INSULT_PATTERNS = [/你[个这].*[傻笨呆废]|菜鸡|弱鸡|垃圾.*(你|啊|了)|不行啊你/];
-const INSULT_ATTACK_PATTERNS = [/你.*(就是|真|太).*[傻笨蠢废烂]|你.*(不配|没资格|差远了)/];
 
 function detectBanter(text: string): { isBanter: boolean; banterScore: number } {
     let score = 0;
