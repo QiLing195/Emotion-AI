@@ -2778,11 +2778,6 @@ function deriveApproachAvoid(core: CoreState): { approachBias: number; avoidBias
 function sigmoid(x: number, k = 5): number { return 1 / (1 + Math.exp(-k * x)); }
 
 /** 从吸引子景观读取显式情绪名（用于 LLM 交互的 dominant） */
-const DOMINANT_MAP: Record<string, string> = {
-    neutral: '平静/倦怠', joy: '喜悦/激动', calm: '平静/倦怠', sad: '失落/忧郁',
-    fear: '焦虑/不安', anger: '愤怒/痛苦', love: '温暖/爱意',
-    disgust: '厌恶/反感', lust: '渴望/心动', greed: '渴望/期待',
-};
 
 function readEmotion(
     core: CoreState,

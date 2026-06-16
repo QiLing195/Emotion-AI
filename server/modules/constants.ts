@@ -242,3 +242,9 @@ export const SENTIMENT_PROMPT = `你是一个中文情感分析器。分析用�
 
 只输出JSON，不要其他文字。`;
 
+
+export const DOMINANT_MAP: Record<string, string> = {
+    neutral: '平静/倦怠', joy: '喜悦/激动', calm: '平静/倦怠', sad: '失落/忧郁',
+    fear: '焦虑/不安', anger: '愤怒/痛苦', love: '温暖/爱意',
+    disgust: '厌恶/反感', lust: '渴望/心动', greed: '渴望/期待',
+};;
