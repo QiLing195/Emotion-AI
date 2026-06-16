@@ -263,3 +263,14 @@ export const PHASE_DURATION_THRESHOLDS = {
     R3: { min: 180, max: 730 },  // 6个月-2年
     R4: { min: 730, max: Infinity },
 };;
+
+// ═══ 自主循环常量 ═══
+// CLOSURE_PATTERNS: see server.ts (complex pattern)
+export const QUIET_HOURS = { start: 23, end: 8 };
+export const AUTONOMY_CYCLE_MS = 10 * 60 * 1000;
+export const IDLE_SKIP_MIN = 8;
+export const CONTACT_BASE_THRESHOLD = 0.65;
+export const CONTACT_IGNORE_PENALTY = 0.05;
+export const CONTACT_MAX_THRESHOLD = 0.85;
+export const CONTACT_RELIEF = 0.15;
+export const CONTACT_DAILY_CAP = 3;

@@ -4312,14 +4312,6 @@ const CLOSURE_RATE_MULTIPLIER = 0.3;   // 宽限期内积累速率倍率
 const POST_QUIET_COOLDOWN_MIN = 60;        // 醒来冷却窗口（分钟）
 const POST_QUIET_THRESHOLD_BOOST = 0.15;   // 冷却窗口内阈值提高
 const POST_QUIET_MAX_MSGS = 1;             // 冷却窗口内最多发几条
-const CLOSURE_PATTERNS = [
-    /晚安|睡了|去睡了|先睡了|困了.*睡/,
-    /先忙了|去忙了|忙一下|有事|开会|上班|工作/,
-    /回头聊|回头说|再聊|下次聊|晚点聊|等(?:下|会)儿.*聊/,
-    /先走了|出门了|出去了|下了|先下了|拜拜|再见|88|bye/i,
-    /回头.*找|等(?:下|会)儿.*找|晚点.*找/,
-    /先(?:不说|不讲)了|到此为止|今天.*到这/,
-];
 
 let lastInteractionTime: number = Date.now();
 let lastClosureTs: number = 0;         // v1.4: 上次检测到对话结束语的时间戳
