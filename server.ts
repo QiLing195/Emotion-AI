@@ -89,7 +89,7 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P } from './server/modules/constants.js';
+import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -251,7 +251,7 @@ const CONSOLIDATION_INTERVAL = 10; // 每 10 轮对话整合一次
 const semanticMemory = new Map<string, MemoryRecord>();
 
 // ─── 语义记忆持久化 ───
-const MEMORY_FILE = './memories/semantic_memory.json';
+
 let _memSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let _memPeriodicTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -557,11 +557,11 @@ function querySimilar(text: string): { key: string; totalValence: number; occurr
 }
 
 // ==================== Layer 4: 元认知持久化 ====================
-const LAYER4_STATE_FILE = './memories/layer4_state.json';
-const HYPOTHESES_FILE = './memories/hypotheses.json';
-const PATTERNS_FILE = './memories/world_patterns.json';
-const WORLD_MODEL_FILE = './memories/world_model.json';
-const SELF_MODEL_FILE = './memories/self_model.json';
+
+
+
+
+
 
 function saveWorldModel(): void {
     try {
@@ -701,7 +701,7 @@ function loadLayer4State(): void {
 }
 
 // ==================== 交互摘要日志 ====================
-const LOG_DIR = './memories';
+
 
 function getLogFileName(): string {
     const today = new Date().toISOString().slice(0, 10);
@@ -2563,7 +2563,7 @@ interface PUARecord {
     llm: any | null; tick: number;
 }
 const puaAnalysisLog: PUARecord[] = [];
-const PUA_LOG_PATH = './memories/pua_analysis_log.jsonl';
+
 
 function appendPUARecord(record: PUARecord): void {
     puaAnalysisLog.push(record);

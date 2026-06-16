@@ -42,3 +42,13 @@ export const P = {
     FEEDBACK_WEIGHT: 0.02, // 回复反哺权重
 };
 
+
+// ═══ 文件路径 ═══
+export const MEMORY_FILE = "./memories/semantic_memory.json";
+export const LAYER4_STATE_FILE = "./memories/layer4_state.json";
+export const HYPOTHESES_FILE = "./memories/hypotheses.json";
+export const PATTERNS_FILE = "./memories/world_patterns.json";
+export const WORLD_MODEL_FILE = "./memories/world_model.json";
+export const SELF_MODEL_FILE = "./memories/self_model.json";
+export const LOG_DIR = "./memories";
+export const PUA_LOG_PATH = "./memories/pua_analysis_log.jsonl";
