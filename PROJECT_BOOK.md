@@ -779,10 +779,10 @@ STRONG (8条) — 同步依赖，不允许失败，需超时+fallback+熔断
   S2: NLU管道 → 情感事件提取
   S3: 情感事件提取 → 情感引擎更新
   S4: 情感引擎+Prompt → AI回复生成
-  S5: 冲突检测 → 对话策略选择        🆕 glue_ready
+  S5: 冲突检测 → 对话策略选择        ✅ active
   S6: 人格参数 → 情感更新速率         🆕 partial
   S7: 价值体系 → 对话策略选择         ✅ active
-  S8: 情境感知 → 对话策略选择         🆕 glue_ready
+  S8: 情境感知 → 对话策略选择         ✅ active
 
 WEAK (8条) — 异步解耦，fire-and-forget
   W1-W6: healthy (情感→记忆/价值/好奇心/认知/主动消息)
@@ -1309,7 +1309,7 @@ curl -X POST http://localhost:3000/event \
 |------|--------|------|
 | **server.ts 接入 aiCoordinator** | ✅ 已实现 | aiCoordinator 管道已接入 server.ts 对话流：危机检测覆盖策略 + 思维图谱注入 workspace + 桥接函数适配新旧状态格式 (2026-06-16) |
 | **server.ts 拆分** | 🔴 高 | 5811行单体服务器，需迁移到 `server/` 模块化架构 |
-| **S5/S8 强连接激活** | 🟡 中 | pipelineHooks 胶水代码已写好，需在回复管道中接入 |
+| **S5/S8 强连接激活** | ✅ 已实现 | aiCoordinator 已直接调用 conflictManager + contextAwareness，pipelineHooks 提供便捷封装 |
 | **S7 价值→策略连接** | ✅ 已实现 | extractActiveValues() -> StrategyContext -> 价值观调制策略权重 |
 | **W7/W8 弱连接** | ✅ 已实现 | coordinator 管道中 conflict->repair + pendingDiscoveries->share 已串联 |
 | **emotionEngine alpha 动态化** | 🟢 低 | S6 仅完成 lossAversion 个性化，alpha 值仍为全局常量 |
