@@ -4,6 +4,50 @@ import fs from 'fs';
 
 const VERSION = JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version;
 
+// ==================== AI Provider (精简版) ====================
+async function callAI(settings: AISettings, systemPrompt: string, userText: string): Promise<string> {
+    const { generateAIResponse } = await import('./src/lib/aiProvider.js');
+    return generateAIResponse(settings, systemPrompt, userText);
+}
+
+// ==================== NLU 管道 ====================
+let _nluLoading = false;
+let nluAnalyze: ((text: string) => Promise<AnalyzedResult>) | null = null;
+
+async function tryInitNLU(): Promise<boolean> {
+    if (nluAnalyze || _nluLoading) return !!nluAnalyze;
+    _nluLoading = true;
+    try {
+        const { default: pipeline } = await import('@xenova/transformers');
+        const pipe = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
+        nluAnalyze = async (text: string) => {
+            const result = await pipe(text);
+            const label = result[0]?.label || 'NEUTRAL';
+            const score = result[0]?.score || 0.5;
+            return {
+                valence: label === 'POSITIVE' ? score * 0.8 : label === 'NEGATIVE' ? -score * 0.8 : 0,
+                salience: 0.5,
+                dominance: 0,
+                sarcasmProbability: 0,
+                raw_label: label,
+                raw_score: score,
+            };
+        };
+        return true;
+    } catch (e) {
+        console.log('[NLU] Transformer 模型加载失败，降级到中文词法分析器');
+        return false;
+    } finally {
+        _nluLoading = false;
+    }
+}
+
+async function ensureNLU(): Promise<void> {
+    if (nluAnalyze) return;
+    await tryInitNLU();
+}
+
+
 type AISettings = { provider: string; apiKey: string; model: string; baseUrl?: string; enableWebSearch?: boolean; temperature?: number };
 interface CoreState {
     valence: number; arousal: number; expectation: number; dominance: number;
