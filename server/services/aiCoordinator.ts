@@ -28,6 +28,7 @@ import { getShareableInsights } from '../../src/curiosity/insights.js';
 import { recordPatternCounts, getFunnelSnapshot, logFunnelSummary } from '../../src/curiosity/funnel.js';
 import { bus } from '../../src/eventBus.js';
 import { ThoughtGraph, assessThoughtGeneration, fillThoughtContent } from '../../src/lib/thoughtGraph.js';
+import { shadowLayer } from '../../src/lib/shadowLayer.js';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEngine.js';
 import type { StrategyDecision, StrategyType, StrategyContext } from '../../src/lib/dialogueStrategy.js';
 import type { ConflictState } from '../../src/lib/conflictManager.js';
@@ -330,7 +331,27 @@ export class AICoordinator {
     }
     const thoughtMs = Date.now() - t3_6;
 
-    // ── 阶段 4: 策略选择（S5 冲突 + S8 情境 + Sprint C 认知上下文 + Sprint E Insight + 🧠 Thought Graph 共同调制） ──
+    // ── 阶段 3.7: 🌑 Shadow Layer 检测与调制 ──
+    // 每 50 轮检测一次潜意识 trait
+    if (roundNumber % 50 === 0) {
+      const emotionHist = {
+        stickyEmotions: findStickyEmotions(input.recentUserMoods ?? []),
+        avgArousal: updatedEmotionState.taiji.arousal,
+        avgValence: updatedEmotionState.taiji.valence,
+        reversalCount: updatedEmotionState.yinyang.reversalPressure > 0 ? 1 : 0,
+      };
+      shadowLayer.detectTraits(
+        this.thoughtGraph.getState(),
+        emotionHist,
+        null, // strategyStats — 后续可从 rewardLearner 获取
+        roundNumber,
+      );
+    }
+    const shadowEmotionMod = shadowLayer.getEmotionModulation();
+    const shadowStrategyMod = shadowLayer.getStrategyModulation();
+    const shadowMemoryMod = shadowLayer.getMemoryModulation();
+
+    // ── 阶段 4: 策略选择（S5 冲突 + S8 情境 + Sprint C 认知上下文 + Sprint E Insight + 🧠 Thought Graph + 🌑 Shadow 共同调制） ──
     const t4 = Date.now();
     const strategyCtx: StrategyContext = {
       emotionState: updatedEmotionState,
@@ -365,6 +386,17 @@ export class AICoordinator {
     };
 
     const strategyDecision = selectStrategy(strategyCtx);
+    // 🌑 Shadow 调制：活跃 trait 影响策略置信度
+    if (shadowStrategyMod.boostStrategies.length > 0 || shadowStrategyMod.suppressStrategies.length > 0) {
+      const origConf = strategyDecision.confidence;
+      if (shadowStrategyMod.boostStrategies.includes(strategyDecision.strategy)) {
+        strategyDecision.confidence = Math.min(0.99, origConf * 1.15);
+      }
+      if (shadowStrategyMod.suppressStrategies.includes(strategyDecision.strategy)) {
+        strategyDecision.confidence *= 0.85;
+      }
+      strategyDecision.confidence = Math.round(strategyDecision.confidence * 100) / 100;
+    }
     // v1.0: 奖励学习 — 记录本轮策略选择
     rewardLearner.markStrategyUsed(strategyDecision.strategy);
     // Phase 2: 存储本轮策略和效价变化量（用户消息对 AI 情绪的影响），供下轮反馈
@@ -504,6 +536,18 @@ export class AICoordinator {
       turnCount: this.turnCounter,
     };
   }
+}
+
+
+/** 从最近情绪历史中找出粘性情绪（出现频率 > 40%） */
+function findStickyEmotions(_moods: number[]): string[] {
+  // 从效价历史推断粘性情绪（简化版，后续可接入真实的九情追踪）
+  if (_moods.length < 5) return [];
+  const negRatio = _moods.filter(v => v < -0.2).length / _moods.length;
+  const result: string[] = [];
+  if (negRatio > 0.4) result.push('sad');
+  if (negRatio > 0.6) result.push('fear');
+  return result;
 }
 
 // 全局单例（与 DefaultAIEngine 保持相同模式）
