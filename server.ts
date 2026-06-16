@@ -89,7 +89,7 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH } from './server/modules/constants.js';
+import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -192,20 +192,6 @@ let _lastTemperature: number = 0.7;
 let _strategyHistory: StrategyType[] = [];  // v1.1: 策略多样性保护
 
 // ── v1.5: 冲突频率追踪 (Conflict Frequency Tracking) ──
-const CONFLICT_KEYWORDS: RegExp[] = [
-  /你不懂|你不理解|你根本不知道|你没在听/,
-  /算了|随便|无所谓了|不想说了|不说了/,
-  /你又来了|你总是|你每次都|你怎么又/,
-  /生气|烦|讨厌你|受不了|无语/,
-  /你太.*了|你怎么这么/,
-  /别说了|住口|够了/,
-  /不想理你|走开|别烦我/,
-];
-const RECOVERY_KEYWORDS: RegExp[] = [
-  /好吧|原谅你了|没事了|不吵了|不生气了/,
-  /我也有不对|我的错|怪我/,
-  /和好|抱抱|爱你|想你/,
-];
 const CONFLICT_WINDOW_MS = 15 * 60_000;     // 15 分钟窗口
 const CONFLICT_ABUSE_THRESHOLD = 3;          // 窗口内 3 次触发边界升级
 let _recentConflictTimestamps: number[] = [];

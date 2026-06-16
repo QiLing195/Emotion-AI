@@ -52,3 +52,19 @@ export const WORLD_MODEL_FILE = "./memories/world_model.json";
 export const SELF_MODEL_FILE = "./memories/self_model.json";
 export const LOG_DIR = "./memories";
 export const PUA_LOG_PATH = "./memories/pua_analysis_log.jsonl";
+
+// ═══ 冲突/恢复关键词 ═══
+export const CONFLICT_KEYWORDS: RegExp[] = [
+  /你不懂|你不理解|你根本不知道|你没在听/,
+  /算了|随便|无所谓了|不想说了|不说了/,
+  /你又来了|你总是|你每次都|你怎么又/,
+  /生气|烦|讨厌你|受不了|无语/,
+  /你太.*了|你怎么这么/,
+  /别说了|住口|够了/,
+  /不想理你|走开|别烦我/,
+];
+export const RECOVERY_KEYWORDS: RegExp[] = [
+  /好吧|原谅你了|没事了|不吵了|不生气了/,
+  /我也有不对|我的错|怪我/,
+  /和好|抱抱|爱你|想你/,
+];
