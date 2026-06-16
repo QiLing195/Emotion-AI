@@ -89,7 +89,7 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY } from './server/modules/constants.js';
+import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY, ROMANCE_KEYWORDS, FRIENDSHIP_KEYWORDS } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -2441,16 +2441,6 @@ const friendPatterns: [RegExp, string, number][] = [
 ];
 
 // ─── 关系类型分类器 ───
-const ROMANCE_KEYWORDS = [
-    /老公|老婆|男朋友|女朋友|恋爱|约会|结婚|求婚|彩礼|见家长|见父母/,
-    /想你|爱你|想你了|我爱你|我喜欢你|好想你|亲爱(的)?/,
-    /抱抱|亲亲|牵手|约会|情侣|二人世界/,
-];
-const FRIENDSHIP_KEYWORDS = [
-    /兄弟|闺蜜|老铁|哥们|姐妹|朋友|死党|基友|损友/,
-    /约饭|开黑|逛街|喝酒|聚聚|好久不见|改天聚|出来坐坐/,
-    /开黑|打游戏|上分|组队|团建|聚会/,
-];
 
 function classifyRelationship(text: string): { romanceScore: number; friendshipScore: number } {
     let romanceScore = 0, friendshipScore = 0;

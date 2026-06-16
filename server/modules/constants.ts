@@ -75,3 +75,15 @@ export const CONFLICT_ABUSE_THRESHOLD = 3; // 窗口内 3 次触发边界升级
 export const CONSOLIDATION_INTERVAL = 10; // 每 10 轮对话整合一次
 export const PARADIGM_COOLDOWN_TICKS = 20; // 范革冷却
 export const MAX_HISTORY = 12; // PUA 分析最大历史
+
+export const ROMANCE_KEYWORDS = [
+    /老公|老婆|男朋友|女朋友|恋爱|约会|结婚|求婚|彩礼|见家长|见父母/,
+    /想你|爱你|想你了|我爱你|我喜欢你|好想你|亲爱(的)?/,
+    /抱抱|亲亲|牵手|约会|情侣|二人世界/,
+];
+
+export const FRIENDSHIP_KEYWORDS = [
+    /兄弟|闺蜜|老铁|哥们|姐妹|朋友|死党|基友|损友/,
+    /约饭|开黑|逛街|喝酒|聚聚|好久不见|改天聚|出来坐坐/,
+    /开黑|打游戏|上分|组队|团建|聚会/,
+];
