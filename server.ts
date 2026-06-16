@@ -50,10 +50,10 @@ async function ensureNLU(): Promise<void> {
 
 function setCallAI(_fn: any) {} // stub
 type AISettings = { provider: string; apiKey: string; model: string; baseUrl?: string; enableWebSearch?: boolean; temperature?: number };
-function setExploreDeps(_a: any, _b: any, _c: any, _d: any, _e: any, _f: any) {}
-function startExplorationCycle() {}
-function getEventCoverage() { return "0%"; }
-function getQuickStats() { return {}; }
+function setExploreDeps(_a: any, _b: any, _c: any, _d: any, _e: any, _f: any) { /* curiosity deps — 原始实现丢失 */ }
+function startExplorationCycle() { /* 原始实现丢失，探索定时器由 autonomousCycle 接管 */ }
+function getEventCoverage() { return "0%"; /* 原始实现丢失 */ }
+function getQuickStats() { return {}; /* 原始实现丢失 */ }
 interface CoreState {
     valence: number; arousal: number; expectation: number; dominance: number;
     extremityDuration: number; lastExtremitySign: number; _trend: number; _valenceHistory: number[];
