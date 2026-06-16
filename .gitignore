@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Runtime data (generated at runtime)
+memories/*.json
+memories/*.log
+memories/*.jsonl
+!memories/.gitkeep
+logs/
+data/

@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Font ── */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+
+  /* ═══════════════════════════════════════════
+     Warm Healing Color Palette
+     ═══════════════════════════════════════════ */
+
+  /* ── Surface: cream-to-peach backgrounds ── */
+  --color-surface-50: #fefaf6;
+  --color-surface-100: #fef6f0;
+  --color-surface-200: #fdf0e6;
+  --color-surface-300: #fce8d8;
+  --color-surface-400: #fad9be;
+
+  /* ── Rose/Pink: primary emotional color ── */
+  --color-rose-50: #fff5f7;
+  --color-rose-100: #ffe4e9;
+  --color-rose-200: #fecdd6;
+  --color-rose-300: #fda4b4;
+  --color-rose-400: #fb718a;
+  --color-rose-500: #f43f6e;
+  --color-rose-600: #e11d55;
+  --color-rose-700: #be1240;
+
+  /* ── Coral/Peach: CTA accent ── */
+  --color-coral-50: #fff7f3;
+  --color-coral-100: #ffede4;
+  --color-coral-200: #ffdaca;
+  --color-coral-300: #ffbe9e;
+  --color-coral-400: #ff9e6e;
+  --color-coral-500: #ff7f45;
+  --color-coral-600: #e8652e;
+  --color-coral-700: #c44e1f;
+
+  /* ── Warm Amber/Gold: cheerful accent ── */
+  --color-warm-50: #fffdf5;
+  --color-warm-100: #fff9e0;
+  --color-warm-200: #fff1b8;
+  --color-warm-300: #ffe689;
+  --color-warm-400: #ffd659;
+  --color-warm-500: #f5c030;
+
+  /* ── Lavender/Soft Purple: dreamy accent ── */
+  --color-lavender-50: #fbf8ff;
+  --color-lavender-100: #f5ecff;
+  --color-lavender-200: #ecd9ff;
+  --color-lavender-300: #dcbefa;
+  --color-lavender-400: #c898f5;
+  --color-lavender-500: #b370ed;
+
+  /* ── Teal/Mint: calm accent ── */
+  --color-teal-50: #f3faf9;
+  --color-teal-100: #e2f4f1;
+  --color-teal-200: #c2e9e2;
+  --color-teal-300: #94d8cd;
+  --color-teal-400: #5fc2b0;
+  --color-teal-500: #34a895;
+  --color-teal-600: #248a79;
+  --color-teal-700: #1b6e60;
+
+  /* ── Moon Gray: neutral text on light bg ── */
+  --color-moon-50: #f8f8f8;
+  --color-moon-100: #f0f0f1;
+  --color-moon-200: #e3e3e5;
+  --color-moon-300: #c8c8cc;
+  --color-moon-400: #a0a0a8;
+  --color-moon-500: #7a7a84;
+  --color-moon-600: #5e5e68;
+  --color-moon-700: #4a4a53;
+  --color-moon-800: #383842;
+  --color-moon-900: #282832;
+
+  /* ═══════════════════════════════════════════
+     Custom Shadows: warm tinted
+     ═══════════════════════════════════════════ */
+  --shadow-soft: 0 2px 12px rgba(244, 63, 110, 0.08), 0 1px 3px rgba(244, 63, 110, 0.04);
+  --shadow-glow: 0 0 24px rgba(255, 127, 69, 0.15), 0 0 8px rgba(244, 63, 110, 0.08);
+  --shadow-card: 0 4px 24px rgba(244, 63, 110, 0.06), 0 1px 6px rgba(244, 63, 110, 0.04);
+  --shadow-float: 0 8px 32px rgba(244, 63, 110, 0.1), 0 2px 12px rgba(244, 63, 110, 0.06);
+
+  /* ═══════════════════════════════════════════
+     Custom Animations
+     ═══════════════════════════════════════════ */
+  --animate-float: float 4s ease-in-out infinite;
+  --animate-breathe: breathe 3s ease-in-out infinite;
+  --animate-fade-in-up: fadeInUp 0.5s ease-out;
+  --animate-pulse-soft: pulseSoft 2.5s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════
+   Keyframes
+   ═══════════════════════════════════════════ */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* ═══════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════ */
+
+body {
+  background: var(--color-surface-50);
+  color: var(--color-moon-800);
+}
+
+/* ═══════════════════════════════════════════
+   Custom Utility Classes
+   ═══════════════════════════════════════════ */
+
+@utility glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+@utility glass-strong {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+@utility glass-warm {
+  background: rgba(254, 250, 246, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(253, 240, 230, 0.6);
+}
+
+@utility msg-user {
+  background: linear-gradient(135deg, #ff7f45 0%, #f43f6e 100%);
+  color: white;
+  border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
+  box-shadow: 0 2px 12px rgba(244, 63, 110, 0.25);
+}
+
+@utility msg-ai {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(254, 246, 240, 0.9));
+  color: var(--color-moon-800);
+  border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;
+  box-shadow: 0 2px 12px rgba(244, 63, 110, 0.06);
+  border: 1px solid rgba(253, 240, 230, 0.5);
+}
+
+@utility divider-soft {
+  border-color: rgba(253, 240, 230, 0.6);
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
