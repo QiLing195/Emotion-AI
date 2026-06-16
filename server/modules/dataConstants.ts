@@ -42,3 +42,8 @@ const ATTRACTORS: Record<string, Attractor> = {
     lust:    { valence: 0.45, arousal: 0.80, bias: 0.60 },
     greed:   { valence: 0.55, arousal: 0.55, bias: 0.80 },
 };
+export const DEFAULT_RHYTHM: Record<number, number> = {
+    0:0.2, 1:0.2, 2:0.2, 3:0.2, 4:0.2, 5:0.2, 6:0.2, 7:0.2,
+    8:0.1, 9:0.1, 10:0.1, 11:0.1, 12:0.1, 13:0.1, 14:0.1, 15:0.1,
+    16:0.1, 17:0.1, 18:0.1, 19:0.2, 20:0.2, 21:0.2, 22:0.2, 23:0.2,
+};

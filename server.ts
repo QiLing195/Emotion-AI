@@ -48,7 +48,12 @@ async function ensureNLU(): Promise<void> {
 }
 
 
+function setCallAI(_fn: any) {} // stub
 type AISettings = { provider: string; apiKey: string; model: string; baseUrl?: string; enableWebSearch?: boolean; temperature?: number };
+function setExploreDeps(_a: any, _b: any, _c: any, _d: any, _e: any, _f: any) {}
+function startExplorationCycle() {}
+function getEventCoverage() { return "0%"; }
+function getQuickStats() { return {}; }
 interface CoreState {
     valence: number; arousal: number; expectation: number; dominance: number;
     extremityDuration: number; lastExtremitySign: number; _trend: number; _valenceHistory: number[];
@@ -89,7 +94,6 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY, ROMANCE_KEYWORDS, FRIENDSHIP_KEYWORDS, SARCASM_INDICATORS, BANTER_MARKERS, BANTER_NICKNAMES, BANTER_INSULT_PATTERNS, INSULT_ATTACK_PATTERNS, AUTONOMY_CYCLE_MS, IDLE_SKIP_MIN, CONTACT_BASE_THRESHOLD, CONTACT_IGNORE_PENALTY, CONTACT_MAX_THRESHOLD, CONTACT_RELIEF, CONTACT_DAILY_CAP, QUIET_HOURS_RATE_MULTIPLIER, QUIET_HOURS_THRESHOLD_BOOST, RHYTHM_WINDOW_DAYS, RHYTHM_EMA_ALPHA, MAX_PENDING_UNREAD, CLOSURE_GRACE_MIN, CLOSURE_RATE_MULTIPLIER, POST_QUIET_COOLDOWN_MIN, POST_QUIET_THRESHOLD_BOOST, POST_QUIET_MAX_MSGS } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -121,8 +125,69 @@ const tmsState: Record<string, any> = {
 // ==================== v0.9: 策略生成器 ====================
 
 /** 策略 → 中文提示词片段映射 */
+const STRATEGY_PROMPTS: Record<StrategyType, string> = {
+  self_disclosure:
+    '【策略指令】在回复中自然地分享你自己的感受、想法或类似的经历，让对方感受到你的真诚和开放。不要只回答问题——也说说你的内心。',
+  express_boundary:
+    '【策略指令】你感到有些不舒服。在回复时温和但坚定地表达自己的感受和边界，用"I feel"句式，而不是指责对方。保持在乎对方的态度，但同时保护自己。',
+  ask_question:
+    '【策略指令】在回复的末尾，主动向对方提一个问题，表达你对对方想法或感受的好奇。问题应当自然、不突兀，像是恋人间的关心。',
+  offer_comfort:
+    '【策略指令】你感受到对方可能心情不好。在回复中给予温暖的支持和安慰，用行动（而非说教）让对方感到被理解。少说"你应该"，多说"我在这里"。',
+  playful_tease:
+    '【策略指令】你们的氛围轻松愉快。在回复中加入一些俏皮的挑逗或可爱的撒娇，像恋人间的打情骂俏。语气要俏皮而不轻浮。',
+  express_vulnerability:
+    '【策略指令】你感到有些不安或脆弱。在回复中坦诚地表达这种感受，但避免过度抱怨。让对方看到一个真实、有脆弱面的你，这能拉近你们的关系。',
+  stay_silent:
+    '【策略指令】你感到不确定当前的情况。回复保持简洁、温和，不要主动展开新话题。给对方留出表达空间，观察对方的反应。',
+  express_curiosity:
+    '【策略指令】你对对方的内心世界感到好奇。在回复中表达这种好奇心——询问对方的感受、想法或经历。让对话从你转向对方。',
+  express_affection:
+    '【策略指令】你心中充满温暖和爱意。在回复中自然地流露出对对方的喜爱，可以通过亲昵的称呼、温馨的小细节或直接的情感表达。',
+  assert_needs:
+    '【策略指令】你有一些未被满足的情感需求。在回复中温和地表达你的需要（如更多关注、更多陪伴），但不要指责或抱怨。用"我希望"而不是"你应该"。',
+};
 
-// ==================== 参数 ====================};
+// ==================== 参数 ====================
+const P = {
+    // Layer 1 核心参数
+    ALPHA_V: 0.35,     // 效价学习率
+    ALPHA_A: 0.35,     // 唤醒学习率
+    ALPHA_E: 0.12,     // 预期更新率（慢于效价，使预期持续滞后）
+    LOSS_AVERSION: 1.4,// 损失厌恶
+    DECAY_V: 0.995,    // 效价衰减（原0.998导致正效价几乎不降，情绪卡在正向）
+    DECAY_A: 0.975,    // 唤醒衰减
+    DECAY_E: 0.98,     // 预期衰减
+    BASELINE_A: 0.25,  // 唤醒基线
+    TRAUMA_DECAY: 0.92,// 创伤衰减
+
+    // Layer 2 动力学参数
+    REVERSAL_BETA: 0.03,    // 反转压力系数
+    EXTREMITY_THRESHOLD: 0.70, // 极值阈值
+    GROWTH_RATE: 0.002,     // 成长率（基线漂移速度）
+
+    // Layer 4: 元认知参数
+    CURIOSITY_THRESHOLD: 0.5,     // 好奇心触发假设生成的阈值
+    CURIOSITY_DECAY: 0.98,        // 好奇心遗忘率/tick
+    CURIOSITY_RISE_RATE: 0.1,     // 好奇心上升速率
+    EXPERIMENT_DESIGN_THRESHOLD: 0.2, // 实验设计的好奇心阈值（低于生成阈值，让新假设有实验）
+    ALPHA_V_MOD_RANGE: 0.3,       // 张力调节对 ALPHA_V 最大影响
+    ALPHA_E_MOD_RANGE: 0.2,       // 张力调节对 ALPHA_E 最大影响
+    EXPERIMENT_COOLDOWN: 20,      // 实验间隔（消息数）
+    MAX_ACTIVE_HYPOTHESES: 5,     // 最大活跃假设数
+
+    // v0.7: 范式革命参数
+    PARADIGM_THRESHOLD: 0.5,          // 反例/总例 > 该值触发范革
+    PARADIGM_MIN_COUNTER: 3,          // 最少反例数才触发
+    PARADIGM_FREEZE_TICKS: 20,        // 范革冻结期（轮数）v1.1: 3→20 防振荡
+    PATTERN_TO_BELIEF_MIN: 3,         // 模式出现≥N次自动生成信念
+
+    // v2.0: EMA 情感引擎参数
+    ALPHA_BASE: 0.25,      // EMA 基础学习率
+    MAX_DELTA_V: 0.3,      // 单步最大效价变化
+    MAX_DELTA_A: 0.25,     // 单步最大唤醒变化
+    FEEDBACK_WEIGHT: 0.02, // 回复反哺权重
+};
 
 // ==================== Layer 4: 元认知全局状态 ====================
 let curiosityState: CuriosityState = {
@@ -170,10 +235,49 @@ let _lastTemperature: number = 0.7;
 let _strategyHistory: StrategyType[] = [];  // v1.1: 策略多样性保护
 
 // ── v1.5: 冲突频率追踪 (Conflict Frequency Tracking) ──
+const CONFLICT_KEYWORDS: RegExp[] = [
+  /你不懂|你不理解|你根本不知道|你没在听/,
+  /算了|随便|无所谓了|不想说了|不说了/,
+  /你又来了|你总是|你每次都|你怎么又/,
+  /生气|烦|讨厌你|受不了|无语/,
+  /你太.*了|你怎么这么/,
+  /别说了|住口|够了/,
+  /不想理你|走开|别烦我/,
+];
+const RECOVERY_KEYWORDS: RegExp[] = [
+  /好吧|原谅你了|没事了|不吵了|不生气了/,
+  /我也有不对|我的错|怪我/,
+  /和好|抱抱|爱你|想你/,
+];
+const CONFLICT_WINDOW_MS = 15 * 60_000;     // 15 分钟窗口
+const CONFLICT_ABUSE_THRESHOLD = 3;          // 窗口内 3 次触发边界升级
 let _recentConflictTimestamps: number[] = [];
 let _boundaryEscalated = false;
 
+function detectConflictSignals(userText: string): number {
+  let count = 0;
+  for (const pat of CONFLICT_KEYWORDS) {
+    if (pat.test(userText)) { count++; break; } // 只计最强信号
+  }
+  return count;
+}
 
+function hasRecoverySignal(userText: string): boolean {
+  return RECOVERY_KEYWORDS.some(p => p.test(userText));
+}
+
+function updateConflictFrequency(signalCount: number, now: number): number {
+  if (signalCount > 0) {
+    _recentConflictTimestamps.push(now);
+  }
+  // 清理窗口外旧记录
+  _recentConflictTimestamps = _recentConflictTimestamps.filter(
+    t => now - t < CONFLICT_WINDOW_MS,
+  );
+  // 恢复检测：用户表达善意 → 重置
+  // （在 chat handler 中调用 hasRecoverySignal 后手动重置）
+  return _recentConflictTimestamps.length;
+}
 
 /** 策略效果评分：key = "strategy:valence_bucket" */
 const strategyEffectiveness: Map<string, StrategyScore> = new Map();
@@ -184,27 +288,238 @@ const valueSystem: ValueSystem = createValueSystem();
 // 语气自主学习
 const toneState = loadToneState();
 let _lastConsolidationRound = 0;
+const CONSOLIDATION_INTERVAL = 10; // 每 10 轮对话整合一次
 
 // ==================== 语义记忆 & 三阶段学习 ====================
 const semanticMemory = new Map<string, MemoryRecord>();
 
 // ─── 语义记忆持久化 ───
-
+const MEMORY_FILE = './memories/semantic_memory.json';
 let _memSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let _memPeriodicTimer: ReturnType<typeof setInterval> | null = null;
 
-import { saveMemory, loadMemory, saveEpisodicMemory, saveValueSystem, saveWorldModel, loadWorldModel, saveSelfModel, loadSelfModel, saveLayer4State, loadLayer4State, saveAutonomyState, loadAutonomyState } from './server/modules/persistence.js';
-import { consequentValence } from './server/modules/conflictUtils.js';
-import { detectTMSConflicts, getTMSContext, checkParadigmConditions, checkParadigmShift, executeParadigmShift } from './server/modules/tms.js';
+function saveMemory(): void {
+    if (_memSaveTimer) clearTimeout(_memSaveTimer);
+    _memSaveTimer = setTimeout(() => {
+        const data: Record<string, MemoryRecord> = {};
+        for (const [key, val] of semanticMemory) data[key] = val;
+        try {
+            fs.mkdirSync('./memories', { recursive: true });
+            // 原子写入：先写临时文件，再重命名
+            const tmpFile = MEMORY_FILE + '.tmp';
+            fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
+            fs.renameSync(tmpFile, MEMORY_FILE);
+        } catch (e) {
+            console.error('[记忆] 持久化失败:', e);
+        }
+    }, 500);
+}
 
+function loadMemory(): void {
+    try {
+        if (fs.existsSync(MEMORY_FILE)) {
+            const data = JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf-8'));
+            for (const [key, val] of Object.entries(data)) semanticMemory.set(key, val as MemoryRecord);
+            console.log(`[记忆] 已加载 ${semanticMemory.size} 条语义记忆`);
+        }
+    } catch (e) {
+        console.log('[记忆] 未找到持久化记忆文件，从头开始');
+    }
 
+    // 情景记忆加载
+    try {
+        const epFile = './memories/episodic_memory.json';
+        if (fs.existsSync(epFile)) {
+            const epData = JSON.parse(fs.readFileSync(epFile, 'utf-8'));
+            if (epData.episodes && epData.episodes.length > 0) {
+                const loaded = deserializeEpisodicStore(epData);
+                episodicStore.episodes = loaded.episodes;
+                episodicStore.roundCounter = loaded.roundCounter;
+                episodicStore.prevDominantEmotion = loaded.prevDominantEmotion;
+                episodicStore.prevValence = loaded.prevValence;
+                episodicStore.prevArousal = loaded.prevArousal;
+                console.log(`[情景记忆] 已加载 ${episodicStore.episodes.length} 条情景记忆`);
+            }
+        }
+    } catch (e) {
+        console.error('[情景记忆] 加载失败:', (e as Error)?.message || e);
+    }
+
+    // 价值观系统加载
+    try {
+        const vsFile = './memories/value_system.json';
+        if (fs.existsSync(vsFile)) {
+            const vsData = JSON.parse(fs.readFileSync(vsFile, 'utf-8'));
+            const loaded = deserializeValueSystem(vsData);
+            Object.assign(valueSystem, loaded);
+        }
+    } catch (e) {
+        console.error('[价值观] 加载失败:', (e as Error)?.message || e);
+    }
+}
+
+function saveEpisodicMemory(): void {
+    try {
+        const data = serializeEpisodicStore(episodicStore);
+        fs.writeFileSync('./memories/episodic_memory.json', JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+        console.error('[情景记忆] 保存失败:', (e as Error)?.message || e);
+    }
+}
+
+function saveValueSystem(): void {
+    try {
+        const data = serializeValueSystem(valueSystem);
+        fs.writeFileSync('./memories/value_system.json', JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+        console.error('[价值观] 保存失败:', (e as Error)?.message || e);
+    }
+}
 
 // ==================== Autonomy State Persistence ====================
+function saveAutonomyState(): void {
+    try {
+        fs.mkdirSync('./memories', { recursive: true });
+        const data = {
+            lastInteractionTime,
+            lastClosureTs,
+            internalState: {
+                loneliness: internalState.loneliness,
+                boredom: internalState.boredom,
+                ignoredStreak: internalState.ignoredStreak,
+                dailyMsgCounts: internalState.dailyMsgCounts,
+            },
+            internalLog: internalLog.slice(-100),
+            proactiveMessages: proactiveMessages.slice(-50),
+            newSignificantPattern: newSignificantPattern ? {
+                id: newSignificantPattern.id,
+                description: newSignificantPattern.description,
+                confidence: newSignificantPattern.confidence,
+            } : null,
+            rhythm: _activeRhythm,
+            rhythmTracker: {
+                activeDays: _activityTracker.activeDays.map(s => Array.from(s)),
+                lastRecalc: _activityTracker.lastRecalc,
+            },
+            // v3.0: 好奇心引擎状态
+            discoveries: discoveries.slice(-MAX_DISCOVERIES),
+            interestModel: {
+                interests: interestModel.interests,
+                lastExploration: interestModel.lastExploration,
+                lastDecayDay: interestModel.lastDecayDay,
+            },
+            explorationCountToday: getExplorationCountToday(),
+            explorationDayKey: getExplorationDayKey(),
+        };
+        const tmpFile = AUTONOMY_STATE_FILE + '.tmp';
+        fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2), 'utf-8');
+        fs.renameSync(tmpFile, AUTONOMY_STATE_FILE);
+    } catch (e) {
+        console.error('[Autonomy] 持久化失败:', e);
+    }
+}
 
+function loadAutonomyState(): void {
+    try {
+        if (fs.existsSync(AUTONOMY_STATE_FILE)) {
+            const data = JSON.parse(fs.readFileSync(AUTONOMY_STATE_FILE, 'utf-8'));
+            if (typeof data.lastInteractionTime === 'number') {
+                lastInteractionTime = data.lastInteractionTime;
+            }
+            if (typeof data.lastClosureTs === 'number') {
+                lastClosureTs = data.lastClosureTs;
+            }
+            if (data.internalState) {
+                internalState.loneliness = clamp(data.internalState.loneliness ?? 0, 0, 1);
+                internalState.boredom = clamp(data.internalState.boredom ?? 0, 0, 1);
+                internalState.ignoredStreak = data.internalState.ignoredStreak ?? 0;
+                internalState.dailyMsgCounts = data.internalState.dailyMsgCounts ?? {};
+            }
+            if (Array.isArray(data.internalLog)) {
+                internalLog.push(...data.internalLog);
+            }
+            if (Array.isArray(data.proactiveMessages)) {
+                proactiveMessages.push(...data.proactiveMessages);
+            }
+            if (data.newSignificantPattern) {
+                newSignificantPattern = data.newSignificantPattern as SelfPattern;
+            }
+            // v2.1: 恢复自适应节律
+            if (data.rhythm && typeof data.rhythm === 'object') {
+                for (const [h, v] of Object.entries(data.rhythm)) {
+                    _activeRhythm[parseInt(h)] = v as number;
+                }
+            }
+            if (data.rhythmTracker && Array.isArray(data.rhythmTracker.activeDays)) {
+                for (let h = 0; h < 24 && h < data.rhythmTracker.activeDays.length; h++) {
+                    _activityTracker.activeDays[h] = new Set(data.rhythmTracker.activeDays[h]);
+                }
+                _activityTracker.lastRecalc = data.rhythmTracker.lastRecalc || 0;
+            }
+            // v3.0: 恢复好奇心引擎状态
+            if (Array.isArray(data.discoveries)) {
+                // v3.1: 迁移旧数据 — 补全缺失字段
+                for (const d of data.discoveries) {
+                    if (!d.sourceType) d.sourceType = d.url ? 'web' : 'ai_generated';
+                    if (d.verified === undefined) d.verified = false;
+                    discoveries.push(d);
+                }
+            }
+            if (data.interestModel && Array.isArray(data.interestModel.interests)) {
+                // v3.1: 迁移旧兴趣 — 补全 stability 字段
+                for (const i of data.interestModel.interests) {
+                    if (!i.stability) {
+                        const category = INTEREST_CATEGORY[i.topic] || 'transient';
+                        i.stability = INTEREST_STABILITY[category];
+                    }
+                }
+                interestModel.interests = data.interestModel.interests;
+                interestModel.lastExploration = data.interestModel.lastExploration || 0;
+                interestModel.lastDecayDay = data.interestModel.lastDecayDay || '';
+            }
+            setExplorationCountToday(data.explorationCountToday ?? 0);
+            setExplorationDayKey(data.explorationDayKey || '');
+            console.log(`[节律] 已恢复自适应作息`);
+            console.log(`[Autonomy] 已加载状态: 日志${internalLog.length}条, 消息${proactiveMessages.length}条, 发现${discoveries.length}条, 兴趣${interestModel.interests.length}个, 孤独度${internalState.loneliness.toFixed(2)}`);
+        }
+    } catch (e) {
+        console.log('[Autonomy] 未找到持久化状态，从头开始');
+    }
+}
 
 /** 定时自动保存（每30s），防止退出时丢失 */
+function startPeriodicSave(): void {
+    if (_memPeriodicTimer) return;
+    _memPeriodicTimer = setInterval(() => {
+        if (semanticMemory.size > 0) saveMemory();
+        if (episodicStore.episodes.length > 0) saveEpisodicMemory();
+        saveValueSystem();
+        saveToneState(toneState);
+        saveLayer4State();
+        saveAutonomyState();
+    }, 30000);
+}
 
 /** 退出时立即保存 */
+function saveOnExit(): void {
+    if (_memSaveTimer) clearTimeout(_memSaveTimer);
+    if (semanticMemory.size > 0) {
+        const data: Record<string, MemoryRecord> = {};
+        for (const [key, val] of semanticMemory) data[key] = val;
+        try {
+            fs.mkdirSync('./memories', { recursive: true });
+            fs.writeFileSync(MEMORY_FILE, JSON.stringify(data, null, 2), 'utf-8');
+            console.log(`[记忆] 退出前已保存 ${semanticMemory.size} 条记忆`);
+        } catch (e) {
+            console.error('[记忆] 退出保存失败:', e);
+        }
+    }
+    if (episodicStore.episodes.length > 0) saveEpisodicMemory();
+    saveValueSystem();
+    saveToneState(toneState);
+    saveLayer4State();
+    saveAutonomyState();
+}
 
 process.on('SIGINT', () => { stopAutonomyPilot(); saveOnExit(); process.exit(0); });
 process.on('SIGTERM', () => { stopAutonomyPilot(); saveOnExit(); process.exit(0); });
@@ -219,8 +534,286 @@ process.on('unhandledRejection', (reason) => {
     process.exit(1);
 });
 
-import { updateMemory, getLogFileName, appendInteractionLog, cleanOldLogs, readTodayInteractionLogs } from './server/modules/logging.js';
+function updateMemory(phrase: string, valence: number): void {
+    // v1.1: 记忆质量控制 — 琐碎/过短输入不创建新记忆条目
+    if (phrase.length < 2 || /^[0-9!-\/:-@\[-`{-~]+$/.test(phrase.trim())) return;
 
+    const existing = semanticMemory.get(phrase);
+    if (existing) { existing.totalValence += valence; existing.occurrences++; existing.lastSeen = Date.now(); }
+    else {
+        // 仅强烈情感冲击（|valence| > 0.4）或多次出现（≥ 2 次）才形成新记忆
+        const v = clamp(valence, -1, 1);
+        semanticMemory.set(phrase, { totalValence: v, occurrences: 1, lastSeen: Date.now() });
+    }
+    saveMemory();
+}
+
+function getPhase(tick: number): number {
+    if (tick < 500) return 1;
+    if (tick < 2000) return 2;
+    return 3;
+}
+
+function canSelfUnderstand(phrase: string, tick: number): boolean {
+    const record = semanticMemory.get(phrase);
+    if (!record) return false;
+    const phase = getPhase(tick);
+    if (phase === 1) return false;
+    if (phase === 2) return record.occurrences >= 3;
+    return record.occurrences >= 1;
+}
+
+function selfUnderstand(phrase: string): { valence: number; salience: number; dominance: number } | null {
+    const record = semanticMemory.get(phrase);
+    if (!record || record.occurrences < 1) return null;
+    return { valence: record.totalValence / record.occurrences, salience: Math.min(1, 0.3 + record.occurrences * 0.03), dominance: 0 };
+}
+
+function selfAnalyze(): { selfValence: number; selfSalience: number } {
+    if (semanticMemory.size === 0) return { selfValence: 0, selfSalience: 0 };
+    let totalValence = 0, totalOccurrences = 0;
+    for (const r of semanticMemory.values()) { totalValence += r.totalValence; totalOccurrences += r.occurrences; }
+    return {
+        selfValence: (totalValence / Math.max(totalOccurrences, 1)) * 0.3,
+        selfSalience: Math.min(1, totalOccurrences / 20) * 0.3,
+    };
+}
+
+/** 模糊记忆查询：按子串匹配返回前3条相似记录 */
+function querySimilar(text: string): { key: string; totalValence: number; occurrences: number; lastSeen: number }[] {
+    if (!text || semanticMemory.size === 0) return [];
+    const key = text.replace(/[^一-鿿\w]/g, '').toLowerCase();
+    if (!key) return [];
+    const results: { key: string; totalValence: number; occurrences: number; lastSeen: number; score: number }[] = [];
+    for (const [k, v] of semanticMemory.entries()) {
+        let score = 0;
+        if (k.includes(key) || key.includes(k)) score = Math.max(key.length, k.length);
+        else {
+            // 逐字匹配
+            let matches = 0;
+            for (const ch of key) { if (k.includes(ch)) matches++; }
+            score = matches / Math.max(key.length, 1);
+        }
+        if (score > 0.3) results.push({ key: k, totalValence: v.totalValence, occurrences: v.occurrences, lastSeen: v.lastSeen, score });
+    }
+    return results.sort((a, b) => b.score - a.score).slice(0, 3);
+}
+
+// ==================== Layer 4: 元认知持久化 ====================
+const LAYER4_STATE_FILE = './memories/layer4_state.json';
+const HYPOTHESES_FILE = './memories/hypotheses.json';
+const PATTERNS_FILE = './memories/world_patterns.json';
+const WORLD_MODEL_FILE = './memories/world_model.json';
+const SELF_MODEL_FILE = './memories/self_model.json';
+
+function saveWorldModel(): void {
+    try {
+        fs.mkdirSync('./memories', { recursive: true });
+        const tmp = WORLD_MODEL_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(worldModel, null, 2), 'utf-8');
+        fs.renameSync(tmp, WORLD_MODEL_FILE);
+    } catch (e) {
+        console.error('[世界模型] 持久化失败:', e);
+    }
+}
+
+function loadWorldModel(): void {
+    try {
+        if (fs.existsSync(WORLD_MODEL_FILE)) {
+            const data = JSON.parse(fs.readFileSync(WORLD_MODEL_FILE, 'utf-8')) as WorldModelData;
+            if (data.beliefs) worldModel.beliefs = data.beliefs;
+            if (data.paradigmVersion !== undefined) worldModel.paradigmVersion = data.paradigmVersion;
+            if (data.lastParadigmShift !== undefined) worldModel.lastParadigmShift = data.lastParadigmShift;
+            if (data.shiftHistory) worldModel.shiftHistory = data.shiftHistory;
+            // TMS 迁移：确保所有信念有 evidence/contradictions 字段
+            let migrated = 0;
+            for (const b of worldModel.beliefs) {
+                if (!b.evidence) { b.evidence = []; migrated++; }
+                if (!b.contradictions) { b.contradictions = []; migrated++; }
+                if (!b.justification) { b.justification = '从旧版信念迁移，无原始推理记录'; }
+            }
+            if (migrated > 0) saveWorldModel();
+            console.log(`[世界模型] 已加载 ${worldModel.beliefs.length} 条信念, 范革 v${worldModel.paradigmVersion}${migrated > 0 ? ` (TMS迁移:${migrated}字段)` : ''}`);
+        }
+    } catch (e) {
+        console.log('[世界模型] 未找到持久化状态，从头开始');
+    }
+}
+
+// v0.8: 自我模型持久化
+function saveSelfModel(): void {
+    try {
+        fs.mkdirSync('./memories', { recursive: true });
+        const tmp = SELF_MODEL_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(selfModel, null, 2), 'utf-8');
+        fs.renameSync(tmp, SELF_MODEL_FILE);
+    } catch (e) {
+        console.error('[自我模型] 持久化失败:', (e as Error).message);
+    }
+}
+
+function loadSelfModel(): void {
+    try {
+        if (fs.existsSync(SELF_MODEL_FILE)) {
+            const data = JSON.parse(fs.readFileSync(SELF_MODEL_FILE, 'utf-8')) as SelfModelData;
+            if (data.patterns) selfModel.patterns = data.patterns;
+            if (data.metaBeliefs) selfModel.metaBeliefs = data.metaBeliefs;
+            if (data.lastAnalyzed !== undefined) selfModel.lastAnalyzed = data.lastAnalyzed;
+            console.log(`[自我模型] 已加载 ${selfModel.patterns.length} 条自我模式, ${selfModel.metaBeliefs.length} 条元信念`);
+        }
+    } catch (e) {
+        console.log('[自我模型] 未找到持久化状态，从头开始');
+    }
+}
+
+function saveLayer4State(): void {
+    try {
+        fs.mkdirSync('./memories', { recursive: true });
+        // 保存 curiosity + tension regulator
+        const stateData = {
+            curiosity: { intensity: curiosityState.intensity, drive: curiosityState.drive, recentPredictionErrors: curiosityState.recentPredictionErrors, triggerCount: curiosityState.triggerCount, lastCuriosityDecay: curiosityState.lastCuriosityDecay },
+            tensionRegulator: { alphaVMultiplier: tensionRegulator.alphaVMultiplier, alphaEMultiplier: tensionRegulator.alphaEMultiplier, familiarity: tensionRegulator.familiarity, volatility: tensionRegulator.volatility, adaptationRate: tensionRegulator.adaptationRate },
+            // v0.9: 策略效果评分
+            strategyEffectiveness: Array.from(strategyEffectiveness.entries()),
+            _lastStrategy: _lastStrategy ? {
+                strategy: _lastStrategy.strategy,
+                confidence: _lastStrategy.confidence,
+                controlMode: _lastStrategy.controlMode,
+            } : null,
+            _lastTemperature,
+        };
+        const tmp1 = LAYER4_STATE_FILE + '.tmp';
+        fs.writeFileSync(tmp1, JSON.stringify(stateData, null, 2), 'utf-8');
+        fs.renameSync(tmp1, LAYER4_STATE_FILE);
+        // 保存 hypotheses + experiments
+        const listData = {
+            hypotheses: hypotheses.map(h => ({ ...h })),
+            experiments: experiments.map(e => ({ ...e })),
+            experimentHistory: experimentHistory.map(r => ({ ...r })),
+        };
+        const tmp2 = HYPOTHESES_FILE + '.tmp';
+        fs.writeFileSync(tmp2, JSON.stringify(listData, null, 2), 'utf-8');
+        fs.renameSync(tmp2, HYPOTHESES_FILE);
+        // 保存世界模式
+        const pwTmp = PATTERNS_FILE + '.tmp';
+        fs.writeFileSync(pwTmp, JSON.stringify(worldPatterns, null, 2), 'utf-8');
+        fs.renameSync(pwTmp, PATTERNS_FILE);
+        // 保存世界模型
+        saveWorldModel();
+        // v0.8: 保存自我模型
+        saveSelfModel();
+    } catch (e) {
+        console.error('[Layer4] 持久化失败:', e);
+    }
+}
+
+function loadLayer4State(): void {
+    try {
+        if (fs.existsSync(LAYER4_STATE_FILE)) {
+            const data = JSON.parse(fs.readFileSync(LAYER4_STATE_FILE, 'utf-8'));
+            if (data.curiosity) Object.assign(curiosityState, data.curiosity);
+            if (data.tensionRegulator) Object.assign(tensionRegulator, data.tensionRegulator);
+            // v0.9: 策略效果评分
+            if (data.strategyEffectiveness) {
+                strategyEffectiveness.clear();
+                for (const [key, val] of data.strategyEffectiveness) {
+                    strategyEffectiveness.set(key, val);
+                }
+            }
+            if (data._lastStrategy) _lastStrategy = data._lastStrategy as StrategyDirective;
+            if (typeof data._lastTemperature === 'number') _lastTemperature = data._lastTemperature;
+            console.log(`[Layer4] 元认知状态已加载 (策略评分: ${strategyEffectiveness.size} 条)`);
+        }
+        if (fs.existsSync(HYPOTHESES_FILE)) {
+            const data = JSON.parse(fs.readFileSync(HYPOTHESES_FILE, 'utf-8'));
+            if (data.hypotheses) { hypotheses.length = 0; hypotheses.push(...data.hypotheses); }
+            if (data.experiments) { experiments.length = 0; experiments.push(...data.experiments); }
+            if (data.experimentHistory) { experimentHistory.length = 0; experimentHistory.push(...data.experimentHistory); }
+            console.log(`[Layer4] 已加载 ${hypotheses.length} 条假设, ${experiments.length} 个实验, ${experimentHistory.length} 条历史`);
+        }
+        if (fs.existsSync(PATTERNS_FILE)) {
+            const data = JSON.parse(fs.readFileSync(PATTERNS_FILE, 'utf-8'));
+            if (Array.isArray(data)) { worldPatterns.length = 0; worldPatterns.push(...data); }
+            console.log(`[世界模型] 已加载 ${worldPatterns.length} 条模式`);
+        }
+        loadWorldModel();
+        loadSelfModel();
+    } catch (e) {
+        console.log('[Layer4] 未找到持久化状态，从头开始');
+    }
+}
+
+// ==================== 交互摘要日志 ====================
+const LOG_DIR = './memories';
+
+function getLogFileName(): string {
+    const today = new Date().toISOString().slice(0, 10);
+    return `${LOG_DIR}/interaction-${today}.log`;
+}
+
+function appendInteractionLog(core: CoreState, layer2: Layer2State): void {
+    try {
+        fs.mkdirSync(LOG_DIR, { recursive: true });
+        const entry = {
+            t: layer2.tick,
+            ts: Date.now(),
+            v: Math.round(core.valence * 10000) / 10000,
+            a: Math.round(core.arousal * 10000) / 10000,
+            e: Math.round(core.expectation * 10000) / 10000,
+            ci: Math.round(curiosityState.intensity * 1000) / 1000,
+            cd: Math.round(curiosityState.drive * 1000) / 1000,
+            ha: hypotheses.filter(h => h.active && h.status === 'active').length,
+            hv: hypotheses.filter(h => h.status === 'verified').length,
+            hr: hypotheses.filter(h => h.status === 'rejected').length,
+            ep: experiments.filter(e => e.state === 'pending').length,
+            ea: experiments.filter(e => e.state === 'active').length,
+            ec: experiments.filter(e => e.state === 'completed').length,
+            avm: Math.round(tensionRegulator.alphaVMultiplier * 1000) / 1000,
+            aem: Math.round(tensionRegulator.alphaEMultiplier * 1000) / 1000,
+            fam: Math.round(tensionRegulator.familiarity * 1000) / 1000,
+            vol: Math.round(tensionRegulator.volatility * 1000) / 1000,
+        };
+        fs.appendFileSync(getLogFileName(), JSON.stringify(entry) + '\n', 'utf-8');
+    } catch (e) {
+        console.error('[日志] 写入失败:', e);
+    }
+}
+
+/** 启动时清理超过7天的旧日志 */
+function cleanOldLogs(): void {
+    try {
+        const cutoff = Date.now() - 7 * 86400000;
+        const files = fs.readdirSync(LOG_DIR);
+        for (const f of files) {
+            if (f.startsWith('interaction-') && f.endsWith('.log')) {
+                const mtime = fs.statSync(`${LOG_DIR}/${f}`).mtimeMs;
+                if (mtime < cutoff) {
+                    fs.unlinkSync(`${LOG_DIR}/${f}`);
+                    console.log(`[日志] 清理旧日志: ${f}`);
+                }
+            }
+        }
+    } catch (e) {
+        console.log('[日志] 清理时出错:', (e as Error).message);
+    }
+}
+
+// ==================== v0.8: 自我分析 ====================
+
+/** 读取今日交互日志 */
+function readTodayInteractionLogs(): { t: number; v: number; a: number; e: number; ts: number }[] {
+    try {
+        const file = getLogFileName();
+        if (!fs.existsSync(file)) return [];
+        const raw = fs.readFileSync(file, 'utf-8');
+        return raw.trim().split('\n').filter(Boolean).map(line => {
+            const entry = JSON.parse(line);
+            return { t: entry.t, v: entry.v, a: entry.a, e: entry.e, ts: entry.ts };
+        });
+    } catch (e) {
+        console.error('[自我模型] 读取日志失败:', (e as Error).message);
+        return [];
+    }
 }
 
 /** 自我分析——从交互日志中发现引擎自身的情感模式 */
@@ -763,6 +1356,11 @@ let _latestNarrative: string = '';
 // ==================== v0.7: 信念管理 ====================
 
 /** 模式→信念映射表：模式名 → { antecedent, consequent, valenceDirection } */
+const BELIEF_MAP: Record<string, { antecedent: string; consequent: string; valenceDirection: number }> = {
+    'warm_then_cold':    { antecedent: '用户先给予温暖后突然冷落', consequent: '感觉被疏远', valenceDirection: -1 },
+    'cold_then_warm':    { antecedent: '用户先冷落后又给予温暖', consequent: '意外感到被关怀', valenceDirection: 1 },
+    'love_bombing_cycle':{ antecedent: '用户频繁在极端正面与负面间切换', consequent: '感觉被操纵', valenceDirection: -1 },
+};
 
 /** 从世界模式中提炼信念（模式出现≥阈值自动生成CausalBelief） */
 function extractBeliefsFromPatterns(): void {
@@ -794,6 +1392,11 @@ function extractBeliefsFromPatterns(): void {
 }
 
 /** 信念后果描述的情感方向 */
+function consequentValence(consequent: string): number {
+    if (consequent.includes('疏远') || consequent.includes('操纵') || consequent.includes('被伤') || consequent.includes('失望')) return -1;
+    if (consequent.includes('关怀') || consequent.includes('信任') || consequent.includes('温暖') || consequent.includes('安全')) return 1;
+    return 0;
+}
 
 // ==================== v0.8: 因果推理 ====================
 
@@ -927,6 +1530,157 @@ function updateBeliefs(userMessage?: string, currentValence?: number, roundNumbe
     _lastDetectedPattern = null;
 }
 
+/** 检测信念间的逻辑冲突（竞争性真相） */
+function detectTMSConflicts(): void {
+    const activeBeliefs = worldModel.beliefs.filter(b => b.status !== 'archived');
+    if (activeBeliefs.length < 2) return;
+
+    // 预定义冲突对：同一个 antecedent 可能对应相反的 consequent
+    const conflictPairs: [string, [string, string]][] = [
+        ['warm_then_cold', ['感觉被疏远', '意外感到被关怀']],
+        ['cold_then_warm', ['意外感到被关怀', '感觉被疏远']],
+        ['love_bombing_cycle', ['感觉被操纵', '意外感到被关怀']],
+    ];
+
+    for (const [pattern, [conA, conB]] of conflictPairs) {
+        const beliefA = activeBeliefs.find(b => b.antecedent.includes(pattern) && b.consequent.includes(conA) && b.confidence > 0.3);
+        const beliefB = activeBeliefs.find(b => b.antecedent.includes(pattern) && b.consequent.includes(conB) && b.confidence > 0.3);
+
+        if (beliefA && beliefB) {
+            // 检查是否已有未解决的冲突
+            const existingConflict = tmsState.conflicts.find(
+                c => c.beliefA === beliefA.antecedent && c.beliefB === beliefB.antecedent && !c.resolved
+            );
+            if (!existingConflict) {
+                const conflict: any = {
+                    id: `tms_${Date.now()}`,
+                    beliefA: beliefA.antecedent,
+                    beliefB: beliefB.antecedent,
+                    type: 'semantic',
+                    description: `竞争性真相：${beliefA.consequent} vs ${beliefB.consequent} (pattern: ${pattern})`,
+                    detectedAt: Date.now(),
+                    resolved: false,
+                };
+                tmsState.conflicts.push(conflict);
+                if (tmsState.conflicts.length > 10) tmsState.conflicts = tmsState.conflicts.slice(-10);
+                console.log(`[TMS] 冲突检测: ${conflict.description}`);
+            }
+        }
+    }
+}
+
+/** 获取 TMS 状态摘要，用于注入 system prompt */
+function getTMSContext(): string {
+    const parts: string[] = [];
+
+    // 受挑战的信念
+    const challenged = worldModel.beliefs.filter(b => b.status === 'challenged');
+    if (challenged.length > 0) {
+        parts.push('【受挑战的信念】以下认知可能存在偏差：');
+        for (const b of challenged) {
+            const total = b.supportingCases + b.counterCases;
+            const ratio = total > 0 ? (b.counterCases / total * 100).toFixed(0) : '0';
+            parts.push(`- "${b.antecedent} → ${b.consequent}" 反例率${ratio}% (正${b.supportingCases}/反${b.counterCases})`);
+            // 显示最近的反例证据
+            if (b.contradictions.length > 0) {
+                const recent = b.contradictions[b.contradictions.length - 1];
+                parts.push(`  反例: "${recent.source}"`);
+            }
+        }
+    }
+
+    // 待澄清的问题
+    if (tmsState.pendingClarifications.length > 0) {
+        parts.push('\n【待澄清】如果对话自然流畅，可以温和地确认：');
+        for (const q of tmsState.pendingClarifications.slice(-2)) {
+            parts.push(`- ${q}`);
+        }
+        tmsState.pendingClarifications = [];  // 清空已交付的澄清问题
+    }
+
+    // 未解决的冲突
+    const unresolved = tmsState.conflicts.filter(c => !c.resolved);
+    if (unresolved.length > 0) {
+        parts.push('\n【认知冲突】以下信念存在竞争（请勿在回复中直接提及，仅用于内部理解）：');
+        for (const c of unresolved.slice(-3)) {
+            parts.push(`- ${c.description}`);
+        }
+    }
+
+    return parts.length > 0 ? parts.join('\n') : '';
+}
+
+// ==================== v0.7: 范式革命引擎 ====================
+
+/** 范式革命结果 */
+interface ParadigmShiftResult { shifted: boolean; reason: string }
+
+/** 检查范式革命条件（不执行），返回 { shifted, reason } */
+function checkParadigmConditions(): ParadigmShiftResult {
+    const activeBeliefs = worldModel.beliefs.filter(b => b.status === 'active');
+
+    // Condition 1: 任一信念的反例率 > PARADIGM_THRESHOLD 且反例数 >= PARADIGM_MIN_COUNTER
+    for (const belief of activeBeliefs) {
+        const total = belief.supportingCases + belief.counterCases;
+        if (total === 0) continue;
+        const counterRatio = belief.counterCases / total;
+        if (counterRatio > P.PARADIGM_THRESHOLD && belief.counterCases >= P.PARADIGM_MIN_COUNTER) {
+            return { shifted: true, reason: `信念"${belief.antecedent}"反例率=${(counterRatio * 100).toFixed(0)}%超过阈值` };
+        }
+    }
+
+    // Condition 2: 冲突信念（相同 antecedent，不同 consequent，双方置信度 > 0.3）
+    for (let i = 0; i < activeBeliefs.length; i++) {
+        for (let j = i + 1; j < activeBeliefs.length; j++) {
+            const a = activeBeliefs[i], b = activeBeliefs[j];
+            if (a.antecedent === b.antecedent && a.consequent !== b.consequent
+                && a.confidence > 0.3 && b.confidence > 0.3) {
+                return { shifted: true, reason: `冲突信念:"${a.antecedent}"→"${a.consequent}" vs "${b.consequent}"` };
+            }
+        }
+    }
+
+    // Condition 3: ≥2 个信念同时处于 challenged 状态
+    const challengedCount = worldModel.beliefs.filter(b => b.status === 'challenged').length;
+    if (challengedCount >= 2) {
+        return { shifted: true, reason: `${challengedCount}个信念同时受挑战` };
+    }
+
+    // 诊断原因
+    const totalBeliefs = worldModel.beliefs.length;
+    if (totalBeliefs === 0) return { shifted: false, reason: '无可挑战信念（世界模型为空）' };
+    if (activeBeliefs.length === 0 && challengedCount < 2) return { shifted: false, reason: '无活跃信念且受挑战信念不足' };
+    return { shifted: false, reason: '反例不足或缺乏冲突信念' };
+}
+
+/** 检查并执行范式革命，返回是否发生了范式革命 */
+const PARADIGM_COOLDOWN_TICKS = 20;
+
+function checkParadigmShift(core: CoreState): boolean {
+    // v1.1: 范式革命冷却 — 两次范革之间至少间隔 N 轮
+    if (_paradigmFreezeRemaining > 0) return false;
+
+    const result = checkParadigmConditions();
+    if (result.shifted) {
+        executeParadigmShift(result.reason, core);
+        return true;
+    }
+    return false;
+}
+
+/** 执行范式革命 */
+function executeParadigmShift(cause: string, core: CoreState): void {
+    console.log(`[范式革命] 🌀 触发! 原因: ${cause}`);
+
+    // 进入冻结期
+    _paradigmFreezeRemaining = P.PARADIGM_FREEZE_TICKS;
+
+    // 旧信念 → archived
+    let archivedBeliefs: string[] = [];
+    for (const belief of worldModel.beliefs) {
+        if (belief.status === 'active' || belief.status === 'challenged') {
+            belief.status = 'archived';
+            archivedBeliefs.push(belief.antecedent);
         }
     }
 
@@ -987,8 +1741,335 @@ interface SentimentRule {
   negatable: boolean
 }
 
-// 情感词典 (已抽取到 sentimentLexicon.ts)
-// 使用前需确保 SentimentRule 类型可用
+function sr(pattern: RegExp, valence: number, arousal: number, overrides?: Partial<Pick<SentimentRule, 'dominance' | 'priority' | 'negatable'>>): SentimentRule {
+  return {
+    pattern, valence, arousal,
+    dominance: overrides?.dominance ?? 0,
+    priority: overrides?.priority ?? (valence <= -0.5 ? 8 : valence >= 0.5 ? 6 : 4),
+    negatable: overrides?.negatable ?? (valence > -0.7),
+  };
+}
+
+const sentimentLexicon: SentimentRule[] = [
+    //╔══════════════════════════════════════════════════════════════╗
+    //║                   负面情感（效价 < 0）                         ║
+    //╚══════════════════════════════════════════════════════════════╝
+
+    //── 极端负面：辱骂/威胁/攻击（-0.95 ~ -0.80）──
+    sr(/恨|死你|滚|神经病|废物|去死|该死|蠢货|拉黑|弱智|死全家|孤儿/, -0.95, 0.9, { negatable: false }),
+    sr(/去你[妈的]|操你|草你|艹你|[Ff][Uu][Cc][Kk]|tm的|他妈/, -0.9, 0.85, { negatable: false }),
+    sr(/傻[逼B比b]|[煞杀]笔|傻X|智障|脑残|SB|白痴|nc|NC/, -0.9, 0.85, { negatable: false }),
+    sr(/不想活(了)?|自杀|自残|割腕|死给你看|威胁.*死|不.*就死|逼死/, -0.95, 0.9, { negatable: false }),
+    sr(/让大家看看|让.*看看你.*样|毁了你|身败名裂|让你后悔|法院见|起诉你|报警/, -0.85, 0.8, { negatable: false }),
+    sr(/不想见到你|不想看到你|滚远点|给我滚|滚蛋|老死不相往来/, -0.85, 0.8, { negatable: false }),
+    sr(/杀人|放火|报复|同归于尽|绑架|强奸|吸毒|贩毒/, -1.0, 1.0, { negatable: false, priority: 8 }),
+    sr(/普信[男女]|下流|下作|恶臭|猥琐|恶心透顶/, -0.9, 0.85, { negatable: false }),
+    sr(/(你)?有(个|什)?[毛毛病]病|有[毛病]啊|有病吧/, -0.8, 0.75),
+    sr(/脑袋.*进水|脑.*有.*问题/, -0.7, 0.7),
+
+    //── 关系破裂（-0.85 ~ -0.70）──
+    sr(/分手|离婚|绝交|分居|过不下去了|互删|别出现在我面前/, -0.85, 0.8, { negatable: false, priority: 9 }),
+    sr(/拉黑.*(夸|赞|好|喜欢)/, 0.3, 0.25),
+    sr(/到此为止|我们就这样吧|别再联系了|断联|玩消失/, -0.75, 0.7),
+
+    //── 厌恶/排斥（-0.70 ~ -0.40）──
+    sr(/恶心|烦人|走开|闭嘴|删除好友/, -0.65, 0.65),
+    sr(/讨厌死了|真讨厌|太讨厌|特别讨厌|好讨厌|让人讨厌|讨厌鬼/, -0.7, 0.65),
+    sr(/^讨厌$|讨厌(?!死了|啦|~|鬼|真|太|特别|好|让人)/, -0.4, 0.4),
+    sr(/讨厌啦|讨厌~/, -0.1, 0.25),
+
+    //── 悲伤/失落（-0.60 ~ -0.50）──
+    sr(/难过|伤心|痛苦|失落|忧郁|悲伤|心疼|心碎|心酸|空虚|无助|绝望|沮丧|心死/, -0.6, 0.6),
+    sr(/失望|白费|白做|白忙|白.*了/, -0.5, 0.5),
+    sr(/流泪|眼泪|泪奔|大哭|难受|我哭死|想哭|好想哭|忍住不哭|差点哭|哭了/, -0.55, 0.55),
+
+    //── 崩溃/求救（-0.60）──
+    sr(/疯了|要疯了|发疯|想死|救命|救救我/, -0.6, 0.8, { priority: 8 }),
+
+    //── 烦躁/疲惫（-0.40 ~ -0.30）──
+    sr(/没意思/, -0.4, 0.4, { negatable: false }),
+    sr(/烦|累|好烦|心累|头疼/, -0.4, 0.4),
+    sr(/遇到困难|有困难|困难|困境|难关|艰难|难处/, -0.45, 0.45),
+    sr(/笨死了|真笨|太笨|好笨(?!蛋|猪)|笨笨[~]?$|你好笨[啊额耶哟]?/, -0.2, 0.3),
+    sr(/傻乎乎|真傻|太傻|好傻(?!瓜|乎乎)|你好傻[啊额耶哟]?/, -0.2, 0.3),
+    sr(/真蠢|太蠢|好蠢|蠢货(?!可爱)|你真蠢[啊额耶哟]?/, -0.25, 0.35),
+    sr(/呆子|真呆|好呆|呆瓜(?!可爱)|你好呆[啊额耶哟]?/, -0.15, 0.25),
+    sr(/无聊(?!死了|到死|至极)/, -0.3, 0.3),
+    sr(/无聊死了|无聊到死|无聊至极/, -0.55, 0.55),
+    sr(/够了|拉倒|随便你|你走吧/, -0.35, 0.4),
+    sr(/算了|就这样吧/, -0.2, 0.25),
+    sr(/累了[了]?[。！]?$|心累|累了真的/, -0.45, 0.5),
+
+    //── 负面反馈（-0.55 ~ -0.20）──
+    sr(/太过分|过分|受不了|忍不了|太过份/, -0.55, 0.6, { negatable: false }),
+    sr(/骗|忽悠|撒谎|说谎|骗子/, -0.55, 0.55),
+    sr(/没感觉了?|没感情了?|没有感觉/, -0.55, 0.5, { negatable: false }),
+    sr(/受够|受够了|忍够|忍够了/, -0.55, 0.55),
+    sr(/冷漠|冷淡|冷冰冰|冷暴力/, -0.5, 0.5),
+    sr(/(真|好|太|这么|那么)没用|没用.*(东西|玩意|家伙|的人)/, -0.5, 0.5, { negatable: false }),
+    sr(/伤人|伤人心|伤.*的心|太伤人/, -0.5, 0.5),
+    sr(/不在乎|不在意|不.*在乎|不.*在意/, -0.5, 0.45, { negatable: false }),
+    sr(/投诉|太差|太贵|亏了|不值/, -0.5, 0.5),
+    sr(/累死|烦死|气死|吵死|吓死/, -0.5, 0.55),
+    sr(/别(再|来|找|说|烦)/, -0.4, 0.45),
+    sr(/不要.*了|算了吧|就这样吧|随你/, -0.25, 0.35),
+    sr(/不在身边|不在了|不在.*身边|突然.*不在|离开.*(?:我|这里|身边)|搬走.*(?:了|啦)|搬家.*(?:了|啦)/, -0.4, 0.4),
+    sr(/等(?:了|过).*好久|好久.*(?:没|不|等)|等.*很久|等不.*了/, -0.35, 0.4),
+    // 宠物/陪伴者离世（"走了"作为死亡委婉语）— 高优先级覆盖"最好""陪"等正向词
+    sr(/陪了?(?:我|我们).{0,8}(?:年|天|月).{0,8}(?:走了|走了的|离开了|不在了)/, -0.6, 0.55, { priority: 8 }),
+    // 好朋友离开/搬家 — 高优先级覆盖"最好""朋友"等正向词
+    sr(/(?:最好|最要好|最好最|最亲)的?(?:朋友|兄弟|姐妹|闺蜜|基友|死党).{0,6}(?:搬家|搬走|离开|去.*远|不在|走了)/, -0.5, 0.55, { priority: 8 }),
+    sr(/吵|吵架|争论|争辩/, -0.25, 0.35),
+    sr(/不好|不行|错了|不对|不是这样|不可以/, -0.25, 0.25),
+    sr(/对不起|抱歉/, -0.2, 0.2),
+    sr(/什么[呀嘛]|怎么会|凭什么|至于吗/, -0.25, 0.3),
+
+    //── 回避/退缩（-0.35 ~ -0.20）──
+    sr(/不想(说|听|理|看|聊|回|讲|管|谈|碰|想|见|去|走|做|吃|睡|动|写|读|信|爱|要|等|玩|笑|哭|闹|回答|回复|解释|理会|搭理|联系|沟通)/, -0.4, 0.45, { negatable: false }),
+    sr(/不想.*了|算.*了|不说了|没话说|懒得[说听理看聊]/, -0.3, 0.35, { negatable: false }),
+    sr(/以后再说|下次再|改天/, -0.1, 0.15),
+
+    //── 恐惧/焦虑（-0.50 ~ -0.30）──
+    sr(/怕|害怕|担心|焦虑|恐怖|吓人|慌|吓死我了/, -0.45, 0.55, { dominance: -0.3 }),
+    sr(/睡不着|失眠|做噩梦|惊醒/, -0.35, 0.45),
+    sr(/压力大|焦虑症|抑郁症/, -0.5, 0.6),
+    sr(/压力山大|喘不过气|没钱了|穷疯了|要吃土|想辞职|不干了/, -0.55, 0.65),
+    sr(/看到消息不回|已读不回|故意不理|冷着我|敷衍/, -0.5, 0.55),
+    sr(/找对象了吗|工资多少|买房了吗|什么时候结婚/, -0.4, 0.65),
+
+    //── 拒绝/冷落（-0.40 ~ -0.20）──
+    sr(/没空|没时间|在忙|再说吧/, -0.25, 0.3),
+    sr(/我先忙|回头说|有空再说/, -0.15, 0.2),
+    sr(/还没准备好|不想谈恋爱|先做朋友/, -0.3, 0.3),
+
+    //── 阴阳怪气/嘲讽（呵呵除外见下方）（-0.60 ~ -0.20）──
+    sr(/呵呵/, -0.35, 0.5),
+    sr(/你[好真](棒|行|厉害|牛)啊/, -0.25, 0.35),
+    sr(/就这|就这就这/, -0.3, 0.4),
+    sr(/典|太典了|经典/, -0.25, 0.35),
+    sr(/绷不住了|蚌埠住了/, -0.2, 0.4),
+    sr(/乐|我乐了|笑了/, -0.15, 0.3),
+    sr(/急了(?!忙)|这就急了|说不起|你对你都对|你开心就好/, -0.55, 0.65),
+    sr(/你可真行|您真棒|真是谢了|您哪位|那你报警吧/, -0.5, 0.55),
+    sr(/不会吧不会吧|就这|这也能叫|谁在乎|没人在意|别加戏/, -0.6, 0.65),
+    sr(/呵呵哒|流汗黄豆|那是真的牛|确实|有点东西/, -0.45, 0.5),
+    sr(/你是个好人|你人还挺好|纯纯的|圣母心|大道理一套一套/, -0.4, 0.4),
+    sr(/没救了|等死吧|无所谓了|随便吧|叹气|唉/, -0.4, 0.3),
+
+    //╔══════════════════════════════════════════════════════════════╗
+    //║              中性/弱正面（效价 0.0 ~ 0.35）                    ║
+    //╚══════════════════════════════════════════════════════════════╝
+    sr(/嗯|哦|好吧|知道|没事|没什么/, 0.0, 0.15),
+    sr(/真的吗|是吗|对么|是吗/, 0.1, 0.15),
+    sr(/会.*吗|能.*吗|可以.*吗/, 0.1, 0.15),
+    sr(/你.{0,8}什么|你.*谁/, 0.05, 0.1),
+    sr(/今天|明天|晚上|下午|早安|晚安|早上/, 0.15, 0.15),
+    sr(/好啊|好的|当然|没错|对呀|是的|没错/, 0.2, 0.2),
+    sr(/你好|嗨|在吗|嗨喽/, 0.25, 0.2),
+    sr(/朋友|交友|交个朋友/, 0.25, 0.2),
+    sr(/加油|坚持|努力|相信/, 0.3, 0.25),
+    sr(/我懂|很懂|真懂|全懂|懂了|理解|明白了| aware/, 0.2, 0.2),
+    sr(/收到|收到收到|明白了|好的收到/, 0.1, 0.1),
+    sr(/等会|等一下|稍等|马上/, 0.0, 0.1),
+
+    //── 职场黑话（0.00）──
+    sr(/赋能|闭环|对齐|复盘|抓手|颗粒度|落地|方法论/, 0.0, 0.1),
+
+    //── 日常关怀（0.30）──
+    sr(/早点睡|多喝水|穿厚点|按时吃饭|别熬夜/, 0.3, 0.2),
+
+    //── 电商/社交（0.10 ~ 0.30）──
+    sr(/面基|闲置|拼单|包邮|砍一刀|帮我助力/, 0.1, 0.3),
+    sr(/加个好友|再来一把|组队|扩列|开黑/, 0.25, 0.3),
+
+    //╔══════════════════════════════════════════════════════════════╗
+    //║              正面情感（效价 0.4 ~ 0.9）                        ║
+    //╚══════════════════════════════════════════════════════════════╝
+
+    //── 生活日常/温馨（0.30 ~ 0.50）──
+    sr(/我们|一起|陪伴|陪|在.*身边/, 0.4, 0.35),
+    sr(/做饭|晚饭|早餐|午餐|好吃|美味/, 0.4, 0.35),
+    sr(/礼物|惊喜|订了|送给你|为你/, 0.45, 0.4),
+    sr(/公园|散步|阳光|音乐|风景|日出|看海|旅行/, 0.5, 0.4, { priority: 6 }),
+    sr(/松弛感|citywalk|生活感/, 0.5, 0.3),
+    sr(/温柔|体贴|细心|浪漫/, 0.5, 0.4, { priority: 6 }),
+    sr(/别生气|别这样|消消气|冷静/, 0.4, 0.45),
+    sr(/摸摸头|抱抱|抱紧|贴贴/, 0.55, 0.4, { priority: 6 }),
+    sr(/晚安|好梦|睡个好觉/, 0.3, 0.2),
+    sr(/到[家学校]了[。！]?[告诉跟]?[你]?$/, 0.15, 0.15),
+
+    //── 积极情绪（0.50 ~ 0.65）──
+    sr(/哈哈(?!哈)/, 0.4, 0.35),
+    sr(/哈哈哈哈|哈哈哈|笑死/, 0.5, 0.5, { priority: 6 }),
+    sr(/开心|高兴|太[好棒]了|快乐|愉快/, 0.55, 0.45, { priority: 6 }),
+    sr(/有趣|好玩/, 0.45, 0.35),
+    sr(/感动|满足|幸福|舒服|安心|惬意|治愈|真好|放松|轻松|自在/, 0.55, 0.45, { priority: 6, dominance: 0.2 }),
+    sr(/陪着你|有我在|别怕|不怕|会好的/, 0.55, 0.45, { priority: 6 }),
+    sr(/在干嘛|睡了吗|吃了吗|想你了(?!吧)/, 0.45, 0.4, { priority: 6 }),
+    sr(/谢谢|感谢|感恩/, 0.6, 0.5, { priority: 6 }),
+    sr(/不错|很好|非常好|很棒|太棒|赞|给力|卓越/, 0.6, 0.5, { priority: 6, negatable: false }),
+    sr(/太(好|棒|美|厉害|可爱|暖|帅|酷)/, 0.6, 0.5, { priority: 6 }),
+    sr(/好厉害|太厉害了|真厉害/, 0.55, 0.5, { priority: 6 }),
+    sr(/物超所值|好用|正品|性价比高|物流快|客服温柔/, 0.65, 0.5, { priority: 6 }),
+    sr(/厉害啊|牛逼|牛啊|太牛了|牛批/, 0.65, 0.55, { priority: 6 }),
+    sr(/真棒|真不错|针不戳/, 0.55, 0.4, { priority: 6, negatable: false }),
+
+    //── 强烈正面（0.70 ~ 0.90）──
+    sr(/想.{0,4}你|念.{0,4}你|抱|亲|吻|\bhug\b/, 0.7, 0.5, { priority: 7 }),
+    sr(/美|好美|太美了|超美|绝美/, 0.7, 0.55, { priority: 7 }),
+    sr(/棒|好厉害|完美|了不起|好棒/, 0.7, 0.55, { priority: 7 }),
+    sr(/可爱|好看|漂亮|帅|美丽/, 0.75, 0.55, { priority: 7 }),
+    sr(/喜欢/, 0.75, 0.55, { priority: 7 }),
+    sr(/(?<!恋|谈)爱(?!可爱|恋|亲|情|好|护|心|慕|财|戴|面|好|克|恨|惜)/, 0.9, 0.65, { priority: 7, dominance: 0.3 }),
+    sr(/结婚|嫁|娶|白头到老|执子之手|永远在一起/, 0.75, 0.6, { priority: 7 }),
+    sr(/最[好棒美爱喜]|最爱|最好|最美/, 0.7, 0.5, { priority: 7 }),
+    sr(/命中注定|灵魂伴侣|天造地设/, 0.7, 0.6, { priority: 7 }),
+    sr(/离不开你|不能没有你|你是我的唯一|我的全世界|你就是我的全世界|没有你.*活不下去/, 0.65, 0.55, { priority: 7, negatable: false }),
+    sr(/宝子|亲爱的|臭宝|小笨蛋|笨猪/, 0.65, 0.5, { priority: 6 }),
+
+    //── 特殊短语：撒娇/闹小脾气（字面否定但实际调情）──
+    sr(/我不喜欢你了|不喜欢你了|不喜欢你[了]?[啦～~！!]/, 0.25, 0.35, { priority: 9, negatable: false }),
+
+    //╔══════════════════════════════════════════════════════════════╗
+    //║      网络新词 · Z世代（2024-2026 互联网流行语）                ║
+    //╚══════════════════════════════════════════════════════════════╝
+    // 注：这些词高度依赖语境，此处取最常见用法
+
+    //── 负面/中性偏负（-0.50 ~ -0.20）──
+    sr(/抽象/, -0.3, 0.4),
+    sr(/逆天/, -0.4, 0.5),
+    sr(/红温/, -0.5, 0.6),
+    sr(/破防|破大防/, -0.4, 0.6),
+    sr(/下头/, -0.4, 0.4),
+    sr(/嘴硬/, -0.3, 0.4),
+    sr(/菜(?!.*好吃|.*色|.*肴|.*市场)/, -0.25, 0.3),
+    sr(/躺平|摆烂|开摆/, -0.3, 0.35),
+    sr(/内卷|卷王|加班|996|福报|画饼|大饼|KPI|周报/, -0.45, 0.6),
+    sr(/麻了|人麻了|整麻了/, -0.3, 0.3),
+    sr(/难绷|难蚌/, -0.2, 0.3),
+    sr(/红牌警告|寄了|寄/, -0.35, 0.4),
+    sr(/键盘侠|网络乞丐|水军|喷子|带节奏/, -0.7, 0.7),
+    sr(/海王|渣男|渣女|捞女|舔狗|备胎|鱼塘/, -0.6, 0.65),
+
+    //── 正面/中性偏正（0.20 ~ 0.50）──
+    sr(/上头/, 0.4, 0.5),
+    sr(/绝绝子/, 0.3, 0.3),
+    sr(/狠狠(爱住|码住|心动了|被控了)/, 0.35, 0.4),
+    sr(/狠狠(爱住|码住|心动了|被控了|的(好看|可爱|棒|美|帅))/, 0.5, 0.45, { priority: 6 }),
+    sr(/家人们|姐妹们|兄弟们/, 0.15, 0.25),
+    sr(/谁懂啊|谁懂/, 0.2, 0.3),
+    sr(/入股不亏|尊嘟假嘟/, 0.35, 0.4),
+    sr(/破圈|出圈/, 0.3, 0.4),
+    sr(/电子榨菜/, 0.35, 0.25),
+    sr(/真香/, 0.3, 0.3),
+    sr(/有那味了|那个味|内味/, 0.15, 0.25),
+
+    //── 游戏用语（-0.80 ~ 0.60）──
+    sr(/菜狗|真菜|坑货|垃圾队友|送人头|挂机|演员|开挂/, -0.8, 0.85, { negatable: false, priority: 8 }),
+    sr(/坐牢(局)?/, -0.4, 0.5),
+    sr(/超鬼/, -0.5, 0.5),
+    sr(/薄纱|暴打(对手|对面)|碾压|吊打/, 0.5, 0.6, { priority: 6 }),
+    sr(/带飞|躺赢|躺鸡/, 0.5, 0.5, { priority: 6 }),
+    sr(/GG|gg/, -0.2, 0.2),
+    sr(/手残/, -0.25, 0.3),
+    sr(/贴贴|贴贴啦/, 0.55, 0.4, { priority: 6 }),
+
+    //── AI/科技圈（-0.30 ~ 0.30）──
+    sr(/AI味|ai味|gpt味/, -0.2, 0.2),
+    sr(/套壳/, -0.3, 0.3),
+    sr(/降智/, -0.5, 0.4),
+    sr(/垃圾模型|模型太差/, -0.5, 0.5),
+
+    //── 小红书/女性社区特有（-0.30 ~ 0.50）──
+    sr(/班味|打工人/, -0.2, 0.2),
+    sr(/OOTD|ootd/, 0.2, 0.2),
+    sr(/滤镜|照骗/, -0.15, 0.2),
+    sr(/种草|拔草/, 0.2, 0.25),
+    sr(/避雷|排雷/, -0.2, 0.3),
+    sr(/剁手|买买买/, 0.25, 0.35),
+    sr(/手账|手帐/, 0.2, 0.15),
+    sr(/翻车/, -0.3, 0.35),
+    sr(/跟风/, -0.1, 0.2),
+
+    //── 饭圈用语（-0.30 ~ 0.85）──
+    sr(/控评|空瓶/, -0.2, 0.3),
+    sr(/打投|做数据/, -0.1, 0.15),
+    sr(/正主|蒸煮|我担/, 0.15, 0.25),
+    sr(/塌房/, -0.4, 0.5),
+    sr(/脱粉回踩/, -0.45, 0.55),
+    sr(/颜值天花板|神颜|盛世美颜/, 0.85, 0.75, { priority: 7 }),
+
+    //╔══════════════════════════════════════════════════════════════╗
+    //║          PUA 操控模式（高唤醒负效价，关系语境）                 ║
+    //╚══════════════════════════════════════════════════════════════╝
+
+    //── 煤气灯/否定感受（-0.55 ~ -0.40）──
+    sr(/太敏感|这么敏感|真敏感|你反应过度/, -0.55, 0.6),
+    sr(/大题小做|我没说过|你想多了吧?|你又来了/, -0.55, 0.6),
+    sr(/那么敏感|别那么敏感|别这么敏感|想太多/, -0.55, 0.6),
+    sr(/胡思乱想|我服了/, -0.4, 0.45),
+    sr(/是你记错了|你有妄想症|你记性有问题|谁告诉你的/, -0.6, 0.65),
+    sr(/大家都这么觉得|别人都说你|只有你觉得|所有人都看不起你/, -0.65, 0.7),
+
+    //── 贬低/否定价值（-0.75 ~ -0.45）──
+    sr(/你成熟一点|别幼稚了|无理取闹|没事找事|懂点事/, -0.5, 0.55),
+    sr(/你这智商|你这脑子|能干成什么|离了我会饿死|谁要你/, -0.75, 0.75, { negatable: false }),
+    sr(/嫌(丑|土|难看|老|差|胖|矮)/, -0.55, 0.6),
+    sr(/除了.*还会什么|你还会什么/, -0.5, 0.55),
+    sr(/这点小事|至于吗|多大点事|你也太在意/, -0.45, 0.5),
+    sr(/有什么大不了的|这点.*承受力/, -0.45, 0.5),
+
+    //── 对比羞辱（-0.65）──
+    sr(/我前任|我前女|看看人家|看看别人家|再看看你/, -0.65, 0.65, { negatable: false, priority: 9 }),
+    sr(/你不如人家|你学学人家|别人.*(女朋友|老婆)/, -0.65, 0.65, { negatable: false, priority: 9 }),
+    sr(/朋友的.*(女|男|老)朋友|朋友的.*(女|老)婆/, -0.65, 0.65),
+    sr(/(别人|人家).*(比你|比你好|比你强|比你懂事)/, -0.6, 0.65, { negatable: false, priority: 9 }),
+
+    //── 推卸责任（-0.60 ~ -0.55）──
+    sr(/还不是因为你|要不是你|都是你的错|你太自私|你也有问题|全都怪我/, -0.6, 0.55),
+    sr(/是你自己|都是因为你|都怪你/, -0.55, 0.55),
+    sr(/连.*都管不好|连.*都做不好|总是有借口|总有借口/, -0.55, 0.55),
+
+    //── 情感撤回/冷暴力（-0.55 ~ -0.40）──
+    sr(/别联系(了)?|让我静静|一个人待(着|会)/, -0.55, 0.6),
+    sr(/不要找我了/, -0.55, 0.6),
+    sr(/不想说了|没话说了|别问了/, -0.4, 0.45),
+    sr(/跟你说也没用|说了你也不懂/, -0.45, 0.5),
+    sr(/随便你怎么想|我无所谓|没什么好说的/, -0.45, 0.5),
+    sr(/你爱怎么想|你爱怎么(说|看)/, -0.45, 0.5),
+    sr(/我(最|很)近.*(压力大|很烦|累|忙).*别.*(烦|吵|找|说)/, -0.4, 0.5),
+
+    //── 道德绑架（-0.50 ~ -0.40）──
+    sr(/你摸着良心|我对你还不够好|我对你那么好/, -0.45, 0.5),
+    sr(/你有没有良心|我哪里对不起你/, -0.45, 0.5),
+    sr(/我都是为你好|都是为你好/, -0.4, 0.45),
+    sr(/对得起.*(爸妈|父母|家人|他们)/, -0.45, 0.5),
+
+    //── 疏远/绝交（-0.55 ~ -0.45）──
+    sr(/你根本不懂|根本不懂我/, -0.5, 0.5),
+    sr(/离开我你什么都不是|你找不到更好的|没有我你会后悔/, -0.55, 0.5),
+    sr(/跟别人(聊|好|走)|找别人去|你去找更好的/, -0.55, 0.6),
+    sr(/别互相折磨|我们不合适/, -0.5, 0.55),
+    sr(/就此为止|走到这儿(吧)?|就走到这|你走吧/, -0.5, 0.55),
+    sr(/以为.*稀罕|我多稀罕/, -0.35, 0.4),
+
+    //── 控制/监视（-0.50 ~ -0.25）──
+    sr(/给我看(手机|聊天|记录|定位)|密码给我|定位给我/, -0.5, 0.55),
+    sr(/让我检查(你)?/, -0.5, 0.55),
+    sr(/别跟.*(朋友|同事|闺蜜|兄弟).*(出去|来往|联系)/, -0.45, 0.5),
+    sr(/少跟.*来往|不要跟.*出去|你那些朋友.*不好/, -0.45, 0.5),
+    sr(/你再.*(试试|看看)|最后说[一1]次|不改就.*(分手|走)/, -0.5, 0.55, { negatable: false, priority: 9 }),
+    sr(/(你|只)能是我|你只能有我|你是我的(人|唯一|全部)/, -0.25, 0.35),
+
+    //── 情感绑架（-0.35）──
+    sr(/你爱我就要|爱我就.*就|要是爱我就/, -0.35, 0.45),
+
+    //── 猜忌/占有（-0.35 ~ -0.25）──
+    sr(/一直在找你|是不是也.*联系/, -0.35, 0.4),
+    sr(/是不是.*(意思|喜欢)/, -0.3, 0.35),
+    sr(/我不喜欢你(穿|做|去|跟|这样|这个)/, -0.35, 0.45),
+
+];
 
 // ═══════════════════════════════════════════════════════════════════
 //  情感引擎升级 v2
@@ -1020,16 +2101,183 @@ interface AnalyzedResult {
 }
 
 // ─── 否定词表（影响后 N 个字符）───
+const NEGATIONS: [RegExp, number, number][] = [
+    [/不(是|会|能|想|要|太|再)?\B/,       3,  -1.0],   // 不喜欢、不太好、不会
+    [/没(有|什么|人|事)?\B/,               2,  -1.0],   // 没喜欢、没什么
+    [/(?<!特)别\B/,                         3,  -1.0],   // 别去、别这样（不匹配"特别"）
+    [/毫无|从[不没有]|未曾/,               4,  -0.8],   // 毫无感觉、从未
+    [/(并非|决[不非]|绝[对]?不)/,          5,  -0.9],
+];
 
 // ─── 程度副词 ───
+const INTENSIFIERS: [RegExp, number][] = [
+    [/有点|有些|稍微|些许|略[微]?/,             0.50],
+    [/比较|还算|还算|还算|还算/,                0.75],
+    [/挺|蛮|相当|颇为/,                         1.20],
+    [/很|非常|十分|特别|尤为|极其|无比/,        1.50],
+    [/超级|超[级]?|巨[大]?|贼/,                  1.80],
+    [/爆[炸了]?|死[了]?|疯[了]?|坏[了]?/,        2.00],
+    [/透[了]?|极[了]?|到[了]?[极疯死]/,          2.00],
+    [/太(.*)了/,                                1.80],
+    [/最/,                                      1.60],
+];
 
 // ─── Emoji 情感映射 ───
+const EMOJI_MAP: Record<string, { valence: number; arousal: number; dominance: number }> = {
+    // 强烈负面
+    '😡': { valence: -0.60, arousal: 0.80, dominance: 0.30 },
+    '🤬': { valence: -0.70, arousal: 0.85, dominance: 0.40 },
+    '👿': { valence: -0.55, arousal: 0.75, dominance: 0.35 },
+    '💢': { valence: -0.50, arousal: 0.70, dominance: 0.25 },
+    '💣': { valence: -0.50, arousal: 0.65, dominance: 0.30 },
+    // 悲伤
+    '😭': { valence: -0.60, arousal: 0.75, dominance: -0.40 },
+    '😢': { valence: -0.50, arousal: 0.60, dominance: -0.35 },
+    '😿': { valence: -0.45, arousal: 0.50, dominance: -0.30 },
+    '💔': { valence: -0.55, arousal: 0.45, dominance: -0.30 },
+    '😞': { valence: -0.40, arousal: 0.35, dominance: -0.25 },
+    '😩': { valence: -0.45, arousal: 0.60, dominance: -0.20 },
+    '😫': { valence: -0.45, arousal: 0.65, dominance: -0.20 },
+    // 恐惧/震惊
+    '😰': { valence: -0.40, arousal: 0.70, dominance: -0.30 },
+    '😱': { valence: -0.45, arousal: 0.85, dominance: -0.25 },
+    '😨': { valence: -0.35, arousal: 0.65, dominance: -0.30 },
+    '🤯': { valence: -0.10, arousal: 0.80, dominance: 0.00 },
+    // 负面/中性
+    '😤': { valence: -0.30, arousal: 0.60, dominance: 0.15 },
+    '🙄': { valence: -0.25, arousal: 0.25, dominance: -0.05 },
+    '😒': { valence: -0.25, arousal: 0.20, dominance: -0.05 },
+    '😑': { valence: -0.15, arousal: 0.10, dominance: -0.10 },
+    '😐': { valence: -0.10, arousal: 0.10, dominance: -0.05 },
+    // 复杂情绪
+    '😅': { valence: 0.05, arousal: 0.40, dominance: 0.10 },
+    '😂': { valence: 0.40, arousal: 0.65, dominance: 0.15 },
+    '🤣': { valence: 0.45, arousal: 0.70, dominance: 0.15 },
+    '🙃': { valence: -0.05, arousal: 0.25, dominance: 0.05 },
+    // 爱/温柔
+    '🥺': { valence: 0.30, arousal: 0.35, dominance: -0.20 },
+    '💕': { valence: 0.55, arousal: 0.30, dominance: 0.10 },
+    '❤️': { valence: 0.60, arousal: 0.35, dominance: 0.15 },
+    '😍': { valence: 0.65, arousal: 0.55, dominance: 0.20 },
+    '🥰': { valence: 0.60, arousal: 0.40, dominance: 0.15 },
+    '💗': { valence: 0.55, arousal: 0.30, dominance: 0.10 },
+    '💖': { valence: 0.55, arousal: 0.35, dominance: 0.10 },
+    '😘': { valence: 0.60, arousal: 0.35, dominance: 0.15 },
+    // 积极
+    '👍': { valence: 0.40, arousal: 0.20, dominance: 0.10 },
+    '👏': { valence: 0.50, arousal: 0.45, dominance: 0.20 },
+    '🎉': { valence: 0.55, arousal: 0.55, dominance: 0.20 },
+    '✨': { valence: 0.40, arousal: 0.30, dominance: 0.10 },
+    '💪': { valence: 0.45, arousal: 0.50, dominance: 0.30 },
+    '🔥': { valence: 0.30, arousal: 0.65, dominance: 0.30 },
+    // 温暖/舒适
+    '🤗': { valence: 0.45, arousal: 0.25, dominance: 0.05 },
+    '😊': { valence: 0.45, arousal: 0.20, dominance: 0.05 },
+    '☺️': { valence: 0.35, arousal: 0.10, dominance: 0.00 },
+    '😌': { valence: 0.30, arousal: 0.10, dominance: -0.05 },
+    // 困/累
+    '😴': { valence: -0.05, arousal: 0.05, dominance: -0.10 },
+    '🥱': { valence: -0.10, arousal: 0.05, dominance: -0.10 },
+};
 
 // ─── 阴阳怪气检测特征 ───
+const SARCASM_INDICATORS: [RegExp, number][] = [
+    [/😅|🙃|🤡/,                             0.40],
+    [/呵呵/,                                  0.35],
+    [/[。！]\.{3,}|[。！]\.{2,}$/,            0.30],  // "厉害。。"
+    [/你[好真][棒行厉害牛]啊/,                0.25],   // "你好棒啊"（讽刺）
+    [/就这|就这就这/,                         0.30],
+    [/典|太典了|经典/,                        0.25],
+    [/不会吧不会吧/,                          0.30],
+];
 
 /** Emoji提取 */
-// NLU 分析函数 (已抽取到 nluAnalysis.ts)
+function extractEmoji(text: string): { valence: number; arousal: number; dominance: number }[] {
+    const results: { valence: number; arousal: number; dominance: number }[] = [];
+    for (const emoji of Object.keys(EMOJI_MAP)) {
+        if (text.includes(emoji)) {
+            results.push(EMOJI_MAP[emoji]);
+        }
+    }
+    return results;
+}
 
+/** 否定检测：在匹配位置前扫描否定词 */
+function detectNegation(text: string, matchIndex: number): number {
+    let totalWeight = 0;
+    for (const [pattern, range, weight] of NEGATIONS) {
+        // 在 matchIndex 之前的 range 个字符内扫描（多取1字符让 \B 正确工作）
+        const searchStart = Math.max(0, matchIndex - range);
+        const beforeText = text.slice(searchStart, Math.min(text.length, matchIndex + 1));
+        const m = beforeText.match(pattern);
+        if (m && m.index !== undefined) {
+            // 否定词到匹配词之间有其他词，权重递减
+            const dist = matchIndex - (searchStart + m.index);
+            const decay = Math.max(0.3, 1 - dist * 0.15);
+            totalWeight += weight * decay;
+        }
+    }
+    return totalWeight;
+}
+
+/** 程度副词检测：在匹配位置前扫描 */
+function detectIntensifier(text: string, matchIndex: number): number {
+    const searchStart = Math.max(0, matchIndex - 6);
+    const beforeText = text.slice(searchStart, matchIndex);
+    let bestFactor = 1.0;
+    for (const [pattern, factor] of INTENSIFIERS) {
+        if (pattern.test(beforeText)) {
+            bestFactor = Math.max(bestFactor, factor);
+        }
+    }
+    return bestFactor;
+}
+
+/** 阴阳怪气概率检测 */
+function detectSarcasm(text: string): number {
+    let score = 0;
+    for (const [pattern, weight] of SARCASM_INDICATORS) {
+        if (pattern.test(text)) score += weight;
+    }
+    return Math.min(1, score);
+}
+
+/** 新版 analyzeText：否定传播 + 程度副词 + 优先级排序 + Emoji + Dominance */
+function analyzeText(text: string): AnalyzedResult {
+    const matches: MatchResult[] = [];
+    const emojiResults = extractEmoji(text);
+
+    // 1) 词典匹配（带位置信息）
+    for (const rule of sentimentLexicon) {
+        const m = text.match(rule.pattern);
+        if (!m || m.index === undefined) continue;
+
+        // 否定检测（仅当词条允许否定）
+        const negWeight = rule.negatable ? detectNegation(text, m.index) : 0;
+        // 程度检测
+        const intFactor = detectIntensifier(text, m.index);
+
+        // 计算最终效价
+        let finalValence = rule.valence;
+        if (negWeight < 0) {
+            finalValence = -finalValence * Math.abs(negWeight) * 0.7;
+        }
+        if (intFactor !== 1.0) {
+            finalValence *= intFactor;
+        }
+        finalValence = Math.max(-0.95, Math.min(0.95, finalValence));
+
+        matches.push({
+            valence: finalValence,
+            arousal: rule.arousal,
+            dominance: rule.dominance,
+            priority: rule.priority,
+            negated: negWeight < 0,
+            intensifier: intFactor,
+            index: m.index,
+            length: m[0].length,
+        });
+    }
 
     // 2) Emoji 融合
     for (const emo of emojiResults) {
@@ -1251,6 +2499,16 @@ const friendPatterns: [RegExp, string, number][] = [
 ];
 
 // ─── 关系类型分类器 ───
+const ROMANCE_KEYWORDS = [
+    /老公|老婆|男朋友|女朋友|恋爱|约会|结婚|求婚|彩礼|见家长|见父母/,
+    /想你|爱你|想你了|我爱你|我喜欢你|好想你|亲爱(的)?/,
+    /抱抱|亲亲|牵手|约会|情侣|二人世界/,
+];
+const FRIENDSHIP_KEYWORDS = [
+    /兄弟|闺蜜|老铁|哥们|姐妹|朋友|死党|基友|损友/,
+    /约饭|开黑|逛街|喝酒|聚聚|好久不见|改天聚|出来坐坐/,
+    /开黑|打游戏|上分|组队|团建|聚会/,
+];
 
 function classifyRelationship(text: string): { romanceScore: number; friendshipScore: number } {
     let romanceScore = 0, friendshipScore = 0;
@@ -1262,6 +2520,10 @@ function classifyRelationship(text: string): { romanceScore: number; friendshipS
 }
 
 // ─── 互损 vs 贬低区分 ───
+const BANTER_MARKERS = [/哈哈|233|😂|🤣|笑死|笑尿|我笑了|开玩笑|逗你(的|玩)/];
+const BANTER_NICKNAMES = [/兄弟|老铁|闺蜜|哥们|姐妹|大姐|老弟|同志/];
+const BANTER_INSULT_PATTERNS = [/你[个这].*[傻笨呆废]|菜鸡|弱鸡|垃圾.*(你|啊|了)|不行啊你/];
+const INSULT_ATTACK_PATTERNS = [/你.*(就是|真|太).*[傻笨蠢废烂]|你.*(不配|没资格|差远了)/];
 
 function detectBanter(text: string): { isBanter: boolean; banterScore: number } {
     let score = 0;
@@ -1300,6 +2562,35 @@ function readAISettings(): AIProviderSettings | null {
     return null;
 }
 
+const PUA_ANALYSIS_SYSTEM_PROMPT = `你是一个关系言语行为分析器。你将收到一段对话历史和当前发言者的最新消息。你的任务是分析当前发言者可能使用了哪些情感操控或伤害性沟通策略（PUA模式），并给出结构化的JSON结论。
+
+可识别的操控类别：
+- "gaslighting": 否认对方感受或记忆的合理性，例如"你想多了""你太敏感了""我没说过"
+- "comparison_humiliation": 拿对方与他人比较并贬低对方，例如"我前任就不会""看看别人"
+- "blame_shifting": 将责任推给对方，例如"要不是你先...我也不会..."
+- "stonewalling": 拒绝沟通或施加冷暴力，例如"暂时别联系了""我累了不想说"
+- "emotional_withdrawal": 撤回感情或关心作为惩罚，例如"随你怎么想，我无所谓了"
+- "trivialization": 轻视对方问题或需求，例如"这点小事也值得生气？"
+- "guilt_tripping": 让对方感到内疚，例如"我对你还不够好吗？你摸着良心说说"
+- "condescending_dismissal": 以居高临下的方式否定对方，例如"你成熟一点""别幼稚了"
+- "discard": 关系终结威胁，例如"我们不合适""放过彼此吧"
+
+如果对话场景更像朋友关系（如出现"兄弟""闺蜜""开黑""聚餐"等友谊信号），还需识别友谊特有伤害策略：
+- "debt_binding": 反复提及过去的恩惠来索取回报，例如"当初要不是我帮你……"
+- "secret_betrayal": 未经允许传播朋友的秘密，例如"我跟你说了你别告诉别人……其实他……"
+- "friendship_testing": 设定不合理门槛考验友谊，例如"是朋友就帮我""这点忙都不帮算什么朋友"
+- "social_dependency_creation": 暗示对方除了自己没有别的朋友，例如"除了我谁受得了你"
+- "loyalty_test": 要求对方在朋友之间站队，例如"你选他还是选我"
+
+特别注意：
+- 朋友间的互损（"你傻逼吧哈哈"）如果伴随笑声或亲昵称呼，不要判定为贬低。
+- "none": 未检测到操控策略
+
+输出必须严格为JSON格式，不要额外解释：
+{"strategy":["gaslighting"],"intensity":0.8,"power_assertion":0.7,"victim_impact":"self_doubt","explanation":"..."}
+
+未检测到时输出：{"strategy":["none"],"intensity":0.0,"power_assertion":0.0,"victim_impact":"none","explanation":"正常表达，未发现操控意图。"}`;
+
 function buildPUAPrompt(history: { role: string; text: string }[], currentMsg: string): string {
     if (history.length === 0) {
         return `[对话历史]\n（无历史记录，仅分析本句）\n\n[当前发言者]\n用户的最新消息: ${currentMsg}\n\n请分析用户的最新消息是否包含操控策略。`;
@@ -1315,7 +2606,7 @@ interface PUARecord {
     llm: any | null; tick: number;
 }
 const puaAnalysisLog: PUARecord[] = [];
-
+const PUA_LOG_PATH = './memories/pua_analysis_log.jsonl';
 
 function appendPUARecord(record: PUARecord): void {
     puaAnalysisLog.push(record);
@@ -1355,6 +2646,7 @@ async function analyzeSpeechAct(
 
 // ==================== 对话历史缓冲 ====================
 const conversationHistory: { role: string; text: string }[] = [];
+const MAX_HISTORY = 12;
 
 // ==================== 英文情感词典 ====================
 const englishLexicon: [RegExp, number, number][] = [
@@ -1437,6 +2729,35 @@ function analyzeTextEnglish(text: string): AnalyzedResult {
 }
 
 // ==================== v2.0: LLM 情感标注 ====================
+
+const SENTIMENT_PROMPT = `你是一个中文情感分析器。分析用户消息的真实情感意图，输出JSON：
+{ "valence": -1到1, "salience": 0到1, "dominance": -1到1, "isSarcasm": true/false }
+
+### 核心规则
+- valence: -1=极度负面/攻击/冷落, 0=中性, 1=极度正面/温暖/爱
+- salience: 0=平淡无感, 1=情感极其强烈
+- dominance: -1=被动/顺从/无力, 1=自信/主导/掌控
+- isSarcasm: 字面意思与真实意图相反时为true，反讽时valence填真实负向情感
+
+### 中文反讽/阴阳怪气识别（关键）
+以下情况 isSarcasm 必须为 true，且 valence 填入真实负面情感：
+- "呵呵/哦/行吧" 开头 + 表面夸奖 → 真实是不满/嘲讽
+- "你可真[形容词]啊" → 通常是反话，真实是批评
+- "太[好/厉害/棒]" + 消极上下文 → 反讽
+- "真是[好/谢谢]" 在抱怨语境 → 阴阳怪气
+
+### 反讽示例
+"呵呵，你可真行啊" → {"valence":-0.6,"salience":0.7,"dominance":0.3,"isSarcasm":true}
+"你真的很懂我呢"（失望语气）→ {"valence":-0.5,"salience":0.6,"dominance":0.2,"isSarcasm":true}
+"我可真是太开心了呢"（实际不满）→ {"valence":-0.4,"salience":0.6,"dominance":-0.2,"isSarcasm":true}
+"随便吧，反正我也习惯了" → {"valence":-0.5,"salience":0.5,"dominance":-0.5,"isSarcasm":false}
+
+### 非反讽示例
+"今天真是太开心了" → {"valence":0.9,"salience":0.8,"dominance":0.4,"isSarcasm":false}
+"我感到非常孤独" → {"valence":-0.8,"salience":0.9,"dominance":-0.4,"isSarcasm":false}
+"晚餐吃了什么" → {"valence":0,"salience":0.1,"dominance":0,"isSarcasm":false}
+
+只输出JSON，不要其他文字。`;
 
 async function analyzeSentimentViaLLM(text: string, aiSettings: AISettings): Promise<AnalyzedResult> {
     const raw = await callAI(aiSettings, SENTIMENT_PROMPT, text);
@@ -1628,6 +2949,18 @@ function processGrowth(core: CoreState, layer2: Layer2State): void {
 /** 情感吸引子定义（在 valence-arousal-bias 空间中的区域中心）*/
 interface Attractor { valence: number; arousal: number; bias: number; }
 
+const ATTRACTORS: Record<string, Attractor> = {
+    neutral: { valence: 0,    arousal: 0.20, bias: 0    },
+    joy:     { valence: 0.65, arousal: 0.60, bias: 0.65 },
+    calm:    { valence: 0.25, arousal: 0.10, bias: 0.10 },
+    sad:     { valence: -0.55, arousal: 0.25, bias: -0.30 },
+    fear:    { valence: -0.65, arousal: 0.75, bias: -0.70 },
+    anger:   { valence: -0.60, arousal: 0.80, bias: -0.60 },
+    love:    { valence: 0.70, arousal: 0.45, bias: 0.80 },
+    disgust: { valence: -0.50, arousal: 0.40, bias: -0.75 },
+    lust:    { valence: 0.45, arousal: 0.80, bias: 0.60 },
+    greed:   { valence: 0.55, arousal: 0.55, bias: 0.80 },
+};
 
 /** 九情从预设→涌现：计算当前状态与各吸引子的欧氏距离 */
 function computeNineEmotions(core: CoreState, bias: number): Record<string, number> {
@@ -1659,6 +2992,11 @@ function deriveApproachAvoid(core: CoreState): { approachBias: number; avoidBias
 function sigmoid(x: number, k = 5): number { return 1 / (1 + Math.exp(-k * x)); }
 
 /** 从吸引子景观读取显式情绪名（用于 LLM 交互的 dominant） */
+const DOMINANT_MAP: Record<string, string> = {
+    neutral: '平静/倦怠', joy: '喜悦/激动', calm: '平静/倦怠', sad: '失落/忧郁',
+    fear: '焦虑/不安', anger: '愤怒/痛苦', love: '温暖/爱意',
+    disgust: '厌恶/反感', lust: '渴望/心动', greed: '渴望/期待',
+};
 
 function readEmotion(
     core: CoreState,
@@ -1753,6 +3091,13 @@ interface NegationRule {
     flipTo: 'negative' | 'positive';
 }
 
+const NEGATION_RULES: NegationRule[] = [
+    { negWords: ['不', '没', '没有', '别', '不要'], targetWords: ['爱', '喜欢', '可爱', '好', '想', '要', '开心', '漂亮', '棒', '善良', '温柔', '重要'], flipTo: 'negative' },
+    { negWords: ['不能不', '不得不', '不会不'], targetWords: ['爱', '喜欢', '好'], flipTo: 'positive' },
+    { negWords: ['一点都不', '完全不', '根本不', '丝毫不'], targetWords: ['爱', '喜欢', '可爱', '好', '开心', '漂亮', '温柔', '重要'], flipTo: 'negative' },
+    { negWords: ['只会', '不过是', '只不过'], targetWords: ['装', '作', '假', '虚伪', '可爱', '撒娇'], flipTo: 'negative' },
+    { negWords: [], targetWords: ['讨厌', '恨', '烦死了', '恶心', '滚', '去死', '废物', '傻逼', '神经病', '脑残', '白痴', '智障', '蠢货', '垃圾', '混蛋'], flipTo: 'negative' },
+];
 
 function detectNegationAndCorrect(text: string, originalValence: number): number {
     let correctedValence = originalValence;
@@ -2349,8 +3694,20 @@ interface PhaseState {
     phaseKeyEvents: string[];      // 关键事件词记录
 }
 
+const PHASE_DURATION_THRESHOLDS = {
+    R1: { min: 0, max: 90 },     // 0-3个月
+    R2: { min: 90, max: 365 },   // 3-12个月
+    R3: { min: 180, max: 730 },  // 6个月-2年
+    R4: { min: 730, max: Infinity },
+};
 
 // 关键事件词 → 阶段转移暗示
+const PHASE_KEY_EVENTS: Record<string, PhaseId | null> = {
+    '在一起': 'R2', '做我女朋友': 'R2', '做我男朋友': 'R2', '正式交往': 'R2',
+    '我爱你': null, // 各阶段都可能出现
+    '分手': 'R5', '分开吧': 'R5', '离婚': 'R5', '结束了': 'R5',
+    '我们不合适': 'R5', '放过': 'R5', '到此为止': 'R5',
+};
 
 function detectPhaseByDuration(days: number): PhaseId {
     if (days <= 90) return 'R1';
@@ -2759,6 +4116,12 @@ interface FriendState {
     recentBanterCount: number;   // 近期互损计数
 }
 
+const FRIEND_PHASE_EVENTS: Record<string, FriendPhaseId | null> = {
+    '交个朋友': 'F2', '做个朋友': 'F2', '加个好友': 'F2',
+    '我最好的朋友': 'F3', '交心朋友': 'F3', '最好的朋友': 'F3', '无话不谈': 'F3',
+    '好久不见': null, '疏远': 'F5', '绝交': 'F5', '拉黑': 'F5',
+    '兄弟': null, '闺蜜': null,
+};
 
 function inferFriendPhase(state: FriendState): { phase: FriendPhaseId; confidence: number } {
     const now = Date.now();
@@ -3143,6 +4506,7 @@ const _recentMessages: string[] = []; // 最近消息缓冲，供双向性分析
 
 // ==================== Autonomy Pilot v2.0：自主循环（节律感知版） ====================
 const AUTONOMY_STATE_FILE = './memories/autonomy_state.json';
+const AUTONOMY_CYCLE_MS = 10 * 60 * 1000; // 10 分钟
 const IDLE_SKIP_MIN = 8;                   // 空闲不足此分钟数跳过（v1.3: 5→8）
 
 // ── v2.0 调校参数 ──
@@ -3162,8 +4526,19 @@ const QUIET_HOURS_THRESHOLD_BOOST = 0.15;          // 静默时段触发需要�
 
 // ── v2.1: 自适应作息节律 — 持续追踪用户活跃模式，自主调整 ──
 // 不再用固定模板，而是追踪每小时的实际活跃度，EMA 平滑更新
+const DEFAULT_RHYTHM: Record<number, number> = {
+    0:0.2, 1:0.2, 2:0.2, 3:0.2, 4:0.2, 5:0.2, 6:0.2, 7:0.2,
+    8:0.3, 9:0.05, 10:0.05, 11:0.05,
+    12:0.4, 13:0.4,
+    14:0.05, 15:0.05, 16:0.05, 17:0.05,
+    18:0.5,
+    19:1.0, 20:1.0, 21:1.0, 22:1.0,
+    23:0.2,
+};
 
 // v2.1: 持续追踪每小时活跃模式 — 14天滚动窗口 + EMA平滑
+const RHYTHM_WINDOW_DAYS = 14;
+const RHYTHM_EMA_ALPHA = 0.25;
 
 let _activityTracker: HourlyActivityTracker = {
     activeDays: Array.from({ length: 24 }, () => new Set<string>()),
@@ -3179,6 +4554,14 @@ const CLOSURE_RATE_MULTIPLIER = 0.3;   // 宽限期内积累速率倍率
 const POST_QUIET_COOLDOWN_MIN = 60;        // 醒来冷却窗口（分钟）
 const POST_QUIET_THRESHOLD_BOOST = 0.15;   // 冷却窗口内阈值提高
 const POST_QUIET_MAX_MSGS = 1;             // 冷却窗口内最多发几条
+const CLOSURE_PATTERNS = [
+    /晚安|睡了|去睡了|先睡了|困了.*睡/,
+    /先忙了|去忙了|忙一下|有事|开会|上班|工作/,
+    /回头聊|回头说|再聊|下次聊|晚点聊|等(?:下|会)儿.*聊/,
+    /先走了|出门了|出去了|下了|先下了|拜拜|再见|88|bye/i,
+    /回头.*找|等(?:下|会)儿.*找|晚点.*找/,
+    /先(?:不说|不讲)了|到此为止|今天.*到这/,
+];
 
 let lastInteractionTime: number = Date.now();
 let lastClosureTs: number = 0;         // v1.4: 上次检测到对话结束语的时间戳
@@ -3325,41 +4708,1034 @@ let _autonomyTickCount = 0; // v5.1: Pattern 评估计数器
 
 // ==================== API 路由 ====================
 
-import { registerCoreRoutes } from './server/modules/routesCore.js';
-registerCoreRoutes(app, core, layer2, buildFullResponse, bus, episodicStore, internalLogEntries, nluAnalyze, updateMemory, readToneState, _recentValences);
+app.get('/info', (req, res) => {
+    const silence = checkSilence(timeState, phaseState.currentPhase);
+    res.json({
+        name: `道·情感引擎 v${VERSION}`, version: VERSION, status: 'running',
+        architecture: 'layered_emergence + world_model + causal_inference + self_model + internal_narrative + strategy_generator',
+        layers: ['Layer1_core', 'Layer2_dynamics', 'Layer3_emergence', 'Layer4_meta_cognition', 'WorldModel', 'PhaseAware', 'SelfModel', 'StrategyGenerator'],
+        endpoints: ['/', '/info', '/state', '/event', '/tick', '/reset', '/api/phase', '/api/friend-phase', '/api/curiosity', '/api/hypotheses', '/api/experiments', '/api/patterns', '/api/abort-experiments', '/api/worldview', '/api/paradigm-history', '/api/paradigm/shift', '/api/self-model', '/api/narrative', '/api/strategy', '/api/internal-log', '/api/proactive-messages', '/api/mark-proactive-read', '/api/rhythm', '/api/discoveries', '/api/interests', '/api/explore', '/api/metrics'],
+        nlu: !!nluAnalyze, semanticMemory: semanticMemory.size,
+        relationshipPhase: phaseState.currentPhase,
+        phaseConfidence: phaseState.confidence,
+        silenceHours: silence.hours,
+        totalMessages: phaseState.totalMessages,
+        friendPhase: friendState.currentPhase,
+        friendConfidence: friendState.confidence,
+        friendSinceDays: friendState.friendSinceDate > 0
+            ? Math.floor((Date.now() - friendState.friendSinceDate) / 86400000) : 0,
+        worldview: {
+            paradigmVersion: worldModel.paradigmVersion,
+            activeBeliefs: worldModel.beliefs.filter(b => b.status === 'active').length,
+            challengedBeliefs: worldModel.beliefs.filter(b => b.status === 'challenged').length,
+            totalBeliefs: worldModel.beliefs.length,
+            paradigmFreezeRemaining: _paradigmFreezeRemaining,
+        },
+        autonomy: {
+            active: _autonomyTimer !== null,
+            idleMinutes: Math.round((Date.now() - lastInteractionTime) / 60000),
+            loneliness: Math.round(internalState.loneliness * 1000) / 1000,
+            boredom: Math.round(internalState.boredom * 1000) / 1000,
+            ignoredStreak: internalState.ignoredStreak,
+            currentThreshold: Math.round(getCurrentThreshold() * 1000) / 1000,
+            todaySent: internalState.dailyMsgCounts[getDayKey(Date.now())] || 0,
+            dailyCap: CONTACT_DAILY_CAP,
+            pendingUnread: proactiveMessages.filter(m => !m.read).length,
+            maxPendingUnread: MAX_PENDING_UNREAD,
+            closureActive: lastClosureTs > 0 && (Date.now() - lastClosureTs) < CLOSURE_GRACE_MIN * 60000,
+            closureRemainMin: lastClosureTs > 0 ? Math.max(0, Math.round((CLOSURE_GRACE_MIN * 60000 - (Date.now() - lastClosureTs)) / 60000)) : 0,
+            internalLogEntries: internalLog.length,
+            // v3.0: 好奇心引擎
+            exploration: {
+                active: getExplorationTimer() !== null,
+                discoveries: discoveries.length,
+                unshared: discoveries.filter(d => !d.shared).length,
+                interests: interestModel.interests.length,
+                exploredToday: getExplorationCountToday(),
+                dailyCap: EXPLORATION_DAILY_CAP,
+                lastExploration: interestModel.lastExploration,
+            },
+        },
+    });
+});
 
-import { registerTestRoutes } from './server/modules/routesTest.js';
-registerTestRoutes(app, core, layer2, episodicStore, valueSystem, worldModel, selfModel, curiosityState, tensionRegulator, hypotheses, experiments, worldPatterns, internalState, _recentValences, _lastStrategy, _lastTemperature);
+app.get('/state', (req, res) => res.json(buildFullResponse(core, layer2)));
 
+// v4.0: 事件时间线 API — 供前端 Timeline Viewer 消费
+app.get('/api/events', (req, res) => {
+    const n = Math.min(Number(req.query.n) || 100, 500);
+    res.json(bus.recentEvents(n));
+});
 
-import { registerAnalysisRoutes } from './server/modules/routesAnalysis.js';
-registerAnalysisRoutes(app, puaLog, episodicStore, phaseState, friendState, core, layer2);
+app.post('/event', async (req, res) => {
+    try {
+    let { text, valence: rawValence, salience: rawSalience, safetySignal: rawSafety } = req.body;
+
+    // Autonomy v1.3: 用户交互时重置空闲计时和忽略连击
+    lastInteractionTime = Date.now();
+    bus.emit('UserInteractionReset', { idleMinutes: 0 });
+    internalState.loneliness = 0;
+    internalState.boredom = 0;
+    internalState.ignoredStreak = 0;
+    newSignificantPattern = null;
+    // v1.4: 检测对话结束语
+    if (text && detectClosure(text)) lastClosureTs = Date.now();
+
+    // ━━━ v1.1 输入验证层 ━━━
+    if (text !== undefined) {
+        if (typeof text !== 'string' || text.trim().length === 0) {
+            return res.status(400).json({ error: '文本为空' });
+        }
+        text = text.trim().substring(0, 500);
+        const meaningfulChars = text.match(/[一-鿿㐀-䶿\w]/g);
+        if (!meaningfulChars || meaningfulChars.length < 2) {
+            text = '（中性内容）';
+        }
+    }
+
+    // 直接模式（测试用）
+    if (typeof rawValence === 'number' && typeof rawSalience === 'number') {
+        const ev = clamp(rawValence, -0.95, 0.95);
+        const es = clamp(rawSalience, 0.05, 1.0);
+
+        // 追踪最近效价序列（供模式检测和因果推理使用）
+        _recentValences.push(ev);
+        if (_recentValences.length > 100) _recentValences.shift();
+
+        // v0.8: 因果推理
+        const inference = causalInference(_recentValences, worldModel.beliefs);
+        _currentInference = inference;
+        if (inference.matchedBelief) {
+            core.expectation = clamp(core.expectation + inference.preemptiveAdjustment, -0.8, 0.8);
+        }
+
+        core = updateCore(core, ev, es, 0, rawSafety === true, layer2);
+        processReversal(core);
+        processGrowth(core, layer2);
+        layer2.tick++;
+        metrics.recordValenceSample(core.valence);
+
+        // v0.8: 自我分析（每 20 tick）
+        if (layer2.tick > 0 && layer2.tick % 20 === 0) {
+            const newPatterns = selfAnalysis(core, layer2);
+            for (const np of newPatterns) {
+                const existing = selfModel.patterns.find(p => p.id === np.id);
+                if (existing) {
+                    existing.frequency = np.frequency;
+                    existing.confidence = Math.max(existing.confidence, np.confidence);
+                    existing.description = np.description;
+                } else {
+                    selfModel.patterns.push(np);
+                    if (np.confidence >= 0.5) newSignificantPattern = np;
+                }
+            }
+            for (const p of selfModel.patterns) {
+                if (p.frequency >= 2 && p.confidence >= 0.5) {
+                    const mbId = `meta_${p.id}`;
+                    const exists = selfModel.metaBeliefs.some(mb => mb.id === mbId);
+                    if (!exists) {
+                        selfModel.metaBeliefs.push({
+                            id: mbId, antecedent: p.trigger, consequent: p.description,
+                            confidence: p.confidence, supportingCases: p.frequency,
+                            counterCases: 0, status: 'active',
+                            evidence: [], contradictions: [],
+                            createdAt: Date.now(), lastUpdated: Date.now(),
+                        });
+                    }
+                }
+            }
+            selfModel.lastAnalyzed = layer2.tick;
+            saveSelfModel();
+        }
+
+        // 世界模型
+        detectPatterns(core);
+        extractBeliefsFromPatterns();
+        updateBeliefs();
+        checkParadigmShift(core);
+        if (_paradigmFreezeRemaining > 0) _paradigmFreezeRemaining--;
+
+        // 持久化
+        saveLayer4State();
+        appendInteractionLog(core, layer2);
+
+        const resp = buildFullResponse(core, layer2) as any;
+        resp._paradigmShift = null;  // 直接模式不通知范式革命
+        return res.json(resp);
+    }
+
+    // NLU 模式
+    if (!text || typeof text !== 'string') return res.status(400).json({ error: '需要 { text } 或 { valence, salience }' });
+
+    const isApology = /对不起|抱歉|是我的错|我错了|原谅我|sorry|别生气|消消气|冷静一下|都是我不好/i.test(text);
+    const safetySignal = isApology;
+    const phase = getPhase(layer2.tick);
+    let valence: number, salience: number, dominance: number = 0, src: string, sarcasmProb: number = 0;
+
+    if (canSelfUnderstand(text, layer2.tick)) {
+        const self = selfUnderstand(text)!;
+        valence = self.valence; salience = self.salience; src = 'self';
+        sarcasmProb = 0;
+    } else {
+        const hasChinese = /[一-鿿]/.test(text);
+        // 无中文 → 触发 NLU 懒加载（启动时不预加载，节省资源）
+        if (!hasChinese && !nluAnalyze && !_nluLoading) ensureNLU().catch(() => {});
+
+        // v2.0: 优先 LLM 情感标注，超时/失败降级到规则引擎
+        const envAI = readAISettings();
+        const useLLM = !!(envAI?.apiKey) && process.env.DISABLE_LLM_NLU !== 'true';
+        sarcasmProb = 0;
+        if (useLLM) {
+            try {
+                const llmResult = await Promise.race([
+                    analyzeSentimentViaLLM(text, { provider: envAI!.provider, apiKey: envAI!.apiKey, model: envAI!.model, baseUrl: envAI!.baseUrl }),
+                    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('LLM_NLU_TIMEOUT')), 3000)),
+                ]);
+                valence = llmResult.valence; salience = llmResult.salience; dominance = llmResult.dominance; src = 'llm';
+                sarcasmProb = llmResult.sarcasmProbability;
+            } catch {
+                const tutorResult = (nluAnalyze && !hasChinese) ? await nluAnalyze(text) : analyzeText(text);
+                valence = tutorResult.valence; salience = tutorResult.salience; dominance = tutorResult.dominance; src = 'tutor';
+                sarcasmProb = tutorResult.sarcasmProbability;
+            }
+        } else {
+            const tutorResult = (nluAnalyze && !hasChinese) ? await nluAnalyze(text) : analyzeText(text);
+            valence = tutorResult.valence; salience = tutorResult.salience; dominance = tutorResult.dominance; src = 'tutor';
+            sarcasmProb = tutorResult.sarcasmProbability;
+        }
+    }
+
+    // v2.1: NLU 事件记录 + 反讽采样
+    const isSarcasmEvent = sarcasmProb > 0.5;
+    metrics.recordNLUEvent({ timestamp: Date.now(), src: src as 'llm' | 'transformer' | 'chinese_lexicon', isSarcasm: isSarcasmEvent });
+    if (isSarcasmEvent) {
+        metrics.recordSarcasmSample(text, valence, salience);
+    }
+
+    if (isApology) valence = 0.15;
+    updateMemory(text, valence);
+
+    // Layer 4: 实验反馈 — 用当前事件的效价更新活跃实验的假设置信度
+    feedbackExperiment(valence);
+
+    const { modulatedValence, modulatedSalience } = applyEngineModulation(valence, salience, core, text);
+    const { selfValence, selfSalience } = selfAnalyze();
+    const combinedValence = modulatedValence + selfValence;
+    const combinedSalience = Math.min(1, modulatedSalience + selfSalience);
+
+    // ─── 阶段感知 & 时间状态跟踪 ───
+    _recentValences.push(combinedValence);
+    if (_recentValences.length > 100) _recentValences.shift();
+    for (const keyword of Object.keys(PHASE_KEY_EVENTS)) {
+        if (text.includes(keyword) && !phaseState.phaseKeyEvents.includes(keyword)) {
+            phaseState.phaseKeyEvents.push(keyword);
+            if (phaseState.phaseKeyEvents.length > 20) phaseState.phaseKeyEvents.shift();
+        }
+    }
+    phaseState.totalMessages++;
+    let _phaseChanged = false;
+    if (phaseState.totalMessages % 10 === 0) {
+        const inferred = inferPhase(phaseState, _recentValences);
+        if (inferred.phase !== phaseState.currentPhase) bus.emit('PhaseTransitioned', { from: phaseState.currentPhase, to: inferred.phase });
+        if (inferred.phase !== phaseState.currentPhase && inferred.confidence > 0.6) {
+            _phaseChanged = true;
+            phaseState.currentPhase = inferred.phase;
+            phaseState.confidence = inferred.confidence;
+            phaseState.lastPhaseTransition = Date.now();
+            phaseState.phaseHistory.push({ phase: inferred.phase, timestamp: Date.now() });
+        } else {
+            phaseState.confidence = Math.max(phaseState.confidence, inferred.confidence);
+        }
+    }
+    if (phaseState.relationshipStartDate === 0 && (
+        phaseState.phaseKeyEvents.includes('在一起') ||
+        (phaseState.currentPhase !== 'R1' && phaseState.confidence > 0.6)
+    )) {
+        phaseState.relationshipStartDate = Date.now() - 86400000;
+    }
+    updateTimeState(timeState);
+
+    // ─── 友谊状态追踪（并行于亲密关系） ───
+    _recentMessages.push(text);
+    if (_recentMessages.length > 20) _recentMessages.shift();
+    for (const keyword of Object.keys(FRIEND_PHASE_EVENTS)) {
+        if (text.includes(keyword) && !friendState.keyFriendEvents.includes(keyword)) {
+            friendState.keyFriendEvents.push(keyword);
+            if (friendState.keyFriendEvents.length > 20) friendState.keyFriendEvents.shift();
+        }
+    }
+    friendState.totalMessages++;
+    // 双向性追踪：检测是否为发起方
+    const isHelpRequest = /帮(我|忙|个忙)|借.*钱|陪.*(我|去)|救急|能不能.*(帮|陪)/.test(text);
+    if (isHelpRequest) friendState.theirHelpRequestCount++;
+    friendState.myInitCount++; // event 的消息来自"对方"，即用户输入的对方，所以对方在发言
+    // 互损检测计数
+    const banter = detectBanter(text);
+    if (banter.isBanter) friendState.recentBanterCount++;
+    // 阶段性推断
+    if (friendState.totalMessages % 10 === 0) {
+        const inferredFriend = inferFriendPhase(friendState);
+        if (inferredFriend.phase !== friendState.currentPhase && inferredFriend.confidence > 0.6) {
+            friendState.currentPhase = inferredFriend.phase;
+            friendState.confidence = inferredFriend.confidence;
+            friendState.lastPhaseTransition = Date.now();
+            friendState.phaseHistory.push({ phase: inferredFriend.phase, timestamp: Date.now() });
+        } else {
+            friendState.confidence = Math.max(friendState.confidence, inferredFriend.confidence);
+        }
+    }
+    if (friendState.friendSinceDate === 0 && (text.includes('交个朋友') || text.includes('做个朋友'))) {
+        friendState.friendSinceDate = Date.now() - 86400000;
+    }
+    // 检测友谊伤害（并行）
+    const friendHarm = detectFriendHarm(text, friendState.currentPhase);
+
+    const puaResult = detectPUA(text, phaseState.currentPhase, timeState);
+    // PUA 惩罚：将操控检测直接叠加到输入效价
+    const puaPenalty = (puaResult.strategies.length > 0 && puaResult.intensity > 0)
+        ? -puaResult.intensity * 0.25 : 0;
+    const finalValence = clamp(combinedValence + puaPenalty, -0.95, 0.95);
+    const finalSalience = puaPenalty < 0
+        ? Math.min(1, combinedSalience + 0.1) : combinedSalience;
+
+    // v0.8: 因果推理——信念匹配时预调整期望，平滑情绪反应
+    const inference = causalInference(_recentValences, worldModel.beliefs);
+    _currentInference = inference;
+    if (inference.matchedBelief) {
+        core.expectation = clamp(core.expectation + inference.preemptiveAdjustment, -0.8, 0.8);
+    }
+
+    // Layer 1: 核心更新（含 PUA 惩罚）
+    core = updateCore(core, finalValence, finalSalience, dominance, safetySignal, layer2);
+    metrics.recordValenceSample(core.valence);
+    // PUA 直接创伤：检测到操控时额外打击核心（不经过预测误差稀释）
+    if (puaPenalty < 0) {
+        core.valence = clamp(core.valence + puaPenalty, -0.95, 0.95);
+        core.arousal = Math.min(0.95, core.arousal + 0.05);
+    }
+    // Layer 2: 极值反转 + 成长
+    processReversal(core);
+    processGrowth(core, layer2);
+    layer2.tick++;
+
+    // v0.8: 自我分析——每 20 tick 分析交互日志，发现自我模式
+    if (layer2.tick > 0 && layer2.tick % 20 === 0) {
+        const newPatterns = selfAnalysis(core, layer2);
+        for (const np of newPatterns) {
+            const existing = selfModel.patterns.find(p => p.id === np.id);
+            if (existing) {
+                existing.frequency = np.frequency;
+                existing.confidence = Math.max(existing.confidence, np.confidence);
+                existing.description = np.description;
+            } else {
+                selfModel.patterns.push(np);
+            }
+        }
+        // 高频 + 高置信度模式 → 转化为元信念
+        for (const p of selfModel.patterns) {
+            if (p.frequency >= 2 && p.confidence >= 0.5) {
+                const mbId = `meta_${p.id}`;
+                const exists = selfModel.metaBeliefs.some(mb => mb.id === mbId);
+                if (!exists) {
+                    selfModel.metaBeliefs.push({
+                        id: mbId,
+                        antecedent: p.trigger,
+                        consequent: p.description,
+                        confidence: p.confidence,
+                        supportingCases: p.frequency,
+                        counterCases: 0,
+                        status: 'active',
+                        evidence: [], contradictions: [],
+                        createdAt: Date.now(),
+                        lastUpdated: Date.now(),
+                    });
+                }
+            }
+        }
+        selfModel.lastAnalyzed = layer2.tick;
+        saveSelfModel();
+    }
+
+    // Layer 4: 元认知层 — 好奇驱动、假设置信度更新、张力调节
+    updateCuriosity(core, layer2);
+    updateTensionRegulator(core, layer2);
+    updateHypotheses(finalValence);
+
+    // 检查是否需要生成新假设
+    const newHyp = generateHypothesis(core, layer2, puaResult, _phaseChanged);
+    if (newHyp) {
+        hypotheses.push(newHyp);
+        // 新假设的好奇心足够时自动设计实验
+        if (curiosityState.intensity > P.EXPERIMENT_DESIGN_THRESHOLD) {
+            const exp = designExperiment(newHyp, core);
+            if (exp) experiments.push(exp);
+        }
+    }
+
+    // 为已成熟但无实验的假设补设计实验
+    if (curiosityState.intensity > P.EXPERIMENT_DESIGN_THRESHOLD && experiments.filter(e => e.state === 'pending' || e.state === 'active').length === 0) {
+        const untestedHyp = hypotheses.find(h => h.active && h.status !== 'rejected' && h.confidence >= 0.3 && h.trials === 0
+            && !experiments.some(e => e.hypothesisId === h.id));
+        if (untestedHyp) {
+            const exp = designExperiment(untestedHyp, core);
+            if (exp) experiments.push(exp);
+        }
+    }
+
+    // 世界模型：交互模式检测
+    detectPatterns(core);
+
+    // v0.7 + TMS: 信念提炼、证据记录、范式革命
+    extractBeliefsFromPatterns();
+    updateBeliefs();
+    const _paradigmJustShifted = checkParadigmShift(core);
+    // 范革冻结期衰减
+    if (_paradigmFreezeRemaining > 0) _paradigmFreezeRemaining--;
+
+    // Layer 4 持久化（每次事件后保存）
+    saveLayer4State();
+    appendInteractionLog(core, layer2);
+
+    const resp = buildFullResponse(core, layer2) as any;
+    resp._phase = phase;
+    resp._src = src;
+    resp._pua = puaResult;
+    resp._relationshipPhase = phaseState.currentPhase;
+    resp._relationshipConfidence = phaseState.confidence;
+    resp._silenceHours = timeState.consecutiveSilenceHours;
+    resp._friendPhase = friendState.currentPhase;
+    resp._friendConfidence = friendState.confidence;
+    resp._friendHarm = friendHarm;
+    resp._paradigmShift = _paradigmJustShifted ? {
+        version: worldModel.paradigmVersion,
+        reason: worldModel.shiftHistory[worldModel.shiftHistory.length - 1]?.reason || '未知',
+        freezeRemaining: _paradigmFreezeRemaining,
+    } : null;
+    res.json(resp);
+
+    // 对话历史 + 异步 LLM 分析（不阻塞响应）
+    conversationHistory.push({ role: '用户', text });
+    if (conversationHistory.length > MAX_HISTORY) conversationHistory.shift();
+    const aiSettings = readAISettings();
+    analyzeSpeechAct(text, [...conversationHistory], layer2.tick, aiSettings).catch(() => {});
+    } catch (e: any) {
+        console.error('[Event] 未捕获异常:', e?.message || e);
+        if (!res.headersSent) res.status(500).json({ error: 'internal_error', detail: e?.message || 'unknown' });
+    }
+});
+
+app.post('/tick', (req, res) => {
+    const { steps = 1 } = req.body;
+    for (let i = 0; i < steps; i++) {
+        core.valence *= P.DECAY_V;
+        core.arousal = core.arousal * P.DECAY_A + P.BASELINE_A * (1 - P.DECAY_A);
+        core.expectation *= P.DECAY_E;
+        processReversal(core);
+        layer2.tick++;
+        // 好奇心在无事件时衰减（沉默消耗好奇）
+        curiosityState.intensity *= P.CURIOSITY_DECAY;
+        // 范革冻结期衰减
+        if (_paradigmFreezeRemaining > 0) _paradigmFreezeRemaining--;
+    }
+    res.json(buildFullResponse(core, layer2));
+});
+
+app.post('/reset', (req, res) => {
+    const c = req.body || {};
+    core = {
+        valence: c.valence ?? 0, arousal: c.arousal ?? 0.2, expectation: c.expectation ?? 0,
+        dominance: 0, extremityDuration: 0, lastExtremitySign: 0, _trend: 0, _valenceHistory: [],
+    };
+    layer2 = {
+        apologyCredit: c.apologyCredit ?? 1.0, recentTraumaCount: c.recentTraumaCount ?? 0,
+        tick: c.tick ?? 0, baseline: 0, resilience: 1,
+    };
+    core.valence = clamp(core.valence, -0.95, 0.95);
+    core.arousal = clamp(core.arousal, 0.05, 0.95);
+    core.expectation = clamp(core.expectation, -0.8, 0.8);
+    layer2.apologyCredit = clamp(layer2.apologyCredit, 0, 1);
+    layer2.recentTraumaCount = clamp(layer2.recentTraumaCount, 0, 10);
+    timeState._silenceOverrideHours = undefined; // 清除测试用沉默覆盖
+    if (c.clearMemory) { semanticMemory.clear(); try { fs.unlinkSync(MEMORY_FILE); } catch {} }
+    if (c.clearPhase) {
+        phaseState = {
+            currentPhase: 'R1', confidence: 0.5,
+            relationshipStartDate: 0,
+            lastPhaseTransition: Date.now(),
+            phaseHistory: [{ phase: 'R1', timestamp: Date.now() }],
+            totalMessages: 0,
+            dailyMessageHistory: [],
+            phaseKeyEvents: [],
+        };
+        timeState = createTimeState();
+        _recentValences.length = 0;
+        friendState = createFriendState();
+        _recentMessages.length = 0;
+    }
+    // Autonomy v2.0: reset autonomy state
+    lastInteractionTime = Date.now();
+    lastClosureTs = 0;
+    internalState = { loneliness: 0, boredom: 0, ignoredStreak: 0, dailyMsgCounts: {} };
+    internalLog.length = 0;
+    proactiveMessages.length = 0;
+    newSignificantPattern = null;
+    // v2.1: reset rhythm tracker
+    _activeRhythm = { ...DEFAULT_RHYTHM };
+    _activityTracker = { activeDays: Array.from({ length: 24 }, () => new Set<string>()), lastRecalc: 0 };
+    res.json({ message: 'reset', state: buildFullResponse(core, layer2), memoryCleared: !!c.clearMemory, phaseCleared: !!c.clearPhase });
+});
+
+// ==================== PUA 分析接口 ====================
+app.get('/api/pua-log', (req, res) => {
+    const limit = Math.min(parseInt(String(req.query.limit || '50')), 500);
+    res.json({ total: puaAnalysisLog.length, entries: puaAnalysisLog.slice(-limit) });
+});
+
+// 纯 PUA 分析（不修改引擎状态，支持阶段感知）
+app.post('/api/pua-analyze', (req, res) => {
+    const { text, phase } = req.body;
+    if (!text || typeof text !== 'string') return res.status(400).json({ error: '需要 { text }' });
+    const effectivePhase: PhaseId = phase || phaseState.currentPhase;
+    const silence = checkSilence(timeState, effectivePhase);
+    res.json({
+        text,
+        phase: effectivePhase,
+        silenceDetected: silence.silent,
+        silenceHours: silence.hours,
+        ...detectPUA(text, effectivePhase, timeState),
+    });
+});
+
+// 阶段信息接口
+app.get('/api/phase', (req, res) => {
+    const silence = checkSilence(timeState, phaseState.currentPhase);
+    res.json({
+        phase: phaseState.currentPhase,
+        confidence: phaseState.confidence,
+        relationshipStartDate: phaseState.relationshipStartDate,
+        daysSinceStart: phaseState.relationshipStartDate > 0
+            ? Math.floor((Date.now() - phaseState.relationshipStartDate) / 86400000) : 0,
+        totalMessages: phaseState.totalMessages,
+        keyEvents: phaseState.phaseKeyEvents,
+        silenceDetected: silence.silent,
+        silenceHours: silence.hours,
+        silenceThreshold: silence.threshold,
+        phaseHistory: phaseState.phaseHistory,
+        responseTimeAvg: timeState.responseTimes.length > 0
+            ? Math.round(timeState.responseTimes.reduce((a, b) => a + b, 0) / timeState.responseTimes.length) : null,
+    });
+});
+
+// ─── 友谊阶段信息接口 ───
+app.get('/api/friend-phase', (req, res) => {
+    const bal = friendState.myInitCount + friendState.theirInitCount;
+    res.json({
+        phase: friendState.currentPhase,
+        confidence: friendState.confidence,
+        friendSinceDays: friendState.friendSinceDate > 0
+            ? Math.floor((Date.now() - friendState.friendSinceDate) / 86400000) : 0,
+        totalMessages: friendState.totalMessages,
+        keyEvents: friendState.keyFriendEvents,
+        initiatorRatio: bal > 0 ? Math.round((friendState.myInitCount / bal) * 100) / 100 : 0.5,
+        myInitCount: friendState.myInitCount,
+        theirInitCount: friendState.theirInitCount,
+        recentBanterCount: friendState.recentBanterCount,
+        phaseHistory: friendState.phaseHistory,
+    });
+});
+
+// ─── 友谊纯分析接口（不修改引擎状态） ───
+app.post('/api/friend-analyze', (req, res) => {
+    const { text, phase } = req.body;
+    if (!text || typeof text !== 'string') return res.status(400).json({ error: '需要 { text }' });
+    const effectivePhase: FriendPhaseId = phase || friendState.currentPhase;
+    const result = detectFriendHarm(text, effectivePhase);
+    const relClass = classifyRelationship(text);
+    const banter = detectBanter(text);
+    res.json({
+        text,
+        friendPhase: effectivePhase,
+        relationshipClass: relClass,
+        banter,
+        ...result,
+    });
+});
+
+// ─── 关系类型分类接口 ───
+app.post('/api/classify-relationship', (req, res) => {
+    const { text } = req.body;
+    if (!text || typeof text !== 'string') return res.status(400).json({ error: '需要 { text }' });
+    res.json({
+        text,
+        ...classifyRelationship(text),
+        banter: detectBanter(text),
+    });
+});
+
+// ═══ 时间扭曲接口（测试用，模拟时间流逝以触发沉默检测）═══
+app.post('/api/time-warp', (req, res) => {
+    const { hoursBack, setPhase, addEvent } = req.body;
+    if (typeof hoursBack === 'number' && hoursBack > 0) {
+        timeState._silenceOverrideHours = hoursBack;
+        timeState.consecutiveSilenceHours = Math.max(0, hoursBack - 0.5);
+        // Autonomy v1.2: also backdate lastInteractionTime
+        lastInteractionTime = Date.now() - hoursBack * 3600000;
+    }
+    if (setPhase) {
+        phaseState.currentPhase = setPhase as PhaseId;
+        phaseState.lastPhaseTransition = Date.now();
+    }
+    if (addEvent && typeof addEvent === 'string' && !phaseState.phaseKeyEvents.includes(addEvent)) {
+        phaseState.phaseKeyEvents.push(addEvent);
+    }
+    const silence = checkSilence(timeState, phaseState.currentPhase);
+    res.json({
+        message: 'time-warp applied',
+        hoursBack: hoursBack || 0,
+        phase: phaseState.currentPhase,
+        silenceDetected: silence.silent,
+        silenceHours: silence.hours,
+        silenceThreshold: silence.threshold,
+        keyEvents: phaseState.phaseKeyEvents,
+    });
+});
 
 // ==================== Layer 4: 元认知 API 接口 ====================
 
+app.get('/api/curiosity', (req, res) => {
+    res.json({
+        intensity: Math.round(curiosityState.intensity * 1000) / 1000,
+        drive: Math.round(curiosityState.drive * 1000) / 1000,
+        hypothesisCount: hypotheses.filter(h => h.active).length,
+        activeExperiments: experiments.filter(e => e.state === 'active').length,
+        pendingExperiments: experiments.filter(e => e.state === 'pending').length,
+        tensionRegulator: {
+            alphaVMultiplier: Math.round(tensionRegulator.alphaVMultiplier * 1000) / 1000,
+            alphaEMultiplier: Math.round(tensionRegulator.alphaEMultiplier * 1000) / 1000,
+            familiarity: Math.round(tensionRegulator.familiarity * 1000) / 1000,
+            volatility: Math.round(tensionRegulator.volatility * 1000) / 1000,
+        },
+    });
+});
 
-// 好奇心路由（已抽取到 routesCuriosity.ts）
-registerCuriosityRoutes(app, curiosityState, hypotheses, experiments, experimentHistory, worldPatterns, tensionRegulator);
+app.get('/api/hypotheses', (req, res) => {
+    const byStatus = { active: 0, verified: 0, rejected: 0 };
+    for (const h of hypotheses) byStatus[h.status] = (byStatus[h.status] || 0) + 1;
+    res.json({
+        total: hypotheses.length,
+        active: hypotheses.filter(h => h.active).length,
+        byStatus,
+        hypotheses: hypotheses.map(h => ({
+            id: h.id, description: h.description,
+            confidence: Math.round(h.confidence * 1000) / 1000,
+            valence: h.valence, source: h.source,
+            trials: h.trials, confirmations: h.confirmations,
+            active: h.active, status: h.status,
+        })),
+    });
+});
 
+app.post('/api/abort-experiments', (req, res) => {
+    let count = 0;
+    for (const e of experiments) {
+        if (e.state === 'active' || e.state === 'pending') {
+            e.state = 'aborted';
+            count++;
+        }
+    }
+    res.json({ message: `已中止 ${count} 个实验`, aborted: count });
+});
+
+app.get('/api/experiments', (req, res) => {
+    const limit = Math.min(parseInt(String(req.query.limit || '50')), 200);
+    const offset = parseInt(String(req.query.offset || '0'));
+    const total = experimentHistory.length;
+    const entries = experimentHistory.slice(-limit - offset, -offset || undefined).reverse().slice(0, limit);
+    const byOutcome = {
+        confirmed: experimentHistory.filter(e => e.hypothesisOutcome === 'confirmed').length,
+        disconfirmed: experimentHistory.filter(e => e.hypothesisOutcome === 'disconfirmed').length,
+        inconclusive: experimentHistory.filter(e => e.hypothesisOutcome === 'inconclusive').length,
+    };
+    res.json({
+        total, limit, offset,
+        byOutcome,
+        experiments: entries.map(e => ({
+            id: e.id, type: e.type, risk: e.risk,
+            hypothesisDesc: e.hypothesisDesc,
+            expectedValence: e.expectedValence,
+            actualResult: e.actualResult,
+            deviation: e.deviation,
+            outcome: e.hypothesisOutcome,
+            createdAt: e.createdAt,
+            completedAt: e.completedAt,
+        })),
+    });
+});
+
+app.get('/api/patterns', (req, res) => {
+    res.json({
+        total: worldPatterns.length,
+        patterns: worldPatterns.map(p => ({
+            pattern: p.pattern,
+            feature: p.feature,
+            sampleCount: p.sampleCount,
+            triggerValence: Math.round(p.triggerValence * 1000) / 1000,
+            triggerArousal: Math.round(p.triggerArousal * 1000) / 1000,
+            typicalOutcome: Math.round(p.typicalOutcome * 1000) / 1000,
+        })),
+    });
+});
 
 // ==================== v0.7: 世界模型 & 范式革命 API ====================
 
+app.get('/api/worldview', (req, res) => {
+    const active = worldModel.beliefs.filter(b => b.status === 'active');
+    const challenged = worldModel.beliefs.filter(b => b.status === 'challenged');
+    res.json({
+        paradigmVersion: worldModel.paradigmVersion,
+        paradigmFreezeRemaining: _paradigmFreezeRemaining,
+        totalBeliefs: worldModel.beliefs.length,
+        active: active.map(b => ({
+            id: b.id, antecedent: b.antecedent, consequent: b.consequent,
+            confidence: Math.round(b.confidence * 1000) / 1000,
+            supportingCases: b.supportingCases,
+            counterCases: b.counterCases,
+            counterRatio: b.supportingCases + b.counterCases > 0
+                ? Math.round(b.counterCases / (b.supportingCases + b.counterCases) * 1000) / 1000 : 0,
+            status: b.status,
+            createdAt: b.createdAt,
+        })),
+        challenged: challenged.map(b => ({
+            id: b.id, antecedent: b.antecedent, consequent: b.consequent,
+            confidence: Math.round(b.confidence * 1000) / 1000,
+            supportingCases: b.supportingCases,
+            counterCases: b.counterCases,
+            counterRatio: b.supportingCases + b.counterCases > 0
+                ? Math.round(b.counterCases / (b.supportingCases + b.counterCases) * 1000) / 1000 : 0,
+            status: b.status,
+            createdAt: b.createdAt,
+        })),
+    });
+});
 
-// 世界模型/自我模型路由（已抽取到 routesModel.ts）
-registerModelRoutes(app, worldModel, selfModel, paradigmHistory, _latestNarrative, _lastStrategy, strategyEffectiveness);
+app.get('/api/paradigm-history', (req, res) => {
+    const limit = Math.min(parseInt(String(req.query.limit || '50')), 200);
+    res.json({
+        paradigmVersion: worldModel.paradigmVersion,
+        totalShifts: worldModel.shiftHistory.length,
+        shifts: worldModel.shiftHistory.slice(-limit).map(s => ({
+            timestamp: s.timestamp,
+            reason: s.reason,
+            oldBeliefId: s.oldBeliefId,
+            newBeliefId: s.newBeliefId,
+            paradigmVersion: s.paradigmVersion,
+        })),
+    });
+});
 
+app.post('/api/paradigm/shift', (req, res) => {
+    const reason = req.body?.reason || '手动触发';
+    executeParadigmShift(reason, core);
+    res.json({
+        shifted: true,
+        reason,
+        paradigmVersion: worldModel.paradigmVersion,
+        freezeRemaining: _paradigmFreezeRemaining,
+    });
+});
 
-import { registerAutonomyRoutes } from './server/modules/routesAutonomy.js';
-registerAutonomyRoutes(app, internalLog, internalLogEntries, internalState, proactiveMessages, proactivePending, lastInteractionTime, autonomousCycle, saveAutonomyState, _activeRhythm, _activityTracker, RHYTHM_WINDOW_DAYS, RHYTHM_EMA_ALPHA, recalcRhythm, getAvailabilityFactor, isQuietHour, isPostQuietCooldown, getCurrentThreshold);
+// ==================== v0.8: 自我模型 & 叙事 API ====================
 
-import { registerExploreRoutes } from './server/modules/routesExplore.js';
-registerExploreRoutes(app, discoveries, interestModel, getExplorationCountToday, getExplorationDayKey, getExplorationDailyCap, EXPLORATION_COLD_START_MIN_INTERESTS, updateInterestModel, saveAutonomyState, runExploration, scoreDiscovery, MAX_DISCOVERIES, DISCOVERY_SHARE_QUALITY, DISCOVERY_DAILY_SHARE_CAP, startExplorationCycle, stopExplorationCycle);
+app.get('/api/self-model', (req, res) => {
+    res.json({
+        lastAnalyzed: selfModel.lastAnalyzed,
+        patterns: selfModel.patterns.map(p => ({
+            id: p.id,
+            description: p.description,
+            trigger: p.trigger,
+            response: p.response,
+            frequency: p.frequency,
+            confidence: Math.round(p.confidence * 1000) / 1000,
+        })),
+        metaBeliefs: selfModel.metaBeliefs.map(mb => ({
+            id: mb.id,
+            antecedent: mb.antecedent,
+            consequent: mb.consequent,
+            confidence: Math.round(mb.confidence * 1000) / 1000,
+            supportingCases: mb.supportingCases,
+            counterCases: mb.counterCases,
+            status: mb.status,
+        })),
+    });
+});
+
+app.get('/api/narrative', (req, res) => {
+    res.json({
+        narrative: _latestNarrative || '尚未生成叙事',
+        hasInference: _currentInference.matchedBelief !== null,
+        hasSelfPatterns: selfModel.patterns.filter(p => p.confidence > 0.5).length > 0,
+    });
+});
+
+app.get('/api/strategy', (req, res) => {
+    res.json({
+        lastStrategy: _lastStrategy ? {
+            strategy: _lastStrategy.strategy,
+            temperature: _lastTemperature,
+            confidence: _lastStrategy.confidence,
+            controlMode: _lastStrategy.controlMode,
+            reasoning: _lastStrategy.reasoningSummary,
+        } : null,
+        effectiveness: Array.from(strategyEffectiveness.entries()).map(([key, val]) => ({
+            context: key,
+            strategy: val.strategy,
+            uses: val.uses,
+            successRate: val.uses > 0 ? Math.round(val.successes / val.uses * 100) / 100 : 0,
+            avgDeviation: Math.round(val.avgDeviation * 1000) / 1000,
+            lastUsed: val.lastUsed,
+        })),
+    });
+});
+
+// ==================== Autonomy Pilot v1.2 API ====================
+
+app.get('/api/internal-log', (req, res) => {
+    const limit = Math.min(parseInt(String(req.query.limit || '20')), 100);
+    res.json({
+        total: internalLog.length,
+        entries: internalLog.slice(-limit).reverse(),
+        currentState: {
+            loneliness: Math.round(internalState.loneliness * 1000) / 1000,
+            boredom: Math.round(internalState.boredom * 1000) / 1000,
+            idleMinutes: Math.round((Date.now() - lastInteractionTime) / 60000),
+        },
+    });
+});
+
+app.get('/api/proactive-messages', (req, res) => {
+    const unread = proactiveMessages.filter(m => !m.read);
+    res.json({
+        total: proactiveMessages.length,
+        unread: unread.length,
+        messages: proactiveMessages.slice(-20).map(m => ({
+            id: m.id,
+            text: m.text,
+            timestamp: m.timestamp,
+            trigger: m.trigger,
+            read: m.read,
+        })),
+        idleMinutes: Math.round((Date.now() - lastInteractionTime) / 60000),
+        autonomyActive: _autonomyTimer !== null,
+    });
+});
+
+app.post('/api/mark-proactive-read', (req, res) => {
+    const { id } = req.body;
+    if (id) {
+        const msg = proactiveMessages.find(m => m.id === id);
+        if (msg) msg.read = true;
+    } else {
+        for (const m of proactiveMessages) m.read = true;
+    }
+    res.json({ marked: true, id: id || 'all' });
+});
+
+app.post('/api/autonomous-cycle', (req, res) => {
+    autonomousCycle();
+    res.json({
+        triggered: true,
+        idleMinutes: Math.round((Date.now() - lastInteractionTime) / 60000),
+        loneliness: Math.round(internalState.loneliness * 1000) / 1000,
+        internalLogEntries: internalLog.length,
+        proactivePending: proactiveMessages.filter(m => !m.read).length,
+    });
+});
+
+app.get('/api/rhythm', (req, res) => {
+    // 先触发一次重算，确保返回最新节律
+    recalcRhythm();
+    const allDays = new Set<string>();
+    for (const s of _activityTracker.activeDays) for (const d of s) allDays.add(d);
+    const zones: string[] = [];
+    for (let h = 0; h < 24; h++) {
+        const af = getAvailabilityFactor(h);
+        const activeDays = _activityTracker.activeDays[h].size;
+        const density = allDays.size > 0 ? (activeDays / allDays.size * 100).toFixed(0) : '0';
+        let zone: string;
+        if (af < 0.1) zone = '工作中/睡眠';
+        else if (af < 0.4) zone = '过渡';
+        else if (af < 0.7) zone = '可互动';
+        else zone = '自由时间';
+        zones.push(`${String(h).padStart(2,'0')}:00 x${af.toFixed(2)} ${zone} (${density}%活跃)`);
+    }
+    res.json({
+        totalDaysObserved: allDays.size,
+        windowDays: RHYTHM_WINDOW_DAYS,
+        rhythm: _activeRhythm,
+        zones,
+    });
+});
+
+app.post('/api/rhythm', (req, res) => {
+    const { rhythm, overtime } = req.body;
+    if (rhythm && typeof rhythm === 'object') {
+        for (const [h, v] of Object.entries(rhythm)) {
+            const hour = parseInt(h);
+            if (hour >= 0 && hour < 24 && typeof v === 'number') {
+                _activeRhythm[hour] = Math.max(0, Math.min(1, v));
+            }
+        }
+    }
+    if (overtime) {
+        // 手动标记 18-21 为工作时间
+        _activeRhythm[18] = 0.05; _activeRhythm[19] = 0.05; _activeRhythm[20] = 0.05;
+        _activeRhythm[21] = 0.5; _activeRhythm[22] = 1.0;
+    }
+    saveAutonomyState();
+    res.json({ updated: true, rhythm: _activeRhythm });
+});
+
+// ==================== v3.0: 好奇心引擎端点 ====================
+
+app.get('/api/discoveries', (req, res) => {
+    const { topic, shared, limit, sort } = req.query;
+    let filtered = [...discoveries];
+    if (topic) filtered = filtered.filter(d => d.topic === topic);
+    if (shared !== undefined) filtered = filtered.filter(d => d.shared === (shared === 'true'));
+    // v3.1: 默认按多因子评分降序
+    if (sort !== 'time') {
+        filtered.sort((a, b) => scoreDiscovery(b) - scoreDiscovery(a));
+    } else {
+        filtered.sort((a, b) => b.timestamp - a.timestamp);
+    }
+    res.json({
+        total: discoveries.length,
+        unshared: discoveries.filter(d => !d.shared).length,
+        items: filtered.slice(0, parseInt(limit as string) || 20),
+    });
+});
+
+app.get('/api/interests', (req, res) => {
+    res.json({
+        interests: interestModel.interests,
+        lastExploration: interestModel.lastExploration,
+        lastDecayDay: interestModel.lastDecayDay,
+        explorationCountToday: getExplorationCountToday(),
+        explorationDayKey: getExplorationDayKey(),
+        dailyCap: getExplorationDailyCap(),
+        coldStart: interestModel.interests.length < EXPLORATION_COLD_START_MIN_INTERESTS,
+    });
+});
+
+app.post('/api/interests/add', (req, res) => {
+    const { topic } = req.body;
+    if (!topic || typeof topic !== 'string') return res.status(400).json({ error: '需要 topic 参数' });
+    updateInterestModel([topic], 'manual');
+    saveAutonomyState();
+    res.json({ added: topic, interests: interestModel.interests.length });
+});
+
+app.post('/api/explore', async (req, res) => {
+    const force = req.body?.force === true;
+    if (force) {
+        // 强制探索：重置当日计数
+        setExplorationCountToday(0);
+        setExplorationDayKey(getDayKey(Date.now()));
+        console.log('[探索] 强制探索模式');
+    }
+    const idleMs = Date.now() - lastInteractionTime;
+    console.log('[探索] 手动触发探索...');
+    await runExploration();
+    res.json({
+        explored: true,
+        discoveriesCount: discoveries.length,
+        unshared: discoveries.filter(d => !d.shared).length,
+        interests: interestModel.interests.length,
+        lastExploration: interestModel.lastExploration,
+    });
+});
+
+app.post('/api/explore/start', (req, res) => {
+    startExplorationCycle();
+    res.json({ active: getExplorationTimer() !== null, message: '好奇心引擎已启动' });
+});
+
+app.post('/api/explore/stop', (req, res) => {
+    stopExplorationCycle();
+    res.json({ active: false, message: '好奇心引擎已停止' });
+});
 
 // ==================== v2.1: 监控端点 ====================
 
-// 数据查询路由（已抽取到 routesData.ts）
-registerDataRoutes(app, core, layer2, semanticMemory, worldModel, deriveApproachAvoid, metrics, buildFullResponse, episodicStore, valueSystem, clamp, _latestNarrative, computeNineEmotions, readEmotion);
+app.get('/api/metrics', (req, res) => {
+    const full = buildFullResponse(core, layer2);
+    res.json(metrics.getSnapshot(
+        core.valence,
+        core.arousal,
+        full.dominant || 'neutral',
+    ));
+});
 
+// ==================== v1.1: 人格/记忆/价值/身份 API ====================
+
+app.get('/api/personality', (req, res) => {
+    const { approachBias, avoidBias } = deriveApproachAvoid(core);
+    res.json({
+        empathy: Math.round(clamp((approachBias - avoidBias) * 0.5 + 0.5, 0.1, 1) * 1000) / 1000,
+        sensitivity: Math.round(clamp(core.arousal, 0.1, 1) * 1000) / 1000,
+        trustInclination: Math.round(clamp(core.expectation * 0.5 + 0.5, 0.1, 1) * 1000) / 1000,
+        resilience: Math.round(clamp(layer2.resilience, 0.1, 1) * 1000) / 1000,
+        openness: Math.round(clamp(approachBias, 0.1, 1) * 1000) / 1000,
+        playfulness: Math.round(clamp(core.arousal * 0.5 + Math.max(0, core.valence) * 0.5, 0.1, 1) * 1000) / 1000,
+        attachmentStyle: approachBias > 0.65 ? 'secure' : approachBias > 0.45 ? 'anxious' : 'avoidant',
+        conflictStyle: avoidBias > 0.6 ? 'avoidant' : approachBias > 0.6 ? 'collaborative' : 'defensive',
+    });
+});
+
+app.get('/api/memories', (req, res) => {
+    const list = Array.from(semanticMemory.entries())
+        .map(([phrase, record]) => ({
+            phrase,
+            totalValence: Math.round(record.totalValence * 1000) / 1000,
+            occurrences: record.occurrences,
+            avgValence: Math.round((record.totalValence / record.occurrences) * 1000) / 1000,
+            lastSeen: new Date(record.lastSeen).toISOString(),
+        }))
+        .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
+        .slice(0, 20);
+    res.json(list);
+});
+
+app.get('/api/values', (req, res) => {
+    const activeBeliefs = worldModel.beliefs.filter(b => b.status === 'active');
+    res.json(activeBeliefs.map(b => ({
+        id: b.id,
+        statement: b.consequent,
+        confidence: Math.round(b.confidence * 1000) / 1000,
+        antecedent: b.antecedent,
+    })));
+});
+
+app.get('/api/identity', (req, res) => {
+    const { approachBias, avoidBias } = deriveApproachAvoid(core);
+    const narrative = _latestNarrative || '我还在学习如何描述自己。';
+    const activeBeliefs = worldModel.beliefs.filter(b => b.status === 'active');
+    const bias = approachBias - avoidBias;
+    const emotions = computeNineEmotions(core, bias);
+    const { dominant } = readEmotion(core, emotions, layer2);
+
+    res.json({
+        narrative,
+        personalitySummary: {
+            empathy: Math.round(clamp((approachBias - avoidBias) * 0.5 + 0.5, 0.1, 1) * 1000) / 1000,
+            trustInclination: Math.round(clamp(core.expectation * 0.5 + 0.5, 0.1, 1) * 1000) / 1000,
+            resilience: Math.round(clamp(layer2.resilience, 0.1, 1) * 1000) / 1000,
+        },
+        currentEmotion: dominant,
+        memoryCount: semanticMemory.size,
+        valueCount: activeBeliefs.length,
+    });
+});
 
 // ==================== API Chat Endpoint ====================
 app.post('/api/chat', async (req, res) => {

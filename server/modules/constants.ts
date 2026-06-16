@@ -284,3 +284,7 @@ export const CLOSURE_RATE_MULTIPLIER = 0.3;
 export const POST_QUIET_COOLDOWN_MIN = 60;
 export const POST_QUIET_THRESHOLD_BOOST = 0.15;
 export const POST_QUIET_MAX_MSGS = 1;
+
+// 节律相关
+export const RHYTHM_WINDOW_DAYS = 14;
+export const RHYTHM_EMA_ALPHA = 0.25;
