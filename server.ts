@@ -3418,12 +3418,6 @@ interface PhaseState {
 
 
 // 关键事件词 → 阶段转移暗示
-const PHASE_KEY_EVENTS: Record<string, PhaseId | null> = {
-    '在一起': 'R2', '做我女朋友': 'R2', '做我男朋友': 'R2', '正式交往': 'R2',
-    '我爱你': null, // 各阶段都可能出现
-    '分手': 'R5', '分开吧': 'R5', '离婚': 'R5', '结束了': 'R5',
-    '我们不合适': 'R5', '放过': 'R5', '到此为止': 'R5',
-};
 
 function detectPhaseByDuration(days: number): PhaseId {
     if (days <= 90) return 'R1';
@@ -3832,12 +3826,6 @@ interface FriendState {
     recentBanterCount: number;   // 近期互损计数
 }
 
-const FRIEND_PHASE_EVENTS: Record<string, FriendPhaseId | null> = {
-    '交个朋友': 'F2', '做个朋友': 'F2', '加个好友': 'F2',
-    '我最好的朋友': 'F3', '交心朋友': 'F3', '最好的朋友': 'F3', '无话不谈': 'F3',
-    '好久不见': null, '疏远': 'F5', '绝交': 'F5', '拉黑': 'F5',
-    '兄弟': null, '闺蜜': null,
-};
 
 function inferFriendPhase(state: FriendState): { phase: FriendPhaseId; confidence: number } {
     const now = Date.now();
@@ -4241,15 +4229,6 @@ const QUIET_HOURS_THRESHOLD_BOOST = 0.15;          // 静默时段触发需要�
 
 // ── v2.1: 自适应作息节律 — 持续追踪用户活跃模式，自主调整 ──
 // 不再用固定模板，而是追踪每小时的实际活跃度，EMA 平滑更新
-const DEFAULT_RHYTHM: Record<number, number> = {
-    0:0.2, 1:0.2, 2:0.2, 3:0.2, 4:0.2, 5:0.2, 6:0.2, 7:0.2,
-    8:0.3, 9:0.05, 10:0.05, 11:0.05,
-    12:0.4, 13:0.4,
-    14:0.05, 15:0.05, 16:0.05, 17:0.05,
-    18:0.5,
-    19:1.0, 20:1.0, 21:1.0, 22:1.0,
-    23:0.2,
-};
 
 // v2.1: 持续追踪每小时活跃模式 — 14天滚动窗口 + EMA平滑
 
