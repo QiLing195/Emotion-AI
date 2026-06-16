@@ -68,3 +68,10 @@ export const RECOVERY_KEYWORDS: RegExp[] = [
   /我也有不对|我的错|怪我/,
   /和好|抱抱|爱你|想你/,
 ];
+
+// ═══ 阈值/配置常量 ═══
+export const CONFLICT_WINDOW_MS = 15 * 60_000; // 15 分钟窗口
+export const CONFLICT_ABUSE_THRESHOLD = 3; // 窗口内 3 次触发边界升级
+export const CONSOLIDATION_INTERVAL = 10; // 每 10 轮对话整合一次
+export const PARADIGM_COOLDOWN_TICKS = 20; // 范革冷却
+export const MAX_HISTORY = 12; // PUA 分析最大历史

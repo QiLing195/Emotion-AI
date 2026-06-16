@@ -89,7 +89,7 @@ import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValu
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
-import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS } from './server/modules/constants.js';
+import { P, MEMORY_FILE, LAYER4_STATE_FILE, HYPOTHESES_FILE, PATTERNS_FILE, WORLD_MODEL_FILE, SELF_MODEL_FILE, LOG_DIR, PUA_LOG_PATH, CONFLICT_KEYWORDS, RECOVERY_KEYWORDS, CONFLICT_WINDOW_MS, CONFLICT_ABUSE_THRESHOLD, CONSOLIDATION_INTERVAL, PARADIGM_COOLDOWN_TICKS, MAX_HISTORY } from './server/modules/constants.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -1597,7 +1597,6 @@ function checkParadigmConditions(): ParadigmShiftResult {
 }
 
 /** 检查并执行范式革命，返回是否发生了范式革命 */
-const PARADIGM_COOLDOWN_TICKS = 20;
 
 function checkParadigmShift(core: CoreState): boolean {
     // v1.1: 范式革命冷却 — 两次范革之间至少间隔 N 轮
@@ -2589,7 +2588,6 @@ async function analyzeSpeechAct(
 
 // ==================== 对话历史缓冲 ====================
 const conversationHistory: { role: string; text: string }[] = [];
-const MAX_HISTORY = 12;
 
 // ==================== 英文情感词典 ====================
 const englishLexicon: [RegExp, number, number][] = [
