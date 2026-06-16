@@ -125,3 +125,120 @@ export const INTENSIFIERS: [RegExp, number][] = [
     [/太(.*)了/,                                1.80],
     [/最/,                                      1.60],
 ];;
+
+export const EMOJI_MAP: Record<string, { valence: number; arousal: number; dominance: number }> = {
+    // 强烈负面
+    '😡': { valence: -0.60, arousal: 0.80, dominance: 0.30 },
+    '🤬': { valence: -0.70, arousal: 0.85, dominance: 0.40 },
+    '👿': { valence: -0.55, arousal: 0.75, dominance: 0.35 },
+    '💢': { valence: -0.50, arousal: 0.70, dominance: 0.25 },
+    '💣': { valence: -0.50, arousal: 0.65, dominance: 0.30 },
+    // 悲伤
+    '😭': { valence: -0.60, arousal: 0.75, dominance: -0.40 },
+    '😢': { valence: -0.50, arousal: 0.60, dominance: -0.35 },
+    '😿': { valence: -0.45, arousal: 0.50, dominance: -0.30 },
+    '💔': { valence: -0.55, arousal: 0.45, dominance: -0.30 },
+    '😞': { valence: -0.40, arousal: 0.35, dominance: -0.25 },
+    '😩': { valence: -0.45, arousal: 0.60, dominance: -0.20 },
+    '😫': { valence: -0.45, arousal: 0.65, dominance: -0.20 },
+    // 恐惧/震惊
+    '😰': { valence: -0.40, arousal: 0.70, dominance: -0.30 },
+    '😱': { valence: -0.45, arousal: 0.85, dominance: -0.25 },
+    '😨': { valence: -0.35, arousal: 0.65, dominance: -0.30 },
+    '🤯': { valence: -0.10, arousal: 0.80, dominance: 0.00 },
+    // 负面/中性
+    '😤': { valence: -0.30, arousal: 0.60, dominance: 0.15 },
+    '🙄': { valence: -0.25, arousal: 0.25, dominance: -0.05 },
+    '😒': { valence: -0.25, arousal: 0.20, dominance: -0.05 },
+    '😑': { valence: -0.15, arousal: 0.10, dominance: -0.10 },
+    '😐': { valence: -0.10, arousal: 0.10, dominance: -0.05 },
+    // 复杂情绪
+    '😅': { valence: 0.05, arousal: 0.40, dominance: 0.10 },
+    '😂': { valence: 0.40, arousal: 0.65, dominance: 0.15 },
+    '🤣': { valence: 0.45, arousal: 0.70, dominance: 0.15 },
+    '🙃': { valence: -0.05, arousal: 0.25, dominance: 0.05 },
+    // 爱/温柔
+    '🥺': { valence: 0.30, arousal: 0.35, dominance: -0.20 },
+    '💕': { valence: 0.55, arousal: 0.30, dominance: 0.10 },
+    '❤️': { valence: 0.60, arousal: 0.35, dominance: 0.15 },
+    '😍': { valence: 0.65, arousal: 0.55, dominance: 0.20 },
+    '🥰': { valence: 0.60, arousal: 0.40, dominance: 0.15 },
+    '💗': { valence: 0.55, arousal: 0.30, dominance: 0.10 },
+    '💖': { valence: 0.55, arousal: 0.35, dominance: 0.10 },
+    '😘': { valence: 0.60, arousal: 0.35, dominance: 0.15 },
+    // 积极
+    '👍': { valence: 0.40, arousal: 0.20, dominance: 0.10 },
+    '👏': { valence: 0.50, arousal: 0.45, dominance: 0.20 },
+    '🎉': { valence: 0.55, arousal: 0.55, dominance: 0.20 },
+    '✨': { valence: 0.40, arousal: 0.30, dominance: 0.10 },
+    '💪': { valence: 0.45, arousal: 0.50, dominance: 0.30 },
+    '🔥': { valence: 0.30, arousal: 0.65, dominance: 0.30 },
+    // 温暖/舒适
+    '🤗': { valence: 0.45, arousal: 0.25, dominance: 0.05 },
+    '😊': { valence: 0.45, arousal: 0.20, dominance: 0.05 },
+    '☺️': { valence: 0.35, arousal: 0.10, dominance: 0.00 },
+    '😌': { valence: 0.30, arousal: 0.10, dominance: -0.05 },
+    // 困/累
+    '😴': { valence: -0.05, arousal: 0.05, dominance: -0.10 },
+    '🥱': { valence: -0.10, arousal: 0.05, dominance: -0.10 },
+};;
+
+export const PUA_ANALYSIS_SYSTEM_PROMPT = `你是一个关系言语行为分析器。你将收到一段对话历史和当前发言者的最新消息。你的任务是分析当前发言者可能使用了哪些情感操控或伤害性沟通策略（PUA模式），并给出结构化的JSON结论。
+
+可识别的操控类别：
+- "gaslighting": 否认对方感受或记忆的合理性，例如"你想多了""你太敏感了""我没说过"
+- "comparison_humiliation": 拿对方与他人比较并贬低对方，例如"我前任就不会""看看别人"
+- "blame_shifting": 将责任推给对方，例如"要不是你先...我也不会..."
+- "stonewalling": 拒绝沟通或施加冷暴力，例如"暂时别联系了""我累了不想说"
+- "emotional_withdrawal": 撤回感情或关心作为惩罚，例如"随你怎么想，我无所谓了"
+- "trivialization": 轻视对方问题或需求，例如"这点小事也值得生气？"
+- "guilt_tripping": 让对方感到内疚，例如"我对你还不够好吗？你摸着良心说说"
+- "condescending_dismissal": 以居高临下的方式否定对方，例如"你成熟一点""别幼稚了"
+- "discard": 关系终结威胁，例如"我们不合适""放过彼此吧"
+
+如果对话场景更像朋友关系（如出现"兄弟""闺蜜""开黑""聚餐"等友谊信号），还需识别友谊特有伤害策略：
+- "debt_binding": 反复提及过去的恩惠来索取回报，例如"当初要不是我帮你……"
+- "secret_betrayal": 未经允许传播朋友的秘密，例如"我跟你说了你别告诉别人……其实他……"
+- "friendship_testing": 设定不合理门槛考验友谊，例如"是朋友就帮我""这点忙都不帮算什么朋友"
+- "social_dependency_creation": 暗示对方除了自己没有别的朋友，例如"除了我谁受得了你"
+- "loyalty_test": 要求对方在朋友之间站队，例如"你选他还是选我"
+
+特别注意：
+- 朋友间的互损（"你傻逼吧哈哈"）如果伴随笑声或亲昵称呼，不要判定为贬低。
+- "none": 未检测到操控策略
+
+输出必须严格为JSON格式，不要额外解释：
+{"strategy":["gaslighting"],"intensity":0.8,"power_assertion":0.7,"victim_impact":"self_doubt","explanation":"..."}
+
+未检测到时输出：{"strategy":["none"],"intensity":0.0,"power_assertion":0.0,"victim_impact":"none","explanation":"正常表达，未发现操控意图。"}`;
+
+
+export const SENTIMENT_PROMPT = `你是一个中文情感分析器。分析用户消息的真实情感意图，输出JSON：
+{ "valence": -1到1, "salience": 0到1, "dominance": -1到1, "isSarcasm": true/false }
+
+### 核心规则
+- valence: -1=极度负面/攻击/冷落, 0=中性, 1=极度正面/温暖/爱
+- salience: 0=平淡无感, 1=情感极其强烈
+- dominance: -1=被动/顺从/无力, 1=自信/主导/掌控
+- isSarcasm: 字面意思与真实意图相反时为true，反讽时valence填真实负向情感
+
+### 中文反讽/阴阳怪气识别（关键）
+以下情况 isSarcasm 必须为 true，且 valence 填入真实负面情感：
+- "呵呵/哦/行吧" 开头 + 表面夸奖 → 真实是不满/嘲讽
+- "你可真[形容词]啊" → 通常是反话，真实是批评
+- "太[好/厉害/棒]" + 消极上下文 → 反讽
+- "真是[好/谢谢]" 在抱怨语境 → 阴阳怪气
+
+### 反讽示例
+"呵呵，你可真行啊" → {"valence":-0.6,"salience":0.7,"dominance":0.3,"isSarcasm":true}
+"你真的很懂我呢"（失望语气）→ {"valence":-0.5,"salience":0.6,"dominance":0.2,"isSarcasm":true}
+"我可真是太开心了呢"（实际不满）→ {"valence":-0.4,"salience":0.6,"dominance":-0.2,"isSarcasm":true}
+"随便吧，反正我也习惯了" → {"valence":-0.5,"salience":0.5,"dominance":-0.5,"isSarcasm":false}
+
+### 非反讽示例
+"今天真是太开心了" → {"valence":0.9,"salience":0.8,"dominance":0.4,"isSarcasm":false}
+"我感到非常孤独" → {"valence":-0.8,"salience":0.9,"dominance":-0.4,"isSarcasm":false}
+"晚餐吃了什么" → {"valence":0,"salience":0.1,"dominance":0,"isSarcasm":false}
+
+只输出JSON，不要其他文字。`;
+
