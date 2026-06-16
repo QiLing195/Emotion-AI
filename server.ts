@@ -3,7 +3,6 @@ import fs from 'fs';
 
 const VERSION = JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version;
 
-// ==================== 核心类型定义 ====================
 type AISettings = { provider: string; apiKey: string; model: string; baseUrl?: string; enableWebSearch?: boolean; temperature?: number };
 interface CoreState {
     valence: number; arousal: number; expectation: number; dominance: number;
@@ -12,21 +11,21 @@ interface CoreState {
 interface Layer2State { apologyCredit: number; recentTraumaCount: number; tick: number; baseline: number; resilience: number; }
 interface MemoryRecord { totalValence: number; occurrences: number; lastSeen: number; }
 interface CuriosityState { intensity: number; drive: number; recentPredictionErrors: number[]; triggerCount: number; lastCuriosityDecay: number; }
-interface Hypothesis { id: string; statement: string; category: 'user' | 'self' | 'relation'; confidence: number; evidenceCount: number; lastTested: number; createdAt: number; fromObservation: string; basedOn: string; active: boolean; status: 'active' | 'confirmed' | 'disconfirmed' | 'archived'; }
+interface Hypothesis { id: string; statement: string; category: 'user' | 'self' | 'relation'; confidence: number; evidenceCount: number; lastTested: number; createdAt: number; fromObservation: string; basedOn: string; active: boolean; status: 'active' | 'confirmed' | 'disconfirmed' | 'archived'; confirmations: number; description: string; source: string; templateId: string; trials: number; valence: number; }
 interface Experiment { id: string; hypothesisId: string; type: 'ask_question' | 'test_behavior' | 'observe_response' | 'scenario_play' | 'confirm_past' | 'self_disclose'; prompt: string; targetAngle: string; risk: 'low' | 'medium' | 'high'; state: 'pending' | 'running' | 'completed' | 'aborted'; result: string | null; expectedValence: number; createdAt: number; completedAt: number | null; }
 interface TensionRegulatorState { curiosityDecayRate: number; tensionLevel: number; lastExpression: number; suppressionCount: number; alphaVMultiplier: number; alphaEMultiplier: number; familiarity: number; volatility: number; adaptationRate: number; }
-interface PatternCase { topic: string; pattern: { key: string; weight: number; occurrences: number }[]; relevance: number; }
+interface PatternCase { topic: string; pattern: { key: string; weight: number; occurrences: number }[]; relevance: number; feature: string; sampleCount: number; triggerArousal: number; triggerValence: number; typicalOutcome: string; }
 type StrategyType = 'self_disclosure' | 'express_boundary' | 'ask_question' | 'offer_comfort' | 'playful_tease' | 'express_vulnerability' | 'stay_silent' | 'express_curiosity' | 'express_affection' | 'assert_needs';
 interface StrategyDirective { strategy: StrategyType; promptSnippet: string; confidence: number; reasoningSummary: string; controlMode: 'predictive' | 'generative'; }
 interface StrategyFeedbackRecord { strategy: StrategyType; timestamp: number; userValenceBefore: number; userValenceAfter: number; efficacySignal: number; contextNarrative: string; }
-interface StrategyScore { strategy: StrategyType; score: number; reasons: string[]; }
-interface CompletedExperimentRecord { id: string; hypothesisId: string; type: Experiment['type']; result: string; learning: string; completedAt: number; }
-interface SelfPattern { id: string; label: string; category: 'expression' | 'reaction' | 'desire' | 'boundary' | 'vulnerability'; description: string; confidence: number; occurrences: number; firstObserved: number; lastObserved: number; }
+interface StrategyScore { strategy: StrategyType; score: number; reasons: string[]; avgDeviation: number; lastUsed: number; successes: number; uses: number; }
+interface CompletedExperimentRecord { id: string; hypothesisId: string; type: Experiment['type']; result: string; learning: string; completedAt: number; actualResult: string; createdAt: number; deviation: number; expectedValence: number; hypothesisDesc: string; hypothesisOutcome: string; risk: string; }
+interface SelfPattern { id: string; label: string; category: 'expression' | 'reaction' | 'desire' | 'boundary' | 'vulnerability'; description: string; confidence: number; occurrences: number; firstObserved: number; lastObserved: number; frequency: number; response: string; trigger: string; }
 interface SelfModelData { patterns: SelfPattern[]; metaBeliefs: { statement: string; confidence: number }[]; version: number; lastAnalyzed: number; }
 interface HourlyActivityTracker { hour: number; totalMessages: number; totalChars: number; daysObserved: number; activeDays: number; lastRecalc: number; }
 interface InternalState { loneliness: number; boredom: number; tick: number; ignoredStreak: number; dailyMsgCounts: Record<string, number>; }
-interface InternalLogEntry { ts: number; type: string; data: any; }
-interface ProactiveMessage { id: string; text: string; reason: string; timestamp: number; read: boolean; quality: number; }
+interface InternalLogEntry { ts: number; type: string; data: any; timestamp: number; id: string; }
+interface ProactiveMessage { id: string; text: string; reason: string; timestamp: number; read: boolean; quality: number; trigger: string; }
 
 import { metrics } from './metrics.js';
 import { bus } from './src/eventBus.js';
@@ -43,7 +42,6 @@ import { createEpisodicMemoryStore, tryFormEpisode, recallRelevantMemories, seri
 import { decayAllMemories, tryConsolidateMemories } from './src/lib/memoryEnhancer.js';
 import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValueSystem, type ValueSystem } from './src/lib/valueDiscovery.js';
 
-// ==================== 类型定义 ====================
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
 
@@ -55,12 +53,13 @@ import { extractInterests, updateInterestModel, interestModel, discoveries, DEFA
 
 // ==================== v0.7: 世界模型与范式革命 ====================
 
-interface _TMSConflict { a: string; b: string; cType: string; resolved: boolean; resolvedBy: string | null; }
-interface _CausalBelief { id: string; statement: string; confidence: number; evidenceCount: number; contradictoryCount: number; lastUpdated: number; sources: string[]; category: string; evidence: any; contradictions: string[]; justification: string; }
-interface _ParadigmShiftRecord { version: number; triggeredBy: string; oldBeliefs: string[]; newBeliefs: string[]; timestamp: number; }
-interface _WorldModelData { beliefs: _CausalBelief[]; paradigmVersion: number; paradigmFreezeRemaining: number; shiftHistory: _ParadigmShiftRecord[]; tmsConflicts: _TMSConflict[]; lastParadigmShift: number; }
 
-// @ts-ignore - TMS 类型内联定义
+interface TMSEvidence { source: string; text: string; valence: number; timestamp: number; counterEvidence: string[]; }
+interface TMSConflict { a: string; b: string; conflictType: string; resolved: boolean; resolvedBy: string | null; }
+interface CausalBelief { id: string; statement: string; confidence: number; evidenceCount: number; contradictoryCount: number; lastUpdated: number; sources: string[]; category: string; evidence: any; contradictions: string[]; justification: string; }
+interface ParadigmShiftRecord { version: number; triggeredBy: string; oldBeliefs: string[]; newBeliefs: string[]; timestamp: number; }
+interface WorldModelData { beliefs: CausalBelief[]; paradigmVersion: number; paradigmFreezeRemaining: number; shiftHistory: ParadigmShiftRecord[]; tmsConflicts: TMSConflict[]; lastParadigmShift: number; }
+
 const tmsState: Record<string, any> = {
     conflicts: [] as any[],
     pendingClarifications: [] as string[],  // 待向用户澄清的问题
