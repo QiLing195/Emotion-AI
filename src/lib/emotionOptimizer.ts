@@ -7,6 +7,7 @@
 //   2. 唤醒边界修复（P1）— (1-arousal)因子改为 min(0.1, 1-arousal)
 //   3. 极值平滑回归（P2）— 硬翻转 → 加速回归 + 概率性翻转
 //   4. 情绪惯性平滑（P2）— 每轮独立计算 → 指数移动平均
+//   5. 🆕 个性化 alpha 速率（S6）— 全局常量 → 人格参数函数
 
 import type {
   EmotionState, EmotionEvent, TaijiState, YinYangState,
@@ -53,6 +54,46 @@ export function computePersonalizedError(
   if (rawError >= 0) return rawError;
   const lossAversion = computeLossAversion(evolution);
   return rawError * lossAversion;
+}
+
+// ════════════════════════════════════════════════════════════
+// 1.5 🆕 个性化 alpha 速率 (S6: 人格 → 情感更新速率)
+// ════════════════════════════════════════════════════════════
+
+export interface PersonalizedAlphas {
+  alphaV: number;  // 效价更新速率
+  alphaA: number;  // 唤醒更新速率
+  alphaE: number;  // 预期更新速率
+}
+
+/**
+ * 从人格参数计算个性化的情感更新速率。
+ *
+ * 原始硬编码:
+ *   ALPHA_V = 0.30, ALPHA_A = 0.20, ALPHA_E = 0.10
+ *
+ * 个性化规则:
+ *   - empathy 高 → alphaV 略高（更易被他人情绪影响）
+ *   - resilience 高 → alphaV 略低（情绪更稳定）
+ *   - sensitivity 高 → alphaA 提高（更大的唤醒响应）
+ *   - trust/openness 高 → alphaE 更低（更信任，预期更慢改变）
+ *   - 浮动范围：±30% 原始基准值
+ */
+export function computePersonalizedAlphas(evolution: EvolutionState): PersonalizedAlphas {
+  const empathy = evolution.empathy / 100;
+  const resilience = evolution.resilience;
+  const sensitivity = evolution.sensitivity;
+  const trust = evolution.trust / 100;
+
+  const alphaV = 0.30 * (1 + (empathy - 0.5) * 0.3 - (resilience - 0.5) * 0.3);
+  const alphaA = 0.20 * (1 + (sensitivity - 0.5) * 0.4);
+  const alphaE = 0.10 * (1 - (trust - 0.5) * 0.3);
+
+  return {
+    alphaV: Math.round(Math.max(0.15, Math.min(0.45, alphaV)) * 1000) / 1000,
+    alphaA: Math.round(Math.max(0.10, Math.min(0.35, alphaA)) * 1000) / 1000,
+    alphaE: Math.round(Math.max(0.05, Math.min(0.15, alphaE)) * 1000) / 1000,
+  };
 }
 
 // ════════════════════════════════════════════════════════════

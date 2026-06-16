@@ -780,7 +780,7 @@ STRONG (8条) — 同步依赖，不允许失败，需超时+fallback+熔断
   S3: 情感事件提取 → 情感引擎更新
   S4: 情感引擎+Prompt → AI回复生成
   S5: 冲突检测 → 对话策略选择        ✅ active
-  S6: 人格参数 → 情感更新速率         🆕 partial
+  S6: 人格参数 → 情感更新速率         ✅ active
   S7: 价值体系 → 对话策略选择         ✅ active
   S8: 情境感知 → 对话策略选择         ✅ active
 

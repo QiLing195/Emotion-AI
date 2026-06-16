@@ -307,3 +307,68 @@ describe('updateSancaiFromYinYang', () => {
     expect(balanced.harmony).toBeGreaterThan(unbalanced.harmony);
   });
 });
+
+// ════════════════════════════════════════════════════════════
+// 🆕 S6: 个性化 alpha 速率
+// ════════════════════════════════════════════════════════════
+
+import { computePersonalizedAlphas } from '../emotionOptimizer';
+
+describe('computePersonalizedAlphas — S6 人格→情感速率', () => {
+  const baseEvo: EvolutionState = {
+    empathy: 60, trust: 55, openness: 50, playfulness: 50,
+    sensitivity: 0.5, resilience: 0.5,
+    fastRate: 0.1, mediumRate: 0.02, slowRate: 0.005,
+    totalInteractions: 200, positiveInteractions: 120, negativeInteractions: 40,
+    baseline: 0, optimism: 50, valuePriorities: {}, lastIdentityRefresh: 0,
+  };
+
+  it('默认人格（中间值）返回基准 alpha', () => {
+    const a = computePersonalizedAlphas(baseEvo);
+    expect(a.alphaV).toBeCloseTo(0.30, 1);
+    expect(a.alphaA).toBeCloseTo(0.20, 1);
+    expect(a.alphaE).toBeCloseTo(0.10, 1);
+  });
+
+  it('高 empathy → alphaV 升高', () => {
+    const high = computePersonalizedAlphas({ ...baseEvo, empathy: 90 });
+    const low = computePersonalizedAlphas({ ...baseEvo, empathy: 30 });
+    expect(high.alphaV).toBeGreaterThan(low.alphaV);
+  });
+
+  it('高 resilience → alphaV 降低', () => {
+    const high = computePersonalizedAlphas({ ...baseEvo, resilience: 0.9 });
+    const low = computePersonalizedAlphas({ ...baseEvo, resilience: 0.2 });
+    expect(high.alphaV).toBeLessThan(low.alphaV);
+  });
+
+  it('高 sensitivity → alphaA 升高', () => {
+    const high = computePersonalizedAlphas({ ...baseEvo, sensitivity: 0.9 });
+    const low = computePersonalizedAlphas({ ...baseEvo, sensitivity: 0.2 });
+    expect(high.alphaA).toBeGreaterThan(low.alphaA);
+  });
+
+  it('高 trust → alphaE 降低（更信任，预期更慢变）', () => {
+    const high = computePersonalizedAlphas({ ...baseEvo, trust: 90 });
+    const low = computePersonalizedAlphas({ ...baseEvo, trust: 30 });
+    expect(high.alphaE).toBeLessThan(low.alphaE);
+  });
+
+  it('所有 alpha 值在合法范围内', () => {
+    // 极端值测试
+    const extremes = [
+      { ...baseEvo, empathy: 0, resilience: 1, sensitivity: 1, trust: 0 },
+      { ...baseEvo, empathy: 100, resilience: 0, sensitivity: 0, trust: 100 },
+      { ...baseEvo, empathy: 50, resilience: 0.5, sensitivity: 0.5, trust: 50 },
+    ];
+    for (const evo of extremes) {
+      const a = computePersonalizedAlphas(evo);
+      expect(a.alphaV).toBeGreaterThanOrEqual(0.15);
+      expect(a.alphaV).toBeLessThanOrEqual(0.45);
+      expect(a.alphaA).toBeGreaterThanOrEqual(0.10);
+      expect(a.alphaA).toBeLessThanOrEqual(0.35);
+      expect(a.alphaE).toBeGreaterThanOrEqual(0.05);
+      expect(a.alphaE).toBeLessThanOrEqual(0.15);
+    }
+  });
+});
