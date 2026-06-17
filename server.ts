@@ -5937,7 +5937,36 @@ app.post('/api/chat', async (req, res) => {
             // v0.8: 构建完整情感状态（同时生成 _latestNarrative）
             const fullState = buildFullResponse(core, layer2);
 
-            // v0.9: 生成策略指令（温度从返回值中独立解耦）
+            // ════════════════════════════════════════════════════════
+            // v1.0: aiCoordinator 单轨主导策略选择
+            // 协调器先行，整合 S5(冲突)+S8(情境)+🧠(思维图谱)+🧩(记忆图谱)
+            // 旧 generateStrategy 提供 temperature + controlMode + fallback
+            // ════════════════════════════════════════════════════════
+            let coordinatorResult: ReturnType<typeof aiCoordinator.processTurn> | null = null;
+            try {
+              const coordinatorState = convertToEmotionState(core, layer2);
+              const localDominant = readEmotion(core, computeNineEmotions(core, deriveApproachAvoid(core).approachBias - deriveApproachAvoid(core).avoidBias), layer2).dominant;
+              coordinatorResult = aiCoordinator.processTurn({
+                userText: message,
+                currentEmotionState: coordinatorState,
+                emotionEvent,
+                userAnalysis: { expressedEmotion: localDominant, likelyCause: '', intensity: Math.abs(core.valence), directedAtAI: false },
+                recentUserMoods: _recentValences.slice(-10),
+                consecutiveNegativeRounds: _recentValences.slice(-3).filter(v => v < -0.2).length,
+                interestSignals: userInterests,
+                roundNumber: layer2.tick,
+                lastInteractionAt: lastInteractionTime,
+                activeValues: extractActiveValues(valueSystem),
+              });
+
+              // 注入 thoughtSummary + memoryContext 到 req
+              (req as any)._thoughtSummary = coordinatorResult.thoughtSummary;
+              (req as any)._memoryContext = coordinatorResult.memoryContext;
+            } catch (coordErr) {
+              console.log('[aiCoordinator] 管道执行失败（降级到旧管道）:', (coordErr as Error).message);
+            }
+
+            // 旧策略引擎：提供 temperature + controlMode + fallback
             const strategyResult = generateStrategy(
                 core,
                 fullState.emotions,
@@ -5951,70 +5980,30 @@ app.post('/api/chat', async (req, res) => {
                 conflictFreq,
                 _boundaryEscalated,
             );
-            strategyDirective = strategyResult;
-            _lastStrategy = strategyResult;
-        bus.emit('StrategySelected', { strategy: strategyResult.strategy, controlMode: strategyResult.controlMode, confidence: strategyResult.confidence?.toFixed(2) });
-            _lastTemperature = strategyResult._temperature ?? (settings?.temperature ?? 0.7);
 
-            // 🆕 aiCoordinator 管道: 危机检测 + 思维图谱
-            try {
-              const coordinatorState = convertToEmotionState(core, layer2);
-              const localDominant = readEmotion(core, computeNineEmotions(core, deriveApproachAvoid(core).approachBias - deriveApproachAvoid(core).avoidBias), layer2).dominant;
-              const coordinatorResult = aiCoordinator.processTurn({
-                userText: message,
-                currentEmotionState: coordinatorState,
-                emotionEvent,
-                userAnalysis: { expressedEmotion: localDominant, likelyCause: '', intensity: Math.abs(core.valence), directedAtAI: false },
-                recentUserMoods: _recentValences.slice(-10),
-                consecutiveNegativeRounds: _recentValences.slice(-3).filter(v => v < -0.2).length,
-                interestSignals: userInterests,
-                roundNumber: layer2.tick,
-                lastInteractionAt: lastInteractionTime,
-                // 🆕 S7: 价值体系 → 策略选择
-                activeValues: extractActiveValues(valueSystem),
-              });
-
-              // 危机检测: 如果协调器检测到危机，立即覆盖策略
-              if (coordinatorResult.conflictState.phase === 'crisis') {
-                strategyDirective = {
-                  strategy: 'crisis' as any,
-                  promptSnippet: coordinatorResult.strategySnippet,
-                  confidence: 0.99,
-                  reasoningSummary: '危机干预: 检测到自伤/自杀风险信号',
-                  controlMode: 'generative',
-                };
-                _lastStrategy = strategyDirective;
-                _lastTemperature = 0.3; // 危机模式低温，更谨慎
-                console.log('[aiCoordinator] ⚠️ 危机覆盖激活');
+            // 选择策略源：协调器优先，旧引擎兜底
+            if (coordinatorResult) {
+              const c = coordinatorResult;
+              strategyDirective = {
+                strategy: c.strategy as any,
+                promptSnippet: c.strategySnippet,
+                confidence: c.strategyDecision.confidence,
+                reasoningSummary: c.strategyDecision.reason,
+                controlMode: strategyResult.controlMode,
+              };
+              _lastTemperature = c.conflictState.phase === 'crisis'
+                ? 0.3
+                : strategyResult._temperature ?? (settings?.temperature ?? 0.7);
+              if (c.conflictState.phase === 'crisis') {
+                console.log('[aiCoordinator] ⚠️ 危机干预激活');
               }
-
-              // S5+S8 策略增强: 当协调器策略置信度更高时，采纳协调器的策略
-              const oldConfidence = (strategyResult as any).confidence ?? 0.5;
-              const newConfidence = coordinatorResult.strategyDecision.confidence;
-              if (
-                !strategyDirective.strategy.startsWith('crisis') &&
-                newConfidence > oldConfidence + 0.15 &&
-                coordinatorResult.strategy !== strategyDirective.strategy
-              ) {
-                const prevStrategy = strategyDirective.strategy;
-                strategyDirective = {
-                  strategy: coordinatorResult.strategy as any,
-                  promptSnippet: coordinatorResult.strategySnippet,
-                  confidence: newConfidence,
-                  reasoningSummary: `S5/S8增强: ${coordinatorResult.strategyDecision.reason}`,
-                  controlMode: 'generative',
-                };
-                _lastStrategy = strategyDirective;
-                console.log(`[aiCoordinator] 🔄 S5/S8策略提升: ${prevStrategy} → ${coordinatorResult.strategy} (置信度 ${oldConfidence.toFixed(2)} → ${newConfidence.toFixed(2)})`);
-              }
-
-              // 思维图谱: 注入 thoughtSummary + memoryContext 到 req（供后续 workspace 使用）
-              (req as any)._thoughtSummary = coordinatorResult.thoughtSummary;
-              (req as any)._memoryContext = coordinatorResult.memoryContext;
-            } catch (coordErr) {
-              // 协调器失败不应阻塞主流程
-              console.log('[aiCoordinator] 管道执行失败（降级到旧管道）:', (coordErr as Error).message);
+            } else {
+              // 协调器失败 → 完全降级到旧引擎
+              strategyDirective = strategyResult;
+              _lastTemperature = strategyResult._temperature ?? (settings?.temperature ?? 0.7);
             }
+            _lastStrategy = strategyDirective;
+        bus.emit('StrategySelected', { strategy: strategyDirective.strategy, controlMode: strategyDirective.controlMode, confidence: strategyDirective.confidence?.toFixed(2) });
         }
 
         // 策略温度

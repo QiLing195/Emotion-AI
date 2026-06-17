@@ -290,7 +290,128 @@ describe('selectStrategy — S8 情境权重调制', () => {
 });
 
 // ════════════════════════════════════════════════════════════
-// 5. 优先级顺序验证
+// 5. S7 价值体系调制
+// ════════════════════════════════════════════════════════════
+
+describe('selectStrategy — S7 价值调制', () => {
+  it('connection 高 → empathize 权重 1.25x', () => {
+    const ctx = makeContext({
+      activeValues: { connection: 0.75 },
+    });
+    const result = selectStrategy(ctx);
+    // neutral 默认策略，但 connection 不直接影响 neutral
+    expect(result.confidence).toBeGreaterThan(0);
+  });
+
+  it('connection 高 + 高情绪强度 → empathize 置信度提升', () => {
+    const ctx = makeContext({
+      emotionState: makeEmotionState({ taiji: { valence: -0.5, arousal: 0.8, expectation: 0 } }),
+      userAnalysis: makeUserAnalysis({ intensity: 0.85 }),
+      activeValues: { connection: 0.75 },
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('empathize');
+    // 基础 0.85 * connection 1.25 = 1.0625, capped at 0.99
+    expect(result.confidence).toBeGreaterThanOrEqual(0.90);
+  });
+
+  it('autonomy 高 → boundary 权重 1.3x', () => {
+    const ctx = makeContext({
+      conflictState: {
+        phase: 'boundary_defending',
+        warningCount: 2, conflictSignals: [], repairActions: [],
+        lastConflictAt: Date.now(), repairedAt: null, totalConflicts: 1,
+        successfulRepairs: 0, trustDamageAccumulated: 0.1,
+        recentConflictTimestamps: [], abuseDetected: false,
+        boundarySetAt: null, inCrisis: false, crisisActivatedAt: null,
+        crisisSignals: [], crisisCooldownUntil: null,
+      },
+      activeValues: { autonomy: 0.8 },
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('boundary');
+    // 基础 0.95 * autonomy 1.3 = 1.235, capped at 0.99
+    expect(result.confidence).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it('honesty 高 → share 权重 1.2x', () => {
+    const ctx = makeContext({
+      emotionState: makeEmotionState({ taiji: { valence: 0.4, arousal: 0.3, expectation: 0 } }),
+      pendingDiscoveries: [{ id: 'd1', title: '发现', content: '内容', topic: '测试', timestamp: Date.now(), shared: true, quality: 0.8, sourceType: 'web', verified: true }],
+      activeValues: { honesty: 0.7 },
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('share');
+    // 基础 0.65 * honesty 1.2 = 0.78
+    expect(result.confidence).toBeGreaterThanOrEqual(0.70);
+  });
+
+  it('growth 高 → repair 权重 1.15x', () => {
+    const ctx = makeContext({
+      conflictState: {
+        phase: 'conflict',
+        warningCount: 3, conflictSignals: [], repairActions: [],
+        lastConflictAt: Date.now(), repairedAt: null, totalConflicts: 1,
+        successfulRepairs: 0, trustDamageAccumulated: 0.1,
+        recentConflictTimestamps: [], abuseDetected: false,
+        boundarySetAt: null, inCrisis: false, crisisActivatedAt: null,
+        crisisSignals: [], crisisCooldownUntil: null,
+      },
+      activeValues: { growth: 0.7 },
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('repair');
+    // 基础 0.95 * growth 1.15 = 1.0925, capped at 0.99
+    expect(result.confidence).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it('playfulness 高 → share 权重 1.2x', () => {
+    const ctx = makeContext({
+      emotionState: makeEmotionState({ taiji: { valence: 0.5, arousal: 0.3, expectation: 0 } }),
+      pendingDiscoveries: [{ id: 'd1', title: '发现', content: '内容', topic: '测试', timestamp: Date.now(), shared: true, quality: 0.8, sourceType: 'web', verified: true }],
+      activeValues: { playfulness: 0.8 },
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('share');
+    expect(result.confidence).toBeGreaterThanOrEqual(0.70);
+  });
+
+  it('activeValues 为空时不影响默认行为', () => {
+    const ctx = makeContext({
+      activeValues: {},
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('neutral');
+    expect(result.confidence).toBe(0.50);
+  });
+
+  it('activeValues 低于阈值(0.6)时不生效', () => {
+    const ctx = makeContext({
+      emotionState: makeEmotionState({ taiji: { valence: 0.4, arousal: 0.3, expectation: 0 } }),
+      pendingDiscoveries: [{ id: 'd1', title: '发现', content: '内容', topic: '测试', timestamp: Date.now(), shared: true, quality: 0.8, sourceType: 'web', verified: true }],
+      activeValues: { honesty: 0.4 }, // 低于 0.6
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('share');
+    // 基础 0.65，不被 honesty 增强（因为 < 0.6）
+    expect(result.confidence).toBe(0.65);
+  });
+
+  it('多价值同时激活时复合调制', () => {
+    const ctx = makeContext({
+      emotionState: makeEmotionState({ taiji: { valence: 0.4, arousal: 0.3, expectation: 0 } }),
+      pendingDiscoveries: [{ id: 'd1', title: '发现', content: '内容', topic: '测试', timestamp: Date.now(), shared: true, quality: 0.8, sourceType: 'web', verified: true }],
+      activeValues: { honesty: 0.7, playfulness: 0.7 }, // 两者都提升 share
+    });
+    const result = selectStrategy(ctx);
+    expect(result.strategy).toBe('share');
+    // 基础 0.65 * honesty 1.2 * playfulness 1.2 = 0.936
+    expect(result.confidence).toBeGreaterThanOrEqual(0.85);
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// 6. 优先级顺序验证
 // ════════════════════════════════════════════════════════════
 
 describe('selectStrategy — 优先级顺序', () => {

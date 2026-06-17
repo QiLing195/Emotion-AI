@@ -109,7 +109,7 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
     timeoutMs: 50,
     fallback: '使用默认参数 (ALPHA_V=0.30, lossAversion=2.0)',
     circuitBreakerThreshold: 5,
-    status: 'degraded',  // ← partial: lossAversion ✅ 已挂接，alpha 动态化待后续
+    status: 'healthy',  // ✅ lossAversion + alpha 动态化均已挂接 taijiUpdate
     consecutiveFailures: 0,
   },
   {
@@ -117,11 +117,11 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
     from: '价值体系',
     to: '对话策略选择',
     strength: 'strong',
-    description: '价值驱动策略：dominantValue → 策略偏好权重',
+    description: '价值驱动策略：activeValues → getSituationalWeights 调制策略权重',
     timeoutMs: 50,
-    fallback: '使用默认策略权重',
+    fallback: '使用默认策略权重（权重=1.0）',
     circuitBreakerThreshold: 5,
-    status: 'pending',  // ← 尚未实现
+    status: 'healthy',  // ✅ extractActiveValues → aiCoordinator → StrategyContext → getSituationalWeights
     consecutiveFailures: 0,
   },
   {

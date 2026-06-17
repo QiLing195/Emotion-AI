@@ -21,6 +21,7 @@ import {
   computeArousalUpdate,
   applySmoothReversal,
   emotionSmoother,
+  computePersonalizedAlphas,
 } from './emotionOptimizer';
 
 // Phase 1: Emotion-Cognition Deep Coupling — 情绪上下文 DTO
@@ -318,6 +319,11 @@ function taijiUpdate(
   // 预测误差 — 情感的唯一驱动力
   let predictionError = eventValence - taiji.expectation;
 
+  // 🆕 S6: 从人格参数计算个性化 alpha（替代硬编码常量）
+  const alphas = (evolution && USE_EMOTION_OPTIMIZER)
+    ? computePersonalizedAlphas(evolution)
+    : { alphaV: ALPHA_V, alphaA: ALPHA_A, alphaE: ALPHA_E };
+
   // v4.1 补丁：个性化损失厌恶（负误差根据 resilience/sensitivity 放大）
   if (evolution && USE_EMOTION_OPTIMIZER) {
     predictionError = computePersonalizedError(predictionError, evolution);
@@ -326,17 +332,17 @@ function taijiUpdate(
   // 显著性调制：高唤醒 × 高显著性 → 冲击更大
   const modulation = 1 + taiji.arousal * eventSalience;
 
-  // 三合一更新
-  taiji.valence     += ALPHA_V * Math.tanh(predictionError * modulation);
+  // 三合一更新（使用个性化 alpha）
+  taiji.valence     += alphas.alphaV * Math.tanh(predictionError * modulation);
 
   // v4.1 补丁：唤醒边界修复 — 正面误差保留最小上升空间，加入基线回归
   if (USE_EMOTION_OPTIMIZER) {
-    taiji.arousal = computeArousalUpdate(taiji.arousal, predictionError, eventSalience, ALPHA_A);
+    taiji.arousal = computeArousalUpdate(taiji.arousal, predictionError, eventSalience, alphas.alphaA);
   } else {
-    taiji.arousal += ALPHA_A * Math.abs(predictionError) * (1 - taiji.arousal) * eventSalience;
+    taiji.arousal += alphas.alphaA * Math.abs(predictionError) * (1 - taiji.arousal) * eventSalience;
   }
 
-  taiji.expectation += ALPHA_E * predictionError;
+  taiji.expectation += alphas.alphaE * predictionError;
 
   // 自然衰减倾向
   taiji.valence     *= 0.98;
