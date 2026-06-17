@@ -97,7 +97,7 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
     timeoutMs: 100,
     fallback: undefined,
     circuitBreakerThreshold: 3,
-    status: 'pending',  // ← glue ready: pipelineHooks.ts 已实现，待 server 管道接入
+    status: 'healthy',  // ✅ aiCoordinator 阶段 1+4: conflictState → StrategyContext
     consecutiveFailures: 0,
   },
   {
@@ -109,7 +109,7 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
     timeoutMs: 50,
     fallback: '使用默认参数 (ALPHA_V=0.30, lossAversion=2.0)',
     circuitBreakerThreshold: 5,
-    status: 'pending',  // ← partial: lossAversion 已挂接 emotionEngine，alpha 动态化待后续
+    status: 'degraded',  // ← partial: lossAversion ✅ 已挂接，alpha 动态化待后续
     consecutiveFailures: 0,
   },
   {
@@ -133,7 +133,7 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
     timeoutMs: 50,
     fallback: '使用默认策略权重（忽略情境调制）',
     circuitBreakerThreshold: 5,
-    status: 'pending',  // ← glue ready: pipelineHooks.ts 已实现，待 server 管道接入
+    status: 'healthy',  // ✅ aiCoordinator 阶段 2+4: timeSlot/userStress/isReunion → StrategyContext
     consecutiveFailures: 0,
   },
 
@@ -223,6 +223,24 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
 
   // ═══ 待建连接 (PENDING 但不急) ═══
 
+  {
+    id: 'W10',
+    from: 'MemoryGraph',
+    to: 'workspace 注入',
+    strength: 'weak',
+    description: '图遍历召回 memoryContext → System Prompt workspace 注入（替代关键词匹配）',
+    status: 'healthy',
+    consecutiveFailures: 0,
+  },
+  {
+    id: 'W11',
+    from: '情景记忆形成',
+    to: 'MemoryGraph 节点同步',
+    strength: 'weak',
+    description: '新情景记忆/发现/思维节点 → 异步添加为 MemoryNode + 自动建边',
+    status: 'healthy',
+    consecutiveFailures: 0,
+  },
   {
     id: 'P3',
     from: '思维图谱 — 认知失调',

@@ -48,12 +48,9 @@ async function ensureNLU(): Promise<void> {
 }
 
 
-function setCallAI(_fn: any) {} // stub
+// v4.0: 已从 src/curiosity/index.js 导入 setCallAI, setExploreDeps, startExplorationCycle, stopExplorationCycle
+// stub 已移除 — 实现位于 src/curiosity/evaluate.ts 和 src/curiosity/explore.ts
 type AISettings = { provider: string; apiKey: string; model: string; baseUrl?: string; enableWebSearch?: boolean; temperature?: number };
-function setExploreDeps(_a: any, _b: any, _c: any, _d: any, _e: any, _f: any) { /* curiosity deps — 原始实现丢失 */ }
-function startExplorationCycle() { /* 原始实现丢失，探索定时器由 autonomousCycle 接管 */ }
-function getEventCoverage() { return "0%"; /* 原始实现丢失 */ }
-function getQuickStats() { return {}; /* 原始实现丢失 */ }
 interface CoreState {
     valence: number; arousal: number; expectation: number; dominance: number;
     extremityDuration: number; lastExtremitySign: number; _trend: number; _valenceHistory: number[];
@@ -90,10 +87,11 @@ import type { GraphSummary } from './src/lib/thoughtGraph.js';
 // v1.0: 认知记忆管道 — 情景记忆 → 整合 → 价值观
 import { createEpisodicMemoryStore, tryFormEpisode, recallRelevantMemories, serializeEpisodicStore, deserializeEpisodicStore, type EpisodicMemoryStore } from './src/lib/episodicMemory.js';
 import { decayAllMemories, tryConsolidateMemories } from './src/lib/memoryEnhancer.js';
+import { memoryGraph, createNodeFromEpisode } from './src/lib/memoryGraph.js';
 import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValueSystem, type ValueSystem } from './src/lib/valueDiscovery.js';
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
-import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS } from './src/curiosity/index.js';
+import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS, setCallAI, setExploreDeps, startExplorationCycle, stopExplorationCycle, getExplorationTimer } from './src/curiosity/index.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -376,6 +374,19 @@ function saveValueSystem(): void {
     }
 }
 
+function saveMemoryGraph(): void {
+    try {
+        const state = memoryGraph.getState();
+        if (state.nodes.length === 0) return;
+        fs.mkdirSync('./memories', { recursive: true });
+        const tmp = './memories/memory_graph.json.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
+        fs.renameSync(tmp, './memories/memory_graph.json');
+    } catch (e) {
+        console.error('[记忆图谱] 保存失败:', (e as Error)?.message || e);
+    }
+}
+
 // ==================== Autonomy State Persistence ====================
 function saveAutonomyState(): void {
     try {
@@ -497,6 +508,7 @@ function startPeriodicSave(): void {
         saveToneState(toneState);
         saveLayer4State();
         saveAutonomyState();
+        saveMemoryGraph();
     }, 30000);
 }
 
@@ -519,6 +531,7 @@ function saveOnExit(): void {
     saveToneState(toneState);
     saveLayer4State();
     saveAutonomyState();
+    saveMemoryGraph();
 }
 
 process.on('SIGINT', () => { stopAutonomyPilot(); saveOnExit(); process.exit(0); });
@@ -5975,8 +5988,29 @@ app.post('/api/chat', async (req, res) => {
                 console.log('[aiCoordinator] ⚠️ 危机覆盖激活');
               }
 
-              // 思维图谱: 注入 thoughtSummary 到工作区（供后续 workspace 使用）
+              // S5+S8 策略增强: 当协调器策略置信度更高时，采纳协调器的策略
+              const oldConfidence = (strategyResult as any).confidence ?? 0.5;
+              const newConfidence = coordinatorResult.strategyDecision.confidence;
+              if (
+                !strategyDirective.strategy.startsWith('crisis') &&
+                newConfidence > oldConfidence + 0.15 &&
+                coordinatorResult.strategy !== strategyDirective.strategy
+              ) {
+                const prevStrategy = strategyDirective.strategy;
+                strategyDirective = {
+                  strategy: coordinatorResult.strategy as any,
+                  promptSnippet: coordinatorResult.strategySnippet,
+                  confidence: newConfidence,
+                  reasoningSummary: `S5/S8增强: ${coordinatorResult.strategyDecision.reason}`,
+                  controlMode: 'generative',
+                };
+                _lastStrategy = strategyDirective;
+                console.log(`[aiCoordinator] 🔄 S5/S8策略提升: ${prevStrategy} → ${coordinatorResult.strategy} (置信度 ${oldConfidence.toFixed(2)} → ${newConfidence.toFixed(2)})`);
+              }
+
+              // 思维图谱: 注入 thoughtSummary + memoryContext 到 req（供后续 workspace 使用）
               (req as any)._thoughtSummary = coordinatorResult.thoughtSummary;
+              (req as any)._memoryContext = coordinatorResult.memoryContext;
             } catch (coordErr) {
               // 协调器失败不应阻塞主流程
               console.log('[aiCoordinator] 管道执行失败（降级到旧管道）:', (coordErr as Error).message);
@@ -6065,6 +6099,17 @@ app.post('/api/chat', async (req, res) => {
         if (activatedMemories.length > 0) {
             workspace.push(`【关联记忆】以下是与当前话题相关的历史记忆：
 ${activatedMemories.slice(0, 3).map(m => `- "${m.key}" (激活度:${m.activation.toFixed(2)})`).join('\n')}`);
+        }
+
+        // 🧩 5.5 记忆图谱上下文（BFS 激活扩散召回，替代关键词匹配）
+        const _memoryContext = (req as any)._memoryContext;
+        if (_memoryContext && _memoryContext.length > 0) {
+            const graphLines = _memoryContext.slice(0, 5).map((item: any) => {
+                const sourceLabel = { episodic: '记忆', semantic: '认知', curiosity: '发现', pattern: '想法' }[item.source] || '关联';
+                return `- [${sourceLabel}] ${item.content.slice(0, 100)} (相关度:${item.relevanceScore.toFixed(2)})`;
+            });
+            workspace.push(`【记忆图谱】BFS 图遍历召回了以下关联内容（可自然参考，不需逐条复述）：
+${graphLines.join('\n')}`);
         }
 
         // 6. 回复原则
@@ -6204,6 +6249,13 @@ ${message}`;
                 if (episode) {
                     console.log(`[情景记忆] 新情景形成: ${episode.eventSummary.slice(0,40)} (权重:${episode.recallWeight.toFixed(2)})`);
 
+                    // 🧩 同步到 MemoryGraph
+                    try {
+                        memoryGraph.addNode(createNodeFromEpisode(episode));
+                    } catch (e) {
+                        console.error('[记忆图谱] 添加情景节点失败:', (e as Error)?.message || e);
+                    }
+
                     // TMS: 将高权重情景用作信念证据
                     if (episode.recallWeight > 0.3) {
                         const evidenceItem: TMSEvidence = {
@@ -6336,6 +6388,17 @@ async function main() {
     loadMemory();
     loadLayer4State();
     loadAutonomyState();
+    // 🧩 启动时将现有情景记忆批量导入 MemoryGraph
+    if (episodicStore.episodes.length > 0) {
+        try {
+            for (const ep of episodicStore.episodes) {
+                memoryGraph.addNode(createNodeFromEpisode(ep));
+            }
+            console.log(`[记忆图谱] 启动导入完成: ${episodicStore.episodes.length} 条情景记忆`);
+        } catch (e) {
+            console.error('[记忆图谱] 启动导入失败:', (e as Error)?.message || e);
+        }
+    }
     // v5.6: 状态加载完成事件 — 标记冷启动完成
     bus.emit('StateLoaded', {
         semanticMemorySize: semanticMemory.size,

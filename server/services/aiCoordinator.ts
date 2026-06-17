@@ -29,6 +29,7 @@ import { recordPatternCounts, getFunnelSnapshot, logFunnelSummary } from '../../
 import { bus } from '../../src/eventBus.js';
 import { ThoughtGraph, assessThoughtGeneration, fillThoughtContent } from '../../src/lib/thoughtGraph.js';
 import { shadowLayer } from '../../src/lib/shadowLayer.js';
+import { MemoryGraph, queryMemoryGraph, memoryGraph, createNodeFromThought, createNodeFromDiscovery } from '../../src/lib/memoryGraph.js';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEngine.js';
 import type { StrategyDecision, StrategyType, StrategyContext } from '../../src/lib/dialogueStrategy.js';
 import type { ConflictState } from '../../src/lib/conflictManager.js';
@@ -39,6 +40,7 @@ import type { PatternCandidate } from '../../src/curiosity/patterns.js';
 import type { Insight } from '../../src/curiosity/insights.js';
 import type { EmotionContext } from '../../src/types/shared.js';
 import type { ThoughtSeed, GraphSummary } from '../../src/lib/thoughtGraph.js';
+import type { MemoryItem } from '../../src/lib/unifiedMemory.js';
 
 // ════════════════════════════════════════════════════════════
 // 1. 类型定义
@@ -99,6 +101,8 @@ export interface TurnOutput {
   thoughtSummary: GraphSummary;
   /** 🧠 本轮新生成的思维内容列表 */
   newThoughts: string[];
+  /** 🧩 Memory Graph: 图遍历召回的记忆上下文 */
+  memoryContext: MemoryItem[];
   /** 模块连接健康报告（可选，用于调试） */
   connectionHealth: ReturnType<typeof getConnectionHealth>;
   /** 管道元数据（时间戳、耗时等） */
@@ -118,6 +122,7 @@ export interface TurnMetadata {
     strategySelectionMs: number;
     arbitrationMs: number;
     rhythmDecisionMs: number;
+    memoryGraphMs: number;
     totalMs: number;
   };
 }
@@ -137,6 +142,8 @@ export class AICoordinator {
   private lastTurnValenceDelta: number = 0;
   /** 🧠 思维图谱（跨轮共享，在情感引擎与策略引擎之间积累思维碎片） */
   private thoughtGraph = new ThoughtGraph();
+  /** 🧩 记忆图谱（全局单例，统一四来源记忆 + BFS 激活扩散召回） */
+  private memoryGraph = memoryGraph;
 
   /**
    * 处理一轮对话的完整管道。
@@ -272,6 +279,14 @@ export class AICoordinator {
       .slice(-5)
       .reverse(); // 最新的在前
 
+    // 🧩 同步新发现到 MemoryGraph（去重：已存在的跳过）
+    for (const d of pendingDiscoveries) {
+      const existingNodes = this.memoryGraph.getNodesBySource('discovery');
+      if (!existingNodes.some(n => n.sourceId === d.id)) {
+        this.memoryGraph.addNode(createNodeFromDiscovery(d));
+      }
+    }
+
     // Sprint E: 从模式生成 Insight，发射 InsightGenerated 事件
     const generatedInsights = getShareableInsights(patternCandidates);
     if (generatedInsights.length > 0) {
@@ -310,6 +325,9 @@ export class AICoordinator {
         null, // sourceMemoryId — 未来可关联 episodicMemory
       );
       newThoughtIds.push(node.id);
+
+      // 🧩 同步到 MemoryGraph（自动建边）
+      this.memoryGraph.addNode(createNodeFromThought(node));
     }
 
     // 每日衰减（随轮次渐进触发）
@@ -351,7 +369,26 @@ export class AICoordinator {
     const shadowStrategyMod = shadowLayer.getStrategyModulation();
     const shadowMemoryMod = shadowLayer.getMemoryModulation();
 
-    // ── 阶段 4: 策略选择（S5 冲突 + S8 情境 + Sprint C 认知上下文 + Sprint E Insight + 🧠 Thought Graph + 🌑 Shadow 共同调制） ──
+    // ── 阶段 3.8: 🧩 Memory Graph 激活 ──
+    // 根据当前上下文，通过 BFS 激活扩散召回相关记忆
+    const t3_8 = Date.now();
+    const memoryContext = queryMemoryGraph(
+      this.memoryGraph,
+      { text: input.userText, emotionState: updatedEmotionState },
+      { maxDepth: 2, maxResults: 5 },
+    );
+
+    // 🌑 Shadow 记忆调制：negativityBias 影响负情绪记忆的召回权重
+    if (shadowMemoryMod.negativityBias > 0.1) {
+      for (const item of memoryContext) {
+        if (item.emotionalMatch === 'sad' || item.emotionalMatch === 'fear' || item.emotionalMatch === 'anger') {
+          item.relevanceScore = Math.min(1, item.relevanceScore * (1 + shadowMemoryMod.negativityBias));
+        }
+      }
+    }
+    const memoryMs = Date.now() - t3_8;
+
+    // ── 阶段 4: 策略选择（S5 冲突 + S8 情境 + Sprint C 认知上下文 + Sprint E Insight + 🧠 Thought Graph + 🌑 Shadow + 🧩 Memory Graph 共同调制） ──
     const t4 = Date.now();
     const strategyCtx: StrategyContext = {
       emotionState: updatedEmotionState,
@@ -383,6 +420,8 @@ export class AICoordinator {
       thoughtSummary,
       // 🆕 S7: 当前活跃价值观
       activeValues: input.activeValues,
+      // 🧩 Memory Graph: 图遍历召回的记忆上下文
+      memoryContext,
     };
 
     const strategyDecision = selectStrategy(strategyCtx);
@@ -480,6 +519,7 @@ export class AICoordinator {
       funnelSnapshot: getFunnelSnapshot(),
       thoughtSummary,
       newThoughts: seeds.map(s => `${s.type}:${s.direction}`),
+      memoryContext,
       connectionHealth: getConnectionHealth(),
       metadata: {
         processedAt: Date.now(),
@@ -493,6 +533,7 @@ export class AICoordinator {
           strategySelectionMs: strategyMs,
           arbitrationMs,
           rhythmDecisionMs: rhythmMs,
+          memoryGraphMs: memoryMs,
           totalMs,
         },
       },

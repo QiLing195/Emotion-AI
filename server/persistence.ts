@@ -18,12 +18,14 @@ import {
 } from '../src/lib/valueDiscovery.js';
 import { importCuriosityState, exportCuriosityState } from '../src/curiosity/patterns.js';
 import { interestModel } from '../src/curiosity/state.js';
+import { memoryGraph } from '../src/lib/memoryGraph.js';
 
 // ── 文件路径 ──
 const EPISODIC_MEMORY_FILE = path.join(__dirname, '../memories/episodic_memory.json');
 const VALUE_SYSTEM_FILE = path.join(__dirname, '../memories/value_system.json');
 const CURIOSITY_STATE_FILE = path.join(__dirname, '../memories/curiosity_state.json');
 const SEMANTIC_MEMORY_FILE = path.join(__dirname, '../memories/semantic_memory.json');
+const MEMORY_GRAPH_FILE = path.join(__dirname, '../memories/memory_graph.json');
 
 // ── 运行时状态 ──
 export let episodicStore: EpisodicMemoryStore = createEpisodicMemoryStore();
@@ -93,11 +95,22 @@ export function loadCuriosityState(): void {
   } catch (e) { console.error('[Persistence] 加载好奇心状态失败:', e); }
 }
 
+export function loadMemoryGraph(): void {
+  try {
+    if (fs.existsSync(MEMORY_GRAPH_FILE)) {
+      const data = JSON.parse(fs.readFileSync(MEMORY_GRAPH_FILE, 'utf-8'));
+      memoryGraph.loadState(data);
+      console.log(`[Persistence] 已加载记忆图谱: ${data.nodes?.length ?? 0} 节点, ${data.edges?.length ?? 0} 边`);
+    }
+  } catch (e) { console.log('[Persistence] 未找到记忆图谱文件，从头开始'); }
+}
+
 export function loadAll(): void {
   loadEpisodicStore();
   loadValueSystem();
   loadSemanticMemory();
   loadCuriosityState();
+  loadMemoryGraph();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -136,4 +149,14 @@ export function saveCuriosityState(): void {
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tmp, CURIOSITY_STATE_FILE);
   } catch (e) { console.error('[Persistence] 保存好奇心状态失败:', e); }
+}
+
+export function saveMemoryGraph(): void {
+  try {
+    const state = memoryGraph.getState();
+    if (state.nodes.length === 0) return; // 空图谱不保存
+    const tmp = MEMORY_GRAPH_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
+    fs.renameSync(tmp, MEMORY_GRAPH_FILE);
+  } catch (e) { console.error('[Persistence] 保存记忆图谱失败:', e); }
 }

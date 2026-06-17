@@ -90,6 +90,8 @@ export interface StrategyContext {
   };
   /** S7: 当前活跃的价值观（value label → confidence） */
   activeValues?: Record<string, number>;
+  /** 🧩 Memory Graph: 图遍历召回的记忆上下文（替代关键词匹配） */
+  memoryContext?: import('./unifiedMemory').MemoryItem[];
   roundNumber: number;
 }
 
