@@ -226,6 +226,57 @@ export function analyze3W(text: string): ThreeWResult {
 }
 
 // ════════════════════════════════════════════════════════
+// 生活类提问检测 — 防止 AI 编造人类活动
+// ════════════════════════════════════════════════════════
+
+export interface LifeQuestionDetection {
+  /** 是否为询问 AI "在做什么/最近在干什么" 的问题 */
+  isAskingWhatAmIDoing: boolean;
+  /** 是否为询问 AI "喜欢什么/有什么爱好" 的问题 */
+  isAskingAboutPreferences: boolean;
+  /** 匹配到的模式 */
+  matchedPatterns: string[];
+}
+
+const LIFE_QUESTION_PATTERNS: { regex: RegExp; tag: string }[] = [
+  { regex: /你在(干|做|忙)(什么|啥|嘛)/, tag: 'what_doing' },
+  { regex: /最近(在)?(干|做|忙)(什么|啥|嘛)/, tag: 'what_doing_recent' },
+  { regex: /(在|最近)(干嘛|做什么|忙什么)/, tag: 'what_doing' },
+  { regex: /你(平常|平时|一般|每天)(都|会)?(干|做)(什么|啥)/, tag: 'what_daily' },
+  { regex: /你(喜欢|爱)(干|做|看|听|玩)(什么|啥)/, tag: 'preferences' },
+  { regex: /你有(什么|啥)(爱好|兴趣)/, tag: 'preferences' },
+  { regex: /你(今天|昨天|这两天)(做了|干了|在干|干了)(什么|啥)/, tag: 'what_past' },
+  { regex: /你(会|能)(看|听|玩|去|吃)/, tag: 'human_activity_probe' },
+];
+
+/**
+ * 检测用户是否在询问 AI 的"生活细节"（如"你在干什么""你喜欢什么"）。
+ *
+ * 这类问题对 AI 女友是陷阱——AI 没有人类日常生活，
+ * 直接回答容易编造不存在的人类活动。管道应在检测到此类问题时
+ * 向 workspace 注入特殊引导，引导 AI 从记忆/思维等真实来源回应。
+ */
+export function detectLifeQuestions(text: string): LifeQuestionDetection {
+  const matchedPatterns: string[] = [];
+  let isAskingWhatAmIDoing = false;
+  let isAskingAboutPreferences = false;
+
+  for (const { regex, tag } of LIFE_QUESTION_PATTERNS) {
+    if (regex.test(text)) {
+      matchedPatterns.push(tag);
+      if (['what_doing', 'what_doing_recent', 'what_daily', 'what_past', 'human_activity_probe'].includes(tag)) {
+        isAskingWhatAmIDoing = true;
+      }
+      if (tag === 'preferences') {
+        isAskingAboutPreferences = true;
+      }
+    }
+  }
+
+  return { isAskingWhatAmIDoing, isAskingAboutPreferences, matchedPatterns };
+}
+
+// ════════════════════════════════════════════════════════
 // 激活传播 (Activation Spreading) — 联想式记忆检索
 // 替代简单子串匹配，使用多因子激活公式
 // ════════════════════════════════════════════════════════

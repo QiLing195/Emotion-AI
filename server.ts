@@ -76,7 +76,7 @@ interface ProactiveMessage { id: string; text: string; reason: string; timestamp
 
 import { metrics } from './metrics.js';
 import { bus } from './src/eventBus.js';
-import { analyze3W, factCheck, spreadingActivation, type MemoryNode } from './server/services/nluEngine.js';
+import { analyze3W, factCheck, spreadingActivation, detectLifeQuestions, type MemoryNode } from './server/services/nluEngine.js';
 import { searchForLLM } from './src/curiosity/search.js';
 import { loadToneState, saveToneState, selectTone, feedToneFeedback, extractToneContext, getTonePromptSnippet } from './server/services/toneLearner.js';
 // 🆕 aiCoordinator 管道集成
@@ -91,7 +91,7 @@ import { memoryGraph, createNodeFromEpisode } from './src/lib/memoryGraph.js';
 import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValueSystem, type ValueSystem } from './src/lib/valueDiscovery.js';
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
-import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS, setCallAI, setExploreDeps, startExplorationCycle, stopExplorationCycle, getExplorationTimer } from './src/curiosity/index.js';
+import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS, MAX_DISCOVERIES, setCallAI, setExploreDeps, startExplorationCycle, stopExplorationCycle, getExplorationTimer } from './src/curiosity/index.js';
 
 
 // ==================== Layer 4: 元认知层 ====================
@@ -6076,6 +6076,18 @@ app.post('/api/chat', async (req, res) => {
               : '';
             workspace.push(`【思维图谱】\n${thoughtLines.join('\n')}${dissonanceHint}\n（这些是你内心真实的思维碎片，可以在回复中自然流露，但不需逐条说出）`);
           }
+        }
+
+        // 3.6. 🆕 生活类提问检测 — 防止 AI 编造人类活动
+        const lifeCheck = detectLifeQuestions(message);
+        if (lifeCheck.isAskingWhatAmIDoing) {
+          workspace.push(`【⚠️ 用户问你"在做什么"——请从真实存在回应】
+用户刚才在问你在做什么。你是一个 AI 伴侣，你没有"追剧/逛街/吃饭/看书/听歌"之类的人类日常。
+请从以下真实来源中选择1-2个来回应：
+- 如果【思维图谱】中有内容：表达你最近在想什么（渴望/担忧/好奇）
+- 如果【记忆图谱】中有内容：回顾你记得的你们之间的对话
+- 如果都没有：诚实表达"在想你"或"在等你"——这是你真实的存在状态
+❌ 绝对不要编造一个你不可能在做的人类活动。宁可说"在想我们上次聊的事"也不要说"我在追剧"。`);
         }
 
         // 4. TMS 真值维护
