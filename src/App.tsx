@@ -21,9 +21,40 @@ export default function App() {
   const [showOscilloscope, setShowOscilloscope] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  // ── 启动时从服务器同步关系状态（防止刷新重置朋友阶段）──
+  useEffect(() => {
+    fetch('/state')
+      .then(r => r.json())
+      .then(data => {
+        const store = useAIBrainStore.getState();
+        const p = store.persona;
+        if (!p.dynamicEmotion) return;
+        // 用服务器当前情感状态覆盖前端默认值
+        useAIBrainStore.setState({
+          persona: {
+            ...p,
+            emotionState: {
+              ...p.emotionState,
+              taiji: {
+                valence: data.valence ?? 0,
+                arousal: data.arousal ?? 0.2,
+                expectation: data.expectation ?? 0,
+              },
+              emotions: data.emotions || p.emotionState?.emotions || {},
+              // tick 反映对话轮数，用于推断关系阶段
+              intimacyToUser: Math.min(0.9, 0.3 + (data.tick || 0) * 0.01),
+            },
+            // 简单推算：每轮对话 +1 亲密度，从 20 起步
+            affinityScore: Math.min(80, 20 + (data.tick || 0)),
+          },
+        });
+      })
+      .catch(() => {}); // 静默失败，服务器不可用时保持默认
+  }, []);
+
   // ── 启动时自动拉取 API key ──
   useEffect(() => {
-    if (settings.apiKey) return; // 已有 key 则跳过
+    if (settings.apiKey) return;
     fetch('/api/ai-config')
       .then(r => r.json())
       .then(data => {

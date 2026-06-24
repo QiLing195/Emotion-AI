@@ -101,8 +101,8 @@ import {
   inferFriendPhase, createFriendState,
   // 记忆增强/路由
   decayAllMemories, tryConsolidateMemories, detectAnchorEvent,
-  routeMemory, formatMemoryBlock,
 } from './server/stubs.js';
+import { routeMemory, formatMemoryBlock } from './server/services/memoryRouter.js';
 
 import {
   type AISettings, type AIProviderSettings, type CoreState, type Layer2State,
@@ -304,6 +304,8 @@ function loadMemory(): void {
                 episodicStore.prevDominantEmotion = loaded.prevDominantEmotion;
                 episodicStore.prevValence = loaded.prevValence;
                 episodicStore.prevArousal = loaded.prevArousal;
+                // 同步 tick 防止服务器重启后朋友状态重置
+                layer2.tick = Math.max(layer2.tick, loaded.roundCounter);
                 console.log(`[情景记忆] 已加载 ${episodicStore.episodes.length} 条情景记忆`);
             }
         }
