@@ -74,9 +74,14 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
   // 初始化语音输出
   useEffect(() => { initVoiceOutput(); }, []);
 
-  // 接收来自 MediaPanel 的语音识别结果
+  // 接收来自 MediaPanel 的语音识别结果，自动填入并发送
   useEffect(() => {
-    if (voiceText) {
+    if (voiceText && voiceOn) {
+      setInput(voiceText);
+      onVoiceTextConsumed();
+      // 延迟一帧让 input 更新后再发送
+      setTimeout(() => commitUserMessage(voiceText), 50);
+    } else if (voiceText) {
       setInput(voiceText);
       onVoiceTextConsumed();
     }

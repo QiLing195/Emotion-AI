@@ -1,5 +1,5 @@
 // ponytail: 媒体面板 — 摄像头预览 + 音频控制
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { startVoiceInput, stopVoiceInput, isVoiceSupported } from '../lib/voiceInput';
 import { stopSpeaking, initVoiceOutput } from '../lib/voiceOutput';
 
@@ -12,17 +12,34 @@ interface Props {
 type CamStatus = 'off' | 'loading' | 'on' | 'error';
 
 export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraStatus, setCameraStatus] = useState<CamStatus>('off');
   const [camError, setCamError] = useState('');
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const streamRef = useRef<MediaStream | null>(null);
 
+  // 用 callback ref 确保 video 元素挂载后立即绑定流
+  const videoRef = useCallback((node: HTMLVideoElement | null) => {
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
+    }
+  }, []);
+
   const voiceSupported = isVoiceSupported();
   const isSecure = typeof window !== 'undefined' && window.isSecureContext;
 
   useEffect(() => { initVoiceOutput(); }, []);
+
+  // 摄像头状态变为 'on' 后，确保已挂载的 video 绑定了流
+  useEffect(() => {
+    if (cameraStatus === 'on' && streamRef.current) {
+      // 通过 querySelector 找到 video 元素（兜底 callback ref）
+      const el = document.querySelector('#media-panel-cam') as HTMLVideoElement | null;
+      if (el && !el.srcObject) {
+        el.srcObject = streamRef.current;
+      }
+    }
+  }, [cameraStatus]);
 
   // ── 摄像头 ──
   const startCamera = async () => {
@@ -37,7 +54,6 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
         video: { width: 640, height: 480, facingMode: 'user' }
       });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setCameraStatus('on');
       setCamError('');
     } catch (err: any) {
@@ -53,7 +69,6 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
     setCameraStatus('off');
     setCamError('');
   };
@@ -79,7 +94,13 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
     }
     setListening(true);
     const ok = startVoiceInput(
-      (text) => { onSpeechResult(text); setListening(false); },
+      (text) => {
+        if (text) {
+          onSpeechResult(text);
+          setVoiceError('');
+        }
+        setListening(false);
+      },
       () => setListening(false)
     );
     if (!ok) {
@@ -97,7 +118,14 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
 
         <div className="relative w-full aspect-[4/5] max-h-full bg-[#111122] rounded-xl overflow-hidden border border-[#2a2a3e] flex items-center justify-center">
           {cameraStatus === 'on' ? (
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            <video
+              id="media-panel-cam"
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
           ) : cameraStatus === 'loading' ? (
             <div className="text-center text-[#666]">
               <div className="animate-spin text-2xl mb-2">⏳</div>
@@ -134,7 +162,6 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
       <div className="p-4 border-t border-[#1e1e2e] bg-[#0a0a16] space-y-3">
         <div className="text-xs text-[#666] uppercase tracking-wider text-center">音频控制</div>
 
-        {/* 连接状态提示 */}
         {!isSecure && (
           <div className="text-xs text-amber-400 bg-amber-400/10 rounded-lg px-3 py-2 text-center">
             非安全连接 — 语音/摄像头需要 HTTPS
@@ -156,7 +183,6 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
           </button>
         </div>
 
-        {/* 语音朗读状态 */}
         {voiceOn && (
           <div className="flex items-center gap-2 text-xs text-rose-400/80 bg-rose-400/5 rounded-lg px-3 py-2">
             <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-pulse" />
@@ -183,13 +209,9 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
           <div className="text-xs text-red-400 text-center">{voiceError}</div>
         )}
 
-        {/* 状态信息 */}
         <div className="text-center text-[10px] text-[#555] space-y-0.5">
           {!voiceOn && <div>开启语音朗读后可使用麦克风</div>}
           {voiceOn && !listening && <div>点击麦克风开始说话</div>}
-          {voiceSupported && isSecure && voiceOn && (
-            <div className="text-[#555]">Chrome/Edge 支持中文识别</div>
-          )}
         </div>
       </div>
     </div>
