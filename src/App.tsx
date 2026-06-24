@@ -1,6 +1,5 @@
-// ── 三模型观测台 · 最小化 UI ──
-// 左侧：ModelPanel（实时参数）  右侧：ChatView（精简聊天）
-// 后端管道完全不受影响（useAIBrainStore / eventBus / emotionEngine / curiosity 全保留）
+// ── 三栏布局 ──
+// 左：ModelPanel | 中：ChatView | 右：MediaPanel（摄像头+音频）
 import { useEffect, useState } from 'react';
 import { useAIBrainStore } from './store/useAIBrainStore';
 import { db } from './firebase';
@@ -8,6 +7,7 @@ import { doc, getDoc, setDoc, collection, onSnapshot, query, orderBy, limit } fr
 import { handleFirestoreError, OperationType, getQuotaExceeded } from './lib/firestore-error';
 import ModelPanel from './components/ModelPanel';
 import ChatView from './views/ChatView';
+import MediaPanel from './components/MediaPanel';
 import SettingsView from './views/SettingsView';
 import CognitiveOscilloscope from './components/overlays/CognitiveOscilloscope';
 
@@ -20,6 +20,8 @@ export default function App() {
   const setSettings = useAIBrainStore(s => s.setSettings);
   const [showOscilloscope, setShowOscilloscope] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [voiceText, setVoiceText] = useState('');
 
   // ── 启动时从服务器同步关系状态（防止刷新重置朋友阶段）──
   useEffect(() => {
@@ -170,7 +172,16 @@ export default function App() {
         onSettingsClick={() => setShowSettings(!showSettings)}
         onOscilloscopeClick={() => setShowOscilloscope(!showOscilloscope)}
       />
-      <ChatView />
+      <div className="flex-1 flex min-w-0">
+        <ChatView voiceOn={voiceOn} voiceText={voiceText} onVoiceTextConsumed={() => setVoiceText('')} />
+        <div className="w-1/5 min-w-[200px] max-w-[280px] shrink-0">
+          <MediaPanel
+            voiceOn={voiceOn}
+            onVoiceToggle={setVoiceOn}
+            onSpeechResult={(text) => setVoiceText(text)}
+          />
+        </div>
+      </div>
 
       {/* 设置页覆盖层 */}
       {showSettings && (

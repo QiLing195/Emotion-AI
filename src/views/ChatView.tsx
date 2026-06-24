@@ -4,8 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAIBrainStore, generateSystemPrompt, ChatMessage as ChatMessageType } from '../store/useAIBrainStore';
 import { getDominantEmotion, analyzeUserSentiment, suggestReinforcement, applyEmotionalContagion, getMicroPhase, getRelationshipStage, STAGE_LABELS, type EmotionEvent } from '../lib/emotionEngine';
 import { XIAONUAN_STAGE_LABELS, getNextStageThreshold, resolveLoverStage } from '../lib/xiaoNuanStages';
-import { startVoiceInput, stopVoiceInput, isVoiceSupported } from '../lib/voiceInput';
-import { speakText, stopSpeaking, initVoiceOutput } from '../lib/voiceOutput';
+import { speakText, initVoiceOutput } from '../lib/voiceOutput';
 
 // ── 单条消息气泡 ──
 function MessageBubble({ msg }: { msg: ChatMessageType; key?: string }) {
@@ -38,7 +37,13 @@ function TypingIndicator() {
   );
 }
 
-export default function ChatView() {
+interface ChatViewProps {
+  voiceOn: boolean;
+  voiceText: string;
+  onVoiceTextConsumed: () => void;
+}
+
+export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: ChatViewProps) {
   const chatMessages = useAIBrainStore(s => s.chatMessages);
   const addChatMessage = useAIBrainStore(s => s.addChatMessage);
   const persona = useAIBrainStore(s => s.persona);
@@ -50,9 +55,6 @@ export default function ChatView() {
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(false);
-  const [listening, setListening] = useState(false);
-  const voiceSupported = isVoiceSupported();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isGeneratingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -69,30 +71,21 @@ export default function ChatView() {
     : STAGE_LABELS[relationshipStage];
   const nextThreshold = persona.useLoverStages ? getNextStageThreshold(affinityScore) : null;
 
-  // 初始化语音
+  // 初始化语音输出
   useEffect(() => { initVoiceOutput(); }, []);
+
+  // 接收来自 MediaPanel 的语音识别结果
+  useEffect(() => {
+    if (voiceText) {
+      setInput(voiceText);
+      onVoiceTextConsumed();
+    }
+  }, [voiceText]);
 
   // 自动滚到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-
-  // 语音输入
-  const handleVoiceInput = () => {
-    if (listening) {
-      stopVoiceInput();
-      setListening(false);
-      return;
-    }
-    setListening(true);
-    startVoiceInput(
-      (text) => {
-        setInput(text);
-        setListening(false);
-      },
-      () => setListening(false)
-    );
-  };
 
   // ── 核心：发送消息 → 流式接收 → 情感更新 ──
   const commitUserMessage = async (text: string) => {
@@ -294,40 +287,15 @@ export default function ChatView() {
       {/* 输入框 */}
       <div className="px-4 py-3 glass-warm shrink-0">
         <div className="flex gap-2">
-          {/* 语音按钮 */}
-          {voiceSupported && (
-            <>
-              <button
-                onClick={() => { setVoiceOn(!voiceOn); if (voiceOn) stopSpeaking(); }}
-                title={voiceOn ? '关闭语音' : '开启语音'}
-                className={`px-3 py-3 rounded-2xl text-lg transition-all ${
-                  voiceOn
-                    ? 'bg-rose-100 text-rose-500 border border-rose-300'
-                    : 'bg-white/60 text-moon-400 border border-surface-300 hover:border-coral-300'
-                }`}
-              >
-                {voiceOn ? '🔊' : '🔈'}
-              </button>
-              <button
-                onClick={handleVoiceInput}
-                disabled={isTyping}
-                title="语音输入"
-                className={`px-3 py-3 rounded-2xl text-lg transition-all border ${
-                  listening
-                    ? 'bg-red-100 text-red-500 border-red-400 animate-pulse'
-                    : 'bg-white/60 text-moon-400 border-surface-300 hover:border-coral-300'
-                } disabled:opacity-40`}
-              >
-                🎤
-              </button>
-            </>
+          {voiceOn && (
+            <span className="flex items-center text-xs text-rose-400 animate-pulse">🎤</span>
           )}
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={hasApiKey ? (voiceOn ? '输入或点🎤说话...' : '输入消息... (Enter 发送)') : '请先配置 API Key...'}
+            placeholder={hasApiKey ? '输入消息... (Enter 发送)' : '请先配置 API Key...'}
             disabled={isTyping || !hasApiKey}
             className="flex-1 bg-white/60 backdrop-blur border border-surface-300 rounded-2xl px-5 py-3 text-sm text-moon-800 placeholder-moon-400 focus:outline-none focus:border-coral-400 focus:ring-4 focus:ring-coral-400/15 disabled:opacity-40 transition-all"
           />
