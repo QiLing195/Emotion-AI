@@ -126,6 +126,11 @@ export default function ChatView() {
         } as ChatMessageType);
       }
 
+      // 服务端计算的亲密度 — 每轮更新，驱动阶段变化
+      if (data._affinity?.score) {
+        useAIBrainStore.getState().setPersona({ affinityScore: data._affinity.score });
+      }
+
       // 情感更新
       const emotionEvent = data.emotionEvent as EmotionEvent | undefined;
       if (emotionEvent) {

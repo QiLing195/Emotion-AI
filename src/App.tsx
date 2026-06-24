@@ -29,7 +29,6 @@ export default function App() {
         const store = useAIBrainStore.getState();
         const p = store.persona;
         if (!p.dynamicEmotion) return;
-        // 用服务器当前情感状态覆盖前端默认值
         useAIBrainStore.setState({
           persona: {
             ...p,
@@ -41,15 +40,14 @@ export default function App() {
                 expectation: data.expectation ?? 0,
               },
               emotions: data.emotions || p.emotionState?.emotions || {},
-              // tick 反映对话轮数，用于推断关系阶段
-              intimacyToUser: Math.min(0.9, 0.3 + (data.tick || 0) * 0.01),
+              intimacyToUser: Math.min(0.95, (data.affinityScore ?? 20) / 100),
             },
-            // 简单推算：每轮对话 +1 亲密度，从 20 起步
-            affinityScore: Math.min(80, 20 + (data.tick || 0)),
+            // 直接使用服务端计算的亲密度分数
+            affinityScore: data.affinityScore ?? 20,
           },
         });
       })
-      .catch(() => {}); // 静默失败，服务器不可用时保持默认
+      .catch(() => {});
   }, []);
 
   // ── 启动时自动拉取 API key ──
@@ -119,12 +117,13 @@ export default function App() {
             calculateOfflineDecay(data.lastActiveAt);
           }
           if (data.persona) {
-            // 合并 emotionState：Firestore 保存时剥离了动态状态，从内存补上
+            // 合并时保留当前内存中的 affinityScore（刚从服务端水合）
             const currentPersona = useAIBrainStore.getState().persona;
             useAIBrainStore.setState({
               persona: {
                 ...currentPersona,
                 ...data.persona,
+                affinityScore: currentPersona.affinityScore ?? data.persona.affinityScore ?? 20,
                 emotionState: data.persona.emotionState || currentPersona.emotionState,
               }
             });

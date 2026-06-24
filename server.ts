@@ -3305,7 +3305,35 @@ app.get('/info', (req, res) => {
     });
 });
 
-app.get('/state', (req, res) => res.json(buildFullResponse(core, layer2)));
+// ── 服务端亲密度计算（基于对话深度/记忆/价值观）──
+function computeAffinityScore(): number {
+    // 基础：20 分起步
+    let score = 20;
+    // 对话轮数：每轮 +0.5，上限 40
+    score += Math.min(layer2.tick * 0.5, 40);
+    // 情景记忆：每条 +2，上限 20
+    score += Math.min(episodicStore.episodes.length * 2, 20);
+    // 情感投入：|valence| * 15，上限 15
+    score += Math.min(Math.abs(core.valence) * 15, 15);
+    // 价值观发现：每个 +3，上限 12
+    const valueCount = Object.values(valueSystem.values || {}).filter((v: any) => v.confidence > 0.5).length;
+    score += Math.min(valueCount * 3, 12);
+    return Math.round(Math.min(score, 95));
+}
+
+app.get('/state', (req, res) => {
+    const full = buildFullResponse(core, layer2);
+    res.json({
+        ...full,
+        affinityScore: computeAffinityScore(),
+        relationshipStage: layer2.tick > 0
+            ? (computeAffinityScore() >= 70 ? 'close' : computeAffinityScore() >= 50 ? 'friend' : computeAffinityScore() >= 30 ? 'acquaintance' : 'stranger')
+            : 'stranger',
+        memoryCount: semanticMemory.size,
+        episodeCount: episodicStore.episodes.length,
+        valueCount: Object.values(valueSystem.values || {}).filter((v: any) => v.confidence > 0.5).length,
+    });
+});
 
 // 自动配置：返回服务器环境变量中的 API key，前端启动时拉取
 app.get('/api/ai-config', (req, res) => {
@@ -5043,6 +5071,7 @@ ${strategyForConstraint === 'neutral' ? '- 宁可留白，不要填满。' : ''}
 
         res.json({
             response: responseText, emotionEvent,
+            _affinity: { score: computeAffinityScore(), tick: layer2.tick },
             _nlu: { valence: eventValence, salience: nluResult.salience, src: nluSrc },
             _feedback: feedbackDelta !== 0 ? { delta: Math.round(feedbackDelta * 1000) / 1000 } : null,
             _factCheck: factCheckResult.flags.length > 0 ? {
