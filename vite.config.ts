@@ -28,11 +28,14 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
+      https: {} as any, // 摄像头/语音 API 需要安全上下文（自签证书）
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
+        '/state': {
           target: 'http://localhost:3000',
           changeOrigin: true,
         },
