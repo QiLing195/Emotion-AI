@@ -4372,6 +4372,50 @@ app.post('/api/tts', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════
+// Vision — AI 视觉：分析摄像头画面
+// ════════════════════════════════════════════════════════════
+let _lastVisionResult: { text: string; ts: number } | null = null;
+
+app.post('/api/vision', async (req, res) => {
+    const { imageBase64, mimeType = 'image/jpeg' } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: 'image required' });
+
+    try {
+        const settings = readAISettings();
+        const { generateAIChatResponse } = await import('./src/lib/aiProvider.js');
+        const result = await generateAIChatResponse(
+            {
+                provider: settings?.provider || 'deepseek',
+                apiKey: settings?.apiKey || '',
+                model: settings?.model || 'deepseek-chat',
+                baseUrl: settings?.baseUrl,
+                temperature: 0.3,
+            },
+            '你是一个观察者。用一句话（15-25字）描述画面中的人在做什么、表情和状态。用中文。不要猜测意图，只描述能看到的。',
+            [{
+                role: 'user',
+                content: '描述画面',
+                imageUrl: `data:${mimeType};base64,${imageBase64}`,
+            }]
+        );
+
+        const desc = result?.text?.trim() || '无法分析画面';
+        _lastVisionResult = { text: desc, ts: Date.now() };
+        res.json({ description: desc });
+    } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'vision failed' });
+    }
+});
+
+// 在 workspace 中注入最近的视觉结果
+function getVisionContext(): string | null {
+    if (!_lastVisionResult) return null;
+    // 30 秒内的结果视为有效
+    if (Date.now() - _lastVisionResult.ts > 30_000) return null;
+    return `【AI 看到你】${_lastVisionResult.text}`;
+}
+
 // ==================== API Chat Endpoint ====================
 app.post('/api/chat', async (req, res) => {
     try {
@@ -4693,6 +4737,10 @@ app.post('/api/chat', async (req, res) => {
         // 0.5. 基础人格
         const basePrompt = persona?.systemPrompt || `你是一个名为"${persona?.name || '助手'}"的AI助手。`;
         workspace.push(`【人格设定】\n${basePrompt}`);
+
+        // 0.6. 视觉上下文 — AI 通过摄像头看到的内容
+        const visionCtx = getVisionContext();
+        if (visionCtx) workspace.push(visionCtx);
 
         // 1. 3W 用户消息分析
         const threeW = analyze3W(message);

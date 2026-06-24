@@ -75,6 +75,46 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
 
   useEffect(() => () => stopCamera(), []);
 
+  // ── AI 视觉：拍照让 AI 看到画面 ──
+  const [visionResult, setVisionResult] = useState('');
+  const [visionLoading, setVisionLoading] = useState(false);
+
+  const captureAndAnalyze = async () => {
+    if (cameraStatus !== 'on' || !streamRef.current) return;
+    setVisionLoading(true);
+    setVisionResult('');
+
+    try {
+      // 从 video 截取一帧
+      const video = document.querySelector('#media-panel-cam') as HTMLVideoElement;
+      if (!video) throw new Error('no video');
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no context');
+      ctx.drawImage(video, 0, 0);
+
+      const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+
+      const res = await fetch('/api/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' }),
+      });
+      const data = await res.json();
+      if (data.description) {
+        setVisionResult(data.description);
+      } else {
+        setVisionResult('分析失败: ' + (data.error || 'unknown'));
+      }
+    } catch (err: any) {
+      setVisionResult('截图失败: ' + (err?.message || 'error'));
+    }
+    setVisionLoading(false);
+  };
+
   // ── 语音输入 ──
   const handleMic = () => {
     if (!isSecure) {
@@ -156,6 +196,24 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
         >
           {cameraStatus === 'on' ? '关闭摄像头' : cameraStatus === 'loading' ? '启动中...' : '开启摄像头'}
         </button>
+
+        {/* AI 视觉按钮 */}
+        {cameraStatus === 'on' && (
+          <>
+            <button
+              onClick={captureAndAnalyze}
+              disabled={visionLoading}
+              className="w-full py-2 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50"
+            >
+              {visionLoading ? '⏳ AI 正在看...' : '👁️ 让 AI 看看我在做什么'}
+            </button>
+            {visionResult && (
+              <div className="w-full text-xs text-[#aaa] bg-[#111122] rounded-lg px-3 py-2 border border-[#2a2a3e]">
+                <span className="text-emerald-400">AI 看到：</span>{visionResult}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* ── 音频控制 — 下半部分 ── */}
