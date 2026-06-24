@@ -174,7 +174,7 @@ export default function App() {
       />
       <div className="flex-1 flex min-w-0">
         <ChatView voiceOn={voiceOn} voiceText={voiceText} onVoiceTextConsumed={() => setVoiceText('')} />
-        <div className="w-1/5 min-w-[200px] max-w-[280px] shrink-0">
+        <div className="w-[38%] min-w-[280px] max-w-[420px] shrink-0" style={{ flexBasis: '38%' }}>
           <MediaPanel
             voiceOn={voiceOn}
             onVoiceToggle={setVoiceOn}

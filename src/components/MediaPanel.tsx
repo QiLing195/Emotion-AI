@@ -60,7 +60,7 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
     <div className="h-full flex flex-col bg-[#0d0d1a] border-l border-[#1e1e2e] text-white">
       {/* 摄像头区域 — 上半部分 */}
       <div className="flex-1 flex flex-col items-center justify-center p-3 min-h-0">
-        <div className="relative w-full aspect-[3/4] max-h-full bg-[#111122] rounded-xl overflow-hidden border border-[#2a2a3e] flex items-center justify-center">
+        <div className="relative w-full aspect-[4/5] max-h-full bg-[#111122] rounded-xl overflow-hidden border border-[#2a2a3e] flex items-center justify-center">
           {cameraOn ? (
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           ) : (
