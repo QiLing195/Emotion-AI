@@ -1,6 +1,7 @@
 // @ts-nocheck
 import express from 'express';
 import fs from 'fs';
+import { spawn } from 'child_process';
 
 const VERSION = JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version;
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
@@ -4322,6 +4323,53 @@ app.get('/api/identity', (req, res) => {
         memoryCount: semanticMemory.size,
         valueCount: activeBeliefs.length,
     });
+});
+
+// ════════════════════════════════════════════════════════════
+// TTS — 微软 Edge 情感语音 (Xiaoxiao 活泼少女音)
+// ════════════════════════════════════════════════════════════
+app.post('/api/tts', async (req, res) => {
+    const { text, voice = 'zh-CN-XiaoxiaoNeural' } = req.body;
+    if (!text || text.length > 500) {
+        return res.status(400).json({ error: 'text required, max 500 chars' });
+    }
+    // 去掉括号内容
+    const clean = text.replace(/[（(][^）)]*[）)]/g, '').trim();
+    if (!clean) return res.status(400).json({ error: 'empty after cleaning' });
+
+    try {
+        const child = spawn('edge-tts', [
+            '--voice', voice,
+            '--text', clean,
+            '--write-media', '-',  // 输出到 stdout
+        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+        const chunks: Buffer[] = [];
+        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+        let stderr = '';
+        child.stderr.on('data', (d: Buffer) => stderr += d.toString());
+
+        child.on('close', (code: number) => {
+            if (code !== 0) {
+                console.error('[TTS] edge-tts error:', stderr.slice(0, 200));
+                return res.status(500).json({ error: 'TTS failed' });
+            }
+            const audio = Buffer.concat(chunks);
+            res.set({
+                'Content-Type': 'audio/mpeg',
+                'Content-Length': audio.length.toString(),
+            });
+            res.send(audio);
+        });
+
+        child.on('error', (err: Error) => {
+            console.error('[TTS] spawn error:', err.message);
+            res.status(500).json({ error: 'TTS spawn failed' });
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'TTS error' });
+    }
 });
 
 // ==================== API Chat Endpoint ====================
