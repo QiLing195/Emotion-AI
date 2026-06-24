@@ -27,6 +27,8 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
   // ── AI 视觉 ──
   const [visionResult, setVisionResult] = useState('');
   const [visionLoading, setVisionLoading] = useState(false);
+  const [autoVision, setAutoVision] = useState(false);
+  const [visionEmotion, setVisionEmotion] = useState('');
 
   const voiceSupported = isVoiceSupported();
   const isSecure = typeof window !== 'undefined' && window.isSecureContext;
@@ -94,6 +96,39 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
     }
     setVisionLoading(false);
   };
+
+  // 提取 video 帧为 base64
+  const captureFrame = (): string | null => {
+    const video = document.querySelector('#media-panel-cam') as HTMLVideoElement;
+    if (!video) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+  };
+
+  // 定时自动拍照分析（每30秒）
+  useEffect(() => {
+    if (!autoVision || cameraStatus !== 'on') return;
+    const timer = setInterval(async () => {
+      const base64 = captureFrame();
+      if (!base64) return;
+      try {
+        const res = await fetch('/api/vision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64, mode: 'full' }),
+        });
+        const data = await res.json();
+        if (!data.cached) {
+          setVisionResult(data.description || '');
+          setVisionEmotion(data.emotion || '');
+        }
+      } catch {}
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [autoVision, cameraStatus]);
 
   // ── 语音聊天模式 ──
   const startChatMode = () => {
@@ -171,13 +206,25 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
 
         {cameraStatus === 'on' && (
           <>
-            <button onClick={captureAndAnalyze} disabled={visionLoading}
-              className="w-full py-2 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50">
-              {visionLoading ? '⏳ 分析中...' : '👁️ 让 AI 看看我'}
-            </button>
+            <div className="flex gap-2 w-full">
+              <button onClick={captureAndAnalyze} disabled={visionLoading}
+                className="flex-1 py-2 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all disabled:opacity-50">
+                {visionLoading ? '⏳' : '👁️'} 手动分析
+              </button>
+              <button onClick={() => setAutoVision(!autoVision)}
+                className={`px-3 py-2 rounded-full text-xs font-medium transition-all border ${
+                  autoVision
+                    ? 'bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
+                    : 'bg-[#1a1a2e] text-[#555] border-[#333] hover:border-emerald-500/30'
+                }`}>
+                {autoVision ? '⏱ 自动' : '⏱'}
+              </button>
+            </div>
             {visionResult && (
               <div className="w-full text-xs text-[#aaa] bg-[#111122] rounded-lg px-3 py-2 border border-[#2a2a3e]">
                 <span className="text-emerald-400">看到：</span>{visionResult}
+                {visionEmotion && <span className="text-rose-400 ml-1">[{visionEmotion}]</span>}
+                {autoVision && <span className="text-[#555] ml-2">每30s</span>}
               </div>
             )}
           </>

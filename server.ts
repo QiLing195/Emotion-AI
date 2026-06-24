@@ -4373,47 +4373,81 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-// Vision — AI 视觉：分析摄像头画面
+// Vision — AI 视觉：分析摄像头画面（含情感识别）
 // ════════════════════════════════════════════════════════════
-let _lastVisionResult: { text: string; ts: number } | null = null;
+let _lastVision: { text: string; emotion: string; ts: number } | null = null;
+let _visionCooldown = 0;
 
 app.post('/api/vision', async (req, res) => {
-    const { imageBase64, mimeType = 'image/jpeg' } = req.body;
+    const { imageBase64, mimeType = 'image/jpeg', mode = 'full' } = req.body;
     if (!imageBase64) return res.status(400).json({ error: 'image required' });
+
+    // 冷却：5 秒内不重复分析
+    if (Date.now() - _visionCooldown < 5000) {
+        return res.json({ description: _lastVision?.text || '', emotion: _lastVision?.emotion || '', cached: true });
+    }
+    _visionCooldown = Date.now();
 
     try {
         const settings = readAISettings();
         const { generateAIChatResponse } = await import('./src/lib/aiProvider.js');
+
+        const prompt = mode === 'emotion'
+            ? `分析画面中人物的表情和情绪状态。返回 JSON: {"expression":"表情","emotion":"情绪(开心/难过/专注/疲惫/平静/兴奋等)","confidence":0.0-1.0}。只返回JSON。`
+            : `用中文描述画面（20字以内）：人物在做什么、表情、状态。如果画面中有多个人或特别的环境特征，也提一下。`;
+
         const result = await generateAIChatResponse(
             {
                 provider: settings?.provider || 'deepseek',
                 apiKey: settings?.apiKey || '',
                 model: settings?.model || 'deepseek-chat',
                 baseUrl: settings?.baseUrl,
-                temperature: 0.3,
+                temperature: 0.2,
             },
-            '你是一个观察者。用一句话（15-25字）描述画面中的人在做什么、表情和状态。用中文。不要猜测意图，只描述能看到的。',
+            mode === 'emotion' ? '只返回 JSON，不要其他文字。' : '用一句话描述，不要评价。',
             [{
                 role: 'user',
-                content: '描述画面',
+                content: prompt,
                 imageUrl: `data:${mimeType};base64,${imageBase64}`,
             }]
         );
 
-        const desc = result?.text?.trim() || '无法分析画面';
-        _lastVisionResult = { text: desc, ts: Date.now() };
-        res.json({ description: desc });
+        const raw = result?.text?.trim() || '';
+        let desc = raw;
+        let emotion = '';
+
+        if (mode === 'emotion') {
+            try {
+                const j = JSON.parse(raw.replace(/```json|```/g, ''));
+                emotion = j.emotion || j.expression || '未知';
+                desc = `${j.expression || ''}，${j.emotion || ''}`;
+            } catch {
+                emotion = raw.slice(0, 20);
+                desc = raw.slice(0, 40);
+            }
+        }
+
+        _lastVision = { text: desc, emotion, ts: Date.now() };
+        res.json({ description: desc, emotion });
     } catch (err: any) {
         res.status(500).json({ error: err?.message || 'vision failed' });
     }
 });
 
-// 在 workspace 中注入最近的视觉结果
+// 在 workspace 中注入视觉上下文（内容有变化时才注入）
+let _lastInjectedVision = '';
 function getVisionContext(): string | null {
-    if (!_lastVisionResult) return null;
-    // 30 秒内的结果视为有效
-    if (Date.now() - _lastVisionResult.ts > 30_000) return null;
-    return `【AI 看到你】${_lastVisionResult.text}`;
+    if (!_lastVision) return null;
+    if (Date.now() - _lastVision.ts > 45_000) return null; // 45秒过期
+    if (_lastVision.text === _lastInjectedVision) return null; // 没变化不重复
+    _lastInjectedVision = _lastVision.text;
+
+    let ctx = `【AI 看到你了】${_lastVision.text}`;
+    if (_lastVision.emotion) {
+        ctx += `（情绪：${_lastVision.emotion}）`;
+    }
+    ctx += `\n→ 可以在回复中自然提及，但不要每轮都说"我看到了"。只在合适时轻轻带过。`;
+    return ctx;
 }
 
 // ==================== API Chat Endpoint ====================
