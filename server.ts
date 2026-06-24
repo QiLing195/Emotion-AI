@@ -4940,7 +4940,7 @@ ${strategyForConstraint === 'neutral' ? '- 宁可留白，不要填满。' : ''}
                     // v2.0: 深度对话结束后写入反思日志
                     if (core.arousal > 0.6 && layer2.tick > 5) {
                         try {
-                            autonomyState.internalLog.push({
+                            internalLog.push({
                                 timestamp: Date.now(),
                                 type: 'deep_conversation_reflection',
                                 summary: `刚结束一段${layer2.tick}轮对话，效价${core.valence.toFixed(2)}，唤醒${core.arousal.toFixed(2)}，${_anchorResult ? `锚点事件: ${_anchorResult.eventType}` : '无锚点事件'}`,
