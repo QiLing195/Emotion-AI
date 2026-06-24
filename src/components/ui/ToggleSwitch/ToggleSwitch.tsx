@@ -27,7 +27,7 @@ const ToggleSwitch = React.forwardRef<HTMLInputElement, ToggleSwitchProps>(
     },
     ref
   ) => {
-    const toggleId = id || `toggle-${Math.random().toString(36).substring(2, 9)}`;
+    const toggleId = id || `toggle-${crypto.randomUUID()}`;
 
     const sizeClasses = {
       sm: 'h-4 w-7',

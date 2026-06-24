@@ -133,7 +133,7 @@ function generateCorrelationInsights(
       const surprising = Math.min(0.8, pattern.connectedness * 0.15 + 0.4);
 
       results.push({
-        id: `insight_corr_${now}_${Math.random().toString(36).slice(2, 6)}`,
+        id: `insight_corr_${crypto.randomUUID()}`,
         type: 'correlation',
         title: `「${pattern.topic}」和「${neighbor}」`,
         description: buildCorrelationDescription(pattern.topic, neighbor, pattern, neighborPattern),
@@ -217,7 +217,7 @@ function generateEmotionDeviationInsights(
       const surprising = Math.min(0.9, 0.3 + magnitude * 0.6); // 偏差越大越 surprise
 
       results.push({
-        id: `insight_emo_${now}_${Math.random().toString(36).slice(2, 6)}`,
+        id: `insight_emo_${crypto.randomUUID()}`,
         type: 'emotion_deviation',
         title: `聊「${pattern.topic}」时${emotionLabel}${direction}`,
         description: buildEmotionDeviationDescription(
@@ -281,7 +281,7 @@ function generateFrequencyShiftInsights(
     const surprising = Math.min(0.8, 0.3 + (ratio - 2) * 0.15);
 
     results.push({
-      id: `insight_freq_${now}_${Math.random().toString(36).slice(2, 6)}`,
+      id: `insight_freq_${crypto.randomUUID()}`,
       type: 'frequency_shift',
       title: `「${top.topic}」关注度超过「${rival.topic}」`,
       description: buildFrequencyShiftDescription(top, rival, ratio),

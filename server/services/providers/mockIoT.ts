@@ -1,6 +1,6 @@
-import { IIoTProvider } from '../interfaces.js';
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-export class MockIoTProvider implements IIoTProvider {
+export class MockIoTProvider {
   id = 'mock_iot';
   name = 'Mock IoT Provider';
 
@@ -12,7 +12,7 @@ export class MockIoTProvider implements IIoTProvider {
       this.deviceStates.set(deviceId, status);
 
       // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await sleep(500);
 
       console.log(`[MockIoT] Device ${deviceId} set to ${status}`);
 

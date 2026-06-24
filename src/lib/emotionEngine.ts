@@ -99,22 +99,24 @@ export interface ReinforcementState {
 }
 
 export interface EmotionState {
-  // ── 分层核心状态 ──
-  taiji: TaijiState;
-  yinyang: YinYangState;
-  sancai: SancaiState;
-  evolution: EvolutionState;
+  // ════════════════════════════════════════════════════════
+  // 🟢 决策层 — 策略/温度/冲突/记忆权重 直接引用
+  // ════════════════════════════════════════════════════════
+  taiji: TaijiState;                    // valence, arousal, expectation
+  yinyang: YinYangState;               // approachBias, avoidBias
+  emotions: Record<string, number>;    // 九情强度 (joy/love/sad/anger/fear/...)
+  intimacyToUser: number;              // [0, 1] 亲密感
+  evolution: EvolutionState;           // resilience, trust, openness (人格漂移用)
 
-  // ── 涌现的情感景观 ──
-  emotions: Record<string, number>;       // 九情强度
+  // ════════════════════════════════════════════════════════
+  // 🔵 解释层 — 只用于 narrative/日志/自我认知，不参与策略
+  // ════════════════════════════════════════════════════════
+  sancai: SancaiState;                 // A/B/R/harmony — 理情平衡指标，仅用于解释
   metaEmotions: { shame: number; despair: number; confusion: number };
-  compositeEmotions: CompositeEmotion[];  // 当前激活的复合情绪
+  compositeEmotions: CompositeEmotion[];
 
-  // ── 关系维度 ──
-  intimacyToUser: number;   // [0, 1] AI 对用户的亲密感
-  intimacyFromUser: number; // [0, 1] 用户对 AI 的亲密感知
-
-  // ── 操作条件反射兼容层 ──
+  // ── 关系/强化 — 辅助层 ──
+  intimacyFromUser: number;
   reinforcement: ReinforcementState;
 
 }
@@ -344,9 +346,9 @@ function taijiUpdate(
 
   taiji.expectation += alphas.alphaE * predictionError;
 
-  // 自然衰减倾向
-  taiji.valence     *= 0.98;
-  taiji.arousal     *= 0.97;
+  // 自然衰减倾向（v2.0: 降低衰减率，防止深度对话中情感持续漏气）
+  taiji.valence     *= 0.995;
+  taiji.arousal     *= 0.992;
 
   // 限幅
   taiji.valence = clamp(taiji.valence, -1, 1);
@@ -1218,7 +1220,7 @@ export function getPhaseStats(): PhaseStats {
     distribution,
     avgConflict: total > 0 ? Math.round((conflictSum / total) * 1000) / 1000 : 0,
     avgIntensity: total > 0 ? Math.round((intensitySum / total) * 1000) / 1000 : 0,
-    perEmotion: JSON.parse(JSON.stringify(perEmotion)),
+    perEmotion: structuredClone(perEmotion),
   };
 }
 
@@ -1287,7 +1289,8 @@ export function computeReward(_userMessageLength: number, userDeltaA: number | n
 // ════════════════════════════════════════════════════════════
 
 const EMOTION_HALF_LIVES: Record<string, number> = {
-  joy: 4, anger: 8, sad: 6, fear: 12, love: 6,
+  joy: 6, anger: 8, sad: 6, fear: 12,
+  love: 24,    // 6→24h，爱应是持久的情感羁绊
   disgust: 4, lust: 3, calm: 12, greed: 24,
 };
 

@@ -3,7 +3,8 @@
 // 移除：debug 模式、模拟按钮、TTS、图片上传、记忆后台提取
 import React, { useState, useRef, useEffect } from 'react';
 import { useAIBrainStore, generateSystemPrompt, ChatMessage as ChatMessageType } from '../store/useAIBrainStore';
-import { getDominantEmotion, analyzeUserSentiment, suggestReinforcement, applyEmotionalContagion, getMicroPhase, type EmotionEvent } from '../lib/emotionEngine';
+import { getDominantEmotion, analyzeUserSentiment, suggestReinforcement, applyEmotionalContagion, getMicroPhase, getRelationshipStage, STAGE_LABELS, type EmotionEvent } from '../lib/emotionEngine';
+import { XIAONUAN_STAGE_LABELS, getNextStageThreshold, resolveLoverStage } from '../lib/xiaoNuanStages';
 
 // ── 单条消息气泡 ──
 function MessageBubble({ msg }: { msg: ChatMessageType; key?: string }) {
@@ -44,6 +45,7 @@ export default function ChatView() {
   const updateEmotion = useAIBrainStore(s => s.updateEmotion);
   const applyReinforcement = useAIBrainStore(s => s.applyReinforcement);
   const setLastTurnInfo = useAIBrainStore(s => s.setLastTurnInfo);
+  const advanceRelationshipStage = useAIBrainStore(s => s.advanceRelationshipStage);
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -54,6 +56,14 @@ export default function ChatView() {
   const dominantEmotion = persona.emotionState
     ? getDominantEmotion(persona.emotionState.emotions)
     : null;
+
+  // 关系阶段显示（小暖恋爱模式 vs 通用模式）
+  const affinityScore = persona.affinityScore ?? 20;
+  const relationshipStage = getRelationshipStage(affinityScore, persona.crisisState?.isCrisis ?? false);
+  const displayStageLabel = persona.useLoverStages
+    ? XIAONUAN_STAGE_LABELS[resolveLoverStage(affinityScore)]
+    : STAGE_LABELS[relationshipStage];
+  const nextThreshold = persona.useLoverStages ? getNextStageThreshold(affinityScore) : null;
 
   // 自动滚到底部
   useEffect(() => {
@@ -196,6 +206,14 @@ export default function ChatView() {
           <span className="text-base font-semibold text-moon-800">
             {persona.name || 'AI 女友'}
           </span>
+          {/* 关系阶段徽章 */}
+          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full transition-all duration-500 ${
+            persona.useLoverStages
+              ? 'bg-rose-100 text-rose-600'
+              : 'bg-slate-100 text-slate-500'
+          }`}>
+            {displayStageLabel}
+          </span>
           {dominantEmotion && (
             <span className="text-xs font-medium text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">
               {dominantEmotion.name} {dominantEmotion.intensity.toFixed(2)}
@@ -203,6 +221,16 @@ export default function ChatView() {
           )}
         </div>
         <div className="flex items-center gap-3 text-xs text-moon-400">
+          {/* 手动推进关系按钮（仅恋爱模式） */}
+          {nextThreshold !== null && (
+            <button
+              onClick={() => advanceRelationshipStage()}
+              className="text-xs px-2.5 py-1 bg-rose-500 text-white rounded-full hover:bg-rose-600 transition-colors font-medium"
+              title={`推进到下一阶段 (好感 > ${nextThreshold})`}
+            >
+              推进关系
+            </button>
+          )}
           {hasApiKey ? (
             <span className="w-2 h-2 rounded-full bg-teal-500" title="API Key 已配置" />
           ) : (

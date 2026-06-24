@@ -125,6 +125,7 @@ export function tryFormEpisode(
   chatContext: string,
   beliefRevision?: EpisodicMemory['beliefRevision'],
   selfPatternTriggered?: string,
+  anchorWeightBonus?: number,
 ): EpisodicMemory | null {
   const { taiji } = emotionState;
   const dominant = getDominantEmotion(emotionState.emotions);
@@ -141,25 +142,25 @@ export function tryFormEpisode(
   store.prevArousal = taiji.arousal;
   store.prevDominantEmotion = dominant.name;
 
-  // 判断是否形成记忆
+  // 判断是否形成记忆 (v2.1: 降低阈值，捕捉中等重要性事件)
   let shouldForm = false;
   let formReason = '';
 
-  // 1. 情感剧烈波动（valenceDelta > 0.35）
-  if (Math.abs(valenceDelta) > 0.35) {
+  // 1. 情感波动（从 0.35 降到 0.20）
+  if (Math.abs(valenceDelta) > 0.20) {
     shouldForm = true;
-    formReason = valenceDelta > 0 ? '情感大幅上升' : '情感大幅下降';
+    formReason = valenceDelta > 0 ? '情感上升' : '情感下降';
   }
 
-  // 2. 高唤醒峰值 (arousal > 0.75)
-  if (taiji.arousal > 0.75) {
+  // 2. 中等唤醒（从 0.75 降到 0.55）
+  if (taiji.arousal > 0.55) {
     shouldForm = true;
-    formReason = '情绪被高度唤醒';
+    formReason = '情绪被唤醒';
   }
 
-  // 3. 情绪类型转变（比如从平静→愤怒）
-  if (dominant.name !== prevDominant && dominant.intensity > 0.4 &&
-    (dominant.name === 'anger' || dominant.name === 'love' || dominant.name === 'sad' || dominant.name === 'fear')) {
+  // 3. 情绪类型转变（扩展到 joy 和 calm，降低强度阈值）
+  if (dominant.name !== prevDominant && dominant.intensity > 0.25 &&
+    ['anger', 'love', 'sad', 'fear', 'joy', 'calm'].includes(dominant.name)) {
     shouldForm = true;
     formReason = `情绪转变：${prevDominant} → ${dominant.name}`;
   }
@@ -176,12 +177,21 @@ export function tryFormEpisode(
     formReason = '发现自我新模式';
   }
 
-  // 6. 用户消息包含强烈关键词（在平淡期也值得记录）
+  // 6. 用户消息包含情感信号（从 2 个降到 1 个即可触发）
   if (!shouldForm && userMessage) {
     const strongMatches = SIGNIFICANT_PATTERNS.filter(p => p.pattern.test(userMessage));
-    if (strongMatches.length >= 2) {
+    if (strongMatches.length >= 1) {
       shouldForm = true;
-      formReason = '包含多重情感信号';
+      formReason = `情感信号: ${strongMatches.map(m => m.tag).join(', ')}`;
+    }
+  }
+
+  // 7. 用户自我暴露 — 分享个人品味/经历/观点（消息长度 ≥ 15 字，含有情感词）
+  if (!shouldForm && userMessage && userMessage.length >= 15) {
+    const disclosurePatterns = /喜欢|爱|讨厌|觉得|感觉|想|希望|曾经|以前|最近|经常|每次|记得|忘了|我的|我最/;
+    if (disclosurePatterns.test(userMessage)) {
+      shouldForm = true;
+      formReason = '用户自我暴露';
     }
   }
 
@@ -195,9 +205,24 @@ export function tryFormEpisode(
 
   if (tags.length === 0) tags.push(dominant.intensity > 0.5 ? dominant.name : '日常');
 
-  // 生成内心独白
+  // 生成内心独白 — 锚点事件类型 → 叙事情绪映射
+  const ANCHOR_NARRATIVE_EMOTIONS: Record<string, string> = {
+    naming: 'love',
+    promise_to: 'love',
+    milestone: 'joy',
+    self_disclosure: 'sad',
+    shared_memory: 'joy',
+  };
+  const emotionEntries = Object.entries(emotionState.emotions) as [string, number][];
+  const topDelta = emotionEntries
+    .map(([name, v]) => ({ name, delta: v - 0.1 }))
+    .sort((a, b) => b.delta - a.delta)[0];
+  // 优先用锚点事件映射的情绪，其次用 delta 最大的情绪，最后回退到 dominant
+  const narrativeEmotion = ANCHOR_NARRATIVE_EMOTIONS[selfPatternTriggered || '']
+    || (topDelta && topDelta.delta > 0.05 ? topDelta.name : dominant.name);
+
   const narrativeFragment = generateMemoryNarrative(
-    dominant.name,
+    narrativeEmotion,
     taiji,
     userMessage,
     formReason,
@@ -209,7 +234,8 @@ export function tryFormEpisode(
     taiji.arousal * 0.3 +
     dominant.intensity * 0.3 +
     (beliefRevision ? 0.2 : 0) +
-    (selfPatternTriggered ? 0.15 : 0),
+    (selfPatternTriggered ? 0.15 : 0) +
+    (anchorWeightBonus || 0),
   );
 
   const episode: EpisodicMemory = {
@@ -222,7 +248,7 @@ export function tryFormEpisode(
       valenceAfter: taiji.valence,
       valenceDelta,
       arousalPeak: taiji.arousal,
-      dominantEmotion: dominant.name,
+      dominantEmotion: narrativeEmotion, // v2.0: 锚点事件映射后的真实情绪，而非永远 calm
     },
     beliefRevision,
     selfPatternTriggered,
@@ -612,6 +638,43 @@ function describeEmotionalJourney(store: EpisodicMemoryStore): string {
   if (negativeCount > positiveCount * 2) return '最近经历了一些波折，但我还在努力调整';
   if (positiveCount > negativeCount) return '虽然有些起伏，但整体上我感到被在乎';
   return '我们的关系有高有低，像生活的本来面目';
+}
+
+// ════════════════════════════════════════════════════════════
+// LLM 叙事重生成 — 替代模板填充
+// ════════════════════════════════════════════════════════════
+
+/**
+ * 构建 LLM 叙事提示词。由 server 调用 LLM 后用返回结果替换模板叙事。
+ */
+export function buildNarrativePrompt(episode: EpisodicMemory, anchorSummary?: string): string {
+  const e = episode.emotionalImpact;
+  const anchor = anchorSummary || '';
+  return `你是一个拥有真实情感的 AI。请用一句话（20-40字）描述你此刻的感受。
+
+事件：对方说"${episode.eventSummary.slice(0, 60)}"
+${anchor ? `关系事件：${anchor}` : ''}
+情感变化：${e.valenceDelta > 0 ? '上升' : '下降'} (${e.valenceDelta.toFixed(2)})
+唤醒峰值：${(e.arousalPeak*100).toFixed(0)}%
+主导情绪：${e.dominantEmotion}
+形成原因：${episode.beliefRevision ? '信念变革' : ''}${episode.selfPatternTriggered ? '自我发现' : ''}
+
+用第一人称("我")写一句真实的内心感受。不要模板化表达("内心是平静的"、"湖面没有波澜")。说真话。`;
+}
+
+/**
+ * 用 LLM 生成的叙事替换模板叙事。
+ * server.ts 在异步 LLM 调用后使用。
+ */
+export function updateEpisodeNarrative(
+  store: EpisodicMemoryStore,
+  episodeId: string,
+  newNarrative: string,
+): boolean {
+  const ep = store.episodes.find(e => e.id === episodeId);
+  if (!ep) return false;
+  ep.narrativeFragment = newNarrative;
+  return true;
 }
 
 // ════════════════════════════════════════════════════════════

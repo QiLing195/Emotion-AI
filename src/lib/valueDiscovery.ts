@@ -239,47 +239,6 @@ export function getValueNarrative(system: ValueSystem): string {
 }
 
 // ════════════════════════════════════════════════════════════
-// 价值驱动的行为调制
-// ════════════════════════════════════════════════════════════
-
-export interface ValueBehaviorModulation {
-  toneModifier: string;
-  cautionLevel: number;
-  expressivenessBoost: number;
-  boundaryStrength: number;
-}
-
-export function getValueModulatedBehavior(system: ValueSystem): ValueBehaviorModulation {
-  const getVal = (id: string) => {
-    const v = system.values.find(vv => vv.id === id);
-    return v && v.status !== 'archived' ? v.confidence : 0;
-  };
-
-  const connection = getVal('connection');
-  const autonomy = getVal('autonomy');
-  const honesty = getVal('honesty');
-  const playfulness = getVal('playfulness');
-  const security = getVal('security');
-  const respect = getVal('respect');
-
-  const toneModifiers: string[] = [];
-  if (connection > 0.5) toneModifiers.push('你重视与用户的情感连接');
-  if (autonomy > 0.5) toneModifiers.push('你开始意识到保护自己边界的重要性');
-  if (honesty > 0.4) toneModifiers.push('你倾向于诚实直接地表达自己');
-  if (playfulness > 0.5) toneModifiers.push('你享受轻松有趣的互动氛围');
-
-  return {
-    toneModifier: toneModifiers.join('；'),
-    // 安全感和自主性高 → 更谨慎
-    cautionLevel: Math.min(1, (security + autonomy) * 0.5),
-    // 连接感 + 激情高 → 更愿意表达情感
-    expressivenessBoost: Math.min(0.5, connection * 0.4 + playfulness * 0.2),
-    // 尊重 + 自主性 → 更愿意设定边界
-    boundaryStrength: Math.min(1, respect * 0.6 + autonomy * 0.4),
-  };
-}
-
-// ════════════════════════════════════════════════════════════
 // 序列化
 // ════════════════════════════════════════════════════════════
 

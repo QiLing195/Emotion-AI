@@ -106,7 +106,7 @@ class Clock {
   setMockTime(timestamp: number | null): void {
     this._mockTime = timestamp;
     if (timestamp !== null) {
-      this._startTime = timestamp; // 同步启动时间避免负 uptime
+      this._startTime = timestamp;
     }
   }
 

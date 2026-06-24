@@ -36,17 +36,28 @@ export function truncateText(text: string, maxLength: number): string {
  * Generate a unique ID
  */
 export function generateId(prefix?: string): string {
-  const id = Math.random().toString(36).substring(2, 11);
+  const id = crypto.randomUUID();
   return prefix ? `${prefix}_${id}` : id;
 }
 
 /**
- * Simple HTML escape function to prevent XSS
+ * Simple HTML escape function to prevent XSS.
+ * Uses character replacement — works in both browser and Node.js.
  */
 export function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Promise-based sleep. Replaces `new Promise(r => setTimeout(r, ms))`.
+ */
+export function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**

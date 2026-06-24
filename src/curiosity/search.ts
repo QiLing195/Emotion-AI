@@ -1,6 +1,5 @@
 // ── v5.0: AI 网络搜索引擎 ──
 // 多源回退 + LRU 缓存 + 智能正文提取 + 聊天管道集成
-import https from 'https';
 
 // ════════════════════════════════════════════════════════
 // 1. 类型定义
@@ -77,38 +76,22 @@ export function clearSearchCache(): void {
 // 3. HTTP 获取
 // ════════════════════════════════════════════════════════
 
-function httpGet(url: string, timeoutMs = 10000): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (!url.startsWith('https://')) { resolve(null); return; }
-    const req = https.get(url, {
-      timeout: timeoutMs,
+async function httpGet(url: string, timeoutMs = 10000): Promise<string | null> {
+  if (!url.startsWith('https://')) return null;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
       },
-    }, (res) => {
-      // 跟踪重定向
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        const redirectUrl = res.headers.location.startsWith('http')
-          ? res.headers.location
-          : new URL(res.headers.location, url).href;
-        resolve(httpGet(redirectUrl, timeoutMs));
-        res.resume();
-        return;
-      }
-      if (res.statusCode !== 200) { res.resume(); resolve(null); return; }
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        try {
-          resolve(Buffer.concat(chunks).toString('utf-8'));
-        } catch { resolve(null); }
-      });
     });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
-  });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
 }
 
 // ════════════════════════════════════════════════════════

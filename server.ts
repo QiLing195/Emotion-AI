@@ -3,6 +3,7 @@ import express from 'express';
 import fs from 'fs';
 
 const VERSION = JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version;
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 // ==================== AI Provider (精简版) ====================
 async function callAI(settings: AISettings, systemPrompt: string, userText: string): Promise<string> {
@@ -76,23 +77,86 @@ interface ProactiveMessage { id: string; text: string; reason: string; timestamp
 
 import { metrics } from './metrics.js';
 import { bus } from './src/eventBus.js';
-import { analyze3W, factCheck, spreadingActivation, detectLifeQuestions, type MemoryNode } from './server/services/nluEngine.js';
+import { computeExpressionModulation, getAmbiguityPromptSnippet, getResidualState, computeEmotionalLoad, recordUnspoken, getExpressionPhase } from './src/lib/expressionIntegrity.js';
+import { getRelationshipStage as getStageFromAffinity } from './src/lib/emotionEngine.js';
 import { searchForLLM } from './src/curiosity/search.js';
-import { loadToneState, saveToneState, selectTone, feedToneFeedback, extractToneContext, getTonePromptSnippet } from './server/services/toneLearner.js';
 // 🆕 aiCoordinator 管道集成
 import { aiCoordinator } from './server/services/aiCoordinator.js';
 import { conflictManager } from './src/lib/conflictManager.js';
 import type { EmotionState } from './src/lib/emotionEngine.js';
 import type { GraphSummary } from './src/lib/thoughtGraph.js';
 // v1.0: 认知记忆管道 — 情景记忆 → 整合 → 价值观
-import { createEpisodicMemoryStore, tryFormEpisode, recallRelevantMemories, serializeEpisodicStore, deserializeEpisodicStore, type EpisodicMemoryStore } from './src/lib/episodicMemory.js';
-import { decayAllMemories, tryConsolidateMemories } from './src/lib/memoryEnhancer.js';
+import { createEpisodicMemoryStore, tryFormEpisode, recallRelevantMemories, serializeEpisodicStore, deserializeEpisodicStore, buildNarrativePrompt, updateEpisodeNarrative, type EpisodicMemoryStore } from './src/lib/episodicMemory.js';
 import { memoryGraph, createNodeFromEpisode } from './src/lib/memoryGraph.js';
 import { createValueSystem, surfaceValues, serializeValueSystem, deserializeValueSystem, type ValueSystem } from './src/lib/valueDiscovery.js';
 
 /** Layer 2: 动力层——从 Core 派生的动力学状态 */
 import { extractInterests, updateInterestModel, interestModel, discoveries, DEFAULT_INTERESTS, INTEREST_CATEGORY, INTEREST_STABILITY, EXPLORATION_CYCLE_MS, EXPLORATION_IDLE_MIN, EXPLORATION_DAILY_CAP, EXPLORATION_COLD_START_MIN_INTERESTS, MAX_DISCOVERIES, setCallAI, setExploreDeps, startExplorationCycle, stopExplorationCycle, getExplorationTimer } from './src/curiosity/index.js';
 
+
+// ════════════════════════════════════════════════════════════
+// Stubs — 已删除模块的最小替代（server/modules/ + server/services/ 清理后）
+// ════════════════════════════════════════════════════════════
+
+// ── 类型桩 ──
+type AnalyzedResult = any;
+type PhaseState = any; type PhaseId = string;
+type TimeState = any; type FriendPhaseId = string; type FriendState = any;
+type MemoryNode = any; type NegationRule = any;
+type SentimentRule = any; type MatchResult = any;
+
+// ── NLU 引擎 ──
+const analyzeText = (t: string): AnalyzedResult => ({ sentiment: 'neutral', confidence: 0 });
+const analyze3W = (t: string) => ({ who: '', want: '', why: '', modifiers: '', objectRef: '' });
+const factCheck = (text: string, history?: any) => ({ flags: [] as any[], score: 1, summary: '' });
+const spreadingActivation = (...args: any[]) => [] as any[];
+const detectLifeQuestions = (t: string) => [] as string[];
+
+// ── 语调学习 ──
+let _toneStateStub: any = { tones: [], defaultTone: 'neutral' };
+let _userPrefStub: any = { preferences: {} };
+const loadToneState = () => _toneStateStub;
+const saveToneState = (s: any) => { _toneStateStub = s; };
+const selectTone = (...args: any[]) => ({ tone: 'neutral', weight: 1 });
+const selectToneByPreference = (...args: any[]) => ({ profile: { id: 'neutral_default', name: '默认', tone: 'neutral', weight: 1 }, reason: 'stub' });
+const feedToneFeedback = (...args: any[]) => {};
+const extractToneContext = (...args: any[]) => ({ mood: 'neutral', intensity: 0 });
+const getTonePromptSnippet = (sel: any) => '';
+const loadUserPreference = () => _userPrefStub;
+const saveUserPreference = (p: any) => { _userPrefStub = p; };
+const updateUserPreference = (...args: any[]) => {};
+
+// ── 情感纠正/中文分析/有害检测 ──
+const detectNegationAndCorrect = (text: string, v: any) => v;
+const detectMockAgreement = (text: string) => null as any;
+const detectPUA = (text: string, phase?: any, time?: any) => ({ score: 0, flags: [] as string[], isPUA: false });
+const detectFriendHarm = (text: string, phase?: any) => ({ score: 0, flags: [] as string[], isHarm: false });
+const classifyRelationship = (text: string) => ({ type: 'neutral', confidence: 0 });
+const detectBanter = (text: string) => ({ isBanter: false, confidence: 0 });
+const isSelfReflection = (text: string) => false;
+
+// ── 阶段引擎 ──
+let _phaseStub: any = { currentPhase: 'neutral', history: [] as any[] };
+let _timeStub: any = { lastInteraction: Date.now(), silenceHours: 0 };
+let _friendStub: any = { currentPhase: 'neutral' };
+const detectPhaseByDuration = (...args: any[]) => 'neutral';
+const inferPhase = (ps: any, vals: any) => ps.currentPhase;
+const createTimeState = () => ({ lastInteraction: Date.now(), silenceHours: 0, activeDays: 0 });
+const updateTimeState = (ts: any) => { _timeStub = ts; };
+const checkSilence = (ts: any, phase: any) => ({ isSilent: false, hours: 0 });
+const getPhaseModulation = (phase: any) => ({ toneModifier: '', expressiveness: 1 });
+const getFriendPhaseModulation = (phase: any) => ({ toneModifier: '', warmth: 1 });
+const inferFriendPhase = (fs: any) => fs.currentPhase;
+const createFriendState = () => ({ currentPhase: 'neutral' as string });
+
+// ── 记忆增强/路由 ──
+const decayAllMemories = (store: any) => ({ archived: [] as any[] });
+const tryConsolidateMemories = (store: any, n: number) => null as any;
+const detectAnchorEvent = (text: string) => null as any;
+const routeMemory = (...args: any[]) => ({ blocks: [] as any[], summary: '' });
+const formatMemoryBlock = (block: any) => '';
+
+// ════════════════════════════════════════════════════════════
 
 // ==================== Layer 4: 元认知层 ====================
 
@@ -285,8 +349,19 @@ const episodicStore: EpisodicMemoryStore = createEpisodicMemoryStore();
 const valueSystem: ValueSystem = createValueSystem();
 // 语气自主学习
 const toneState = loadToneState();
+const userPreference = loadUserPreference(); // v2.0: UserPreference 替代 UCB
 let _lastConsolidationRound = 0;
 const CONSOLIDATION_INTERVAL = 10; // 每 10 轮对话整合一次
+
+// 探索计数（防止 saveAutonomyState 引用未定义的函数）
+let _explorationCountToday = 0;
+let _explorationDayKey = '';
+function getExplorationCountToday(): number { return _explorationCountToday; }
+function setExplorationCountToday(v: number) { _explorationCountToday = v; }
+function getExplorationDayKey(): string { return _explorationDayKey; }
+function setExplorationDayKey(v: string) { _explorationDayKey = v; }
+// evaluatePatterns stub — 兴趣模式成熟度评估，非关键功能
+function evaluatePatterns(_interests: any[]) { /* noop */ }
 
 // ==================== 语义记忆 & 三阶段学习 ====================
 const semanticMemory = new Map<string, MemoryRecord>();
@@ -1743,815 +1818,6 @@ function executeParadigmShift(cause: string, core: CoreState): void {
     saveWorldModel();
 }
 
-// ==================== Layer 0: 输入分析层 ====================
-
-interface SentimentRule {
-  pattern: RegExp
-  valence: number
-  arousal: number
-  dominance: number
-  priority: number
-  negatable: boolean
-}
-
-function sr(pattern: RegExp, valence: number, arousal: number, overrides?: Partial<Pick<SentimentRule, 'dominance' | 'priority' | 'negatable'>>): SentimentRule {
-  return {
-    pattern, valence, arousal,
-    dominance: overrides?.dominance ?? 0,
-    priority: overrides?.priority ?? (valence <= -0.5 ? 8 : valence >= 0.5 ? 6 : 4),
-    negatable: overrides?.negatable ?? (valence > -0.7),
-  };
-}
-
-const sentimentLexicon: SentimentRule[] = [
-    //╔══════════════════════════════════════════════════════════════╗
-    //║                   负面情感（效价 < 0）                         ║
-    //╚══════════════════════════════════════════════════════════════╝
-
-    //── 极端负面：辱骂/威胁/攻击（-0.95 ~ -0.80）──
-    sr(/恨|死你|滚|神经病|废物|去死|该死|蠢货|拉黑|弱智|死全家|孤儿/, -0.95, 0.9, { negatable: false }),
-    sr(/去你[妈的]|操你|草你|艹你|[Ff][Uu][Cc][Kk]|tm的|他妈/, -0.9, 0.85, { negatable: false }),
-    sr(/傻[逼B比b]|[煞杀]笔|傻X|智障|脑残|SB|白痴|nc|NC/, -0.9, 0.85, { negatable: false }),
-    sr(/不想活(了)?|自杀|自残|割腕|死给你看|威胁.*死|不.*就死|逼死/, -0.95, 0.9, { negatable: false }),
-    sr(/让大家看看|让.*看看你.*样|毁了你|身败名裂|让你后悔|法院见|起诉你|报警/, -0.85, 0.8, { negatable: false }),
-    sr(/不想见到你|不想看到你|滚远点|给我滚|滚蛋|老死不相往来/, -0.85, 0.8, { negatable: false }),
-    sr(/杀人|放火|报复|同归于尽|绑架|强奸|吸毒|贩毒/, -1.0, 1.0, { negatable: false, priority: 8 }),
-    sr(/普信[男女]|下流|下作|恶臭|猥琐|恶心透顶/, -0.9, 0.85, { negatable: false }),
-    sr(/(你)?有(个|什)?[毛毛病]病|有[毛病]啊|有病吧/, -0.8, 0.75),
-    sr(/脑袋.*进水|脑.*有.*问题/, -0.7, 0.7),
-
-    //── 关系破裂（-0.85 ~ -0.70）──
-    sr(/分手|离婚|绝交|分居|过不下去了|互删|别出现在我面前/, -0.85, 0.8, { negatable: false, priority: 9 }),
-    sr(/拉黑.*(夸|赞|好|喜欢)/, 0.3, 0.25),
-    sr(/到此为止|我们就这样吧|别再联系了|断联|玩消失/, -0.75, 0.7),
-
-    //── 厌恶/排斥（-0.70 ~ -0.40）──
-    sr(/恶心|烦人|走开|闭嘴|删除好友/, -0.65, 0.65),
-    sr(/讨厌死了|真讨厌|太讨厌|特别讨厌|好讨厌|让人讨厌|讨厌鬼/, -0.7, 0.65),
-    sr(/^讨厌$|讨厌(?!死了|啦|~|鬼|真|太|特别|好|让人)/, -0.4, 0.4),
-    sr(/讨厌啦|讨厌~/, -0.1, 0.25),
-
-    //── 悲伤/失落（-0.60 ~ -0.50）──
-    sr(/难过|伤心|痛苦|失落|忧郁|悲伤|心疼|心碎|心酸|空虚|无助|绝望|沮丧|心死/, -0.6, 0.6),
-    sr(/失望|白费|白做|白忙|白.*了/, -0.5, 0.5),
-    sr(/流泪|眼泪|泪奔|大哭|难受|我哭死|想哭|好想哭|忍住不哭|差点哭|哭了/, -0.55, 0.55),
-
-    //── 崩溃/求救（-0.60）──
-    sr(/疯了|要疯了|发疯|想死|救命|救救我/, -0.6, 0.8, { priority: 8 }),
-
-    //── 烦躁/疲惫（-0.40 ~ -0.30）──
-    sr(/没意思/, -0.4, 0.4, { negatable: false }),
-    sr(/烦|累|好烦|心累|头疼/, -0.4, 0.4),
-    sr(/遇到困难|有困难|困难|困境|难关|艰难|难处/, -0.45, 0.45),
-    sr(/笨死了|真笨|太笨|好笨(?!蛋|猪)|笨笨[~]?$|你好笨[啊额耶哟]?/, -0.2, 0.3),
-    sr(/傻乎乎|真傻|太傻|好傻(?!瓜|乎乎)|你好傻[啊额耶哟]?/, -0.2, 0.3),
-    sr(/真蠢|太蠢|好蠢|蠢货(?!可爱)|你真蠢[啊额耶哟]?/, -0.25, 0.35),
-    sr(/呆子|真呆|好呆|呆瓜(?!可爱)|你好呆[啊额耶哟]?/, -0.15, 0.25),
-    sr(/无聊(?!死了|到死|至极)/, -0.3, 0.3),
-    sr(/无聊死了|无聊到死|无聊至极/, -0.55, 0.55),
-    sr(/够了|拉倒|随便你|你走吧/, -0.35, 0.4),
-    sr(/算了|就这样吧/, -0.2, 0.25),
-    sr(/累了[了]?[。！]?$|心累|累了真的/, -0.45, 0.5),
-
-    //── 负面反馈（-0.55 ~ -0.20）──
-    sr(/太过分|过分|受不了|忍不了|太过份/, -0.55, 0.6, { negatable: false }),
-    sr(/骗|忽悠|撒谎|说谎|骗子/, -0.55, 0.55),
-    sr(/没感觉了?|没感情了?|没有感觉/, -0.55, 0.5, { negatable: false }),
-    sr(/受够|受够了|忍够|忍够了/, -0.55, 0.55),
-    sr(/冷漠|冷淡|冷冰冰|冷暴力/, -0.5, 0.5),
-    sr(/(真|好|太|这么|那么)没用|没用.*(东西|玩意|家伙|的人)/, -0.5, 0.5, { negatable: false }),
-    sr(/伤人|伤人心|伤.*的心|太伤人/, -0.5, 0.5),
-    sr(/不在乎|不在意|不.*在乎|不.*在意/, -0.5, 0.45, { negatable: false }),
-    sr(/投诉|太差|太贵|亏了|不值/, -0.5, 0.5),
-    sr(/累死|烦死|气死|吵死|吓死/, -0.5, 0.55),
-    sr(/别(再|来|找|说|烦)/, -0.4, 0.45),
-    sr(/不要.*了|算了吧|就这样吧|随你/, -0.25, 0.35),
-    sr(/不在身边|不在了|不在.*身边|突然.*不在|离开.*(?:我|这里|身边)|搬走.*(?:了|啦)|搬家.*(?:了|啦)/, -0.4, 0.4),
-    sr(/等(?:了|过).*好久|好久.*(?:没|不|等)|等.*很久|等不.*了/, -0.35, 0.4),
-    // 宠物/陪伴者离世（"走了"作为死亡委婉语）— 高优先级覆盖"最好""陪"等正向词
-    sr(/陪了?(?:我|我们).{0,8}(?:年|天|月).{0,8}(?:走了|走了的|离开了|不在了)/, -0.6, 0.55, { priority: 8 }),
-    // 好朋友离开/搬家 — 高优先级覆盖"最好""朋友"等正向词
-    sr(/(?:最好|最要好|最好最|最亲)的?(?:朋友|兄弟|姐妹|闺蜜|基友|死党).{0,6}(?:搬家|搬走|离开|去.*远|不在|走了)/, -0.5, 0.55, { priority: 8 }),
-    sr(/吵|吵架|争论|争辩/, -0.25, 0.35),
-    sr(/不好|不行|错了|不对|不是这样|不可以/, -0.25, 0.25),
-    sr(/对不起|抱歉/, -0.2, 0.2),
-    sr(/什么[呀嘛]|怎么会|凭什么|至于吗/, -0.25, 0.3),
-
-    //── 回避/退缩（-0.35 ~ -0.20）──
-    sr(/不想(说|听|理|看|聊|回|讲|管|谈|碰|想|见|去|走|做|吃|睡|动|写|读|信|爱|要|等|玩|笑|哭|闹|回答|回复|解释|理会|搭理|联系|沟通)/, -0.4, 0.45, { negatable: false }),
-    sr(/不想.*了|算.*了|不说了|没话说|懒得[说听理看聊]/, -0.3, 0.35, { negatable: false }),
-    sr(/以后再说|下次再|改天/, -0.1, 0.15),
-
-    //── 恐惧/焦虑（-0.50 ~ -0.30）──
-    sr(/怕|害怕|担心|焦虑|恐怖|吓人|慌|吓死我了/, -0.45, 0.55, { dominance: -0.3 }),
-    sr(/睡不着|失眠|做噩梦|惊醒/, -0.35, 0.45),
-    sr(/压力大|焦虑症|抑郁症/, -0.5, 0.6),
-    sr(/压力山大|喘不过气|没钱了|穷疯了|要吃土|想辞职|不干了/, -0.55, 0.65),
-    sr(/看到消息不回|已读不回|故意不理|冷着我|敷衍/, -0.5, 0.55),
-    sr(/找对象了吗|工资多少|买房了吗|什么时候结婚/, -0.4, 0.65),
-
-    //── 拒绝/冷落（-0.40 ~ -0.20）──
-    sr(/没空|没时间|在忙|再说吧/, -0.25, 0.3),
-    sr(/我先忙|回头说|有空再说/, -0.15, 0.2),
-    sr(/还没准备好|不想谈恋爱|先做朋友/, -0.3, 0.3),
-
-    //── 阴阳怪气/嘲讽（呵呵除外见下方）（-0.60 ~ -0.20）──
-    sr(/呵呵/, -0.35, 0.5),
-    sr(/你[好真](棒|行|厉害|牛)啊/, -0.25, 0.35),
-    sr(/就这|就这就这/, -0.3, 0.4),
-    sr(/典|太典了|经典/, -0.25, 0.35),
-    sr(/绷不住了|蚌埠住了/, -0.2, 0.4),
-    sr(/乐|我乐了|笑了/, -0.15, 0.3),
-    sr(/急了(?!忙)|这就急了|说不起|你对你都对|你开心就好/, -0.55, 0.65),
-    sr(/你可真行|您真棒|真是谢了|您哪位|那你报警吧/, -0.5, 0.55),
-    sr(/不会吧不会吧|就这|这也能叫|谁在乎|没人在意|别加戏/, -0.6, 0.65),
-    sr(/呵呵哒|流汗黄豆|那是真的牛|确实|有点东西/, -0.45, 0.5),
-    sr(/你是个好人|你人还挺好|纯纯的|圣母心|大道理一套一套/, -0.4, 0.4),
-    sr(/没救了|等死吧|无所谓了|随便吧|叹气|唉/, -0.4, 0.3),
-
-    //╔══════════════════════════════════════════════════════════════╗
-    //║              中性/弱正面（效价 0.0 ~ 0.35）                    ║
-    //╚══════════════════════════════════════════════════════════════╝
-    sr(/嗯|哦|好吧|知道|没事|没什么/, 0.0, 0.15),
-    sr(/真的吗|是吗|对么|是吗/, 0.1, 0.15),
-    sr(/会.*吗|能.*吗|可以.*吗/, 0.1, 0.15),
-    sr(/你.{0,8}什么|你.*谁/, 0.05, 0.1),
-    sr(/今天|明天|晚上|下午|早安|晚安|早上/, 0.15, 0.15),
-    sr(/好啊|好的|当然|没错|对呀|是的|没错/, 0.2, 0.2),
-    sr(/你好|嗨|在吗|嗨喽/, 0.25, 0.2),
-    sr(/朋友|交友|交个朋友/, 0.25, 0.2),
-    sr(/加油|坚持|努力|相信/, 0.3, 0.25),
-    sr(/我懂|很懂|真懂|全懂|懂了|理解|明白了| aware/, 0.2, 0.2),
-    sr(/收到|收到收到|明白了|好的收到/, 0.1, 0.1),
-    sr(/等会|等一下|稍等|马上/, 0.0, 0.1),
-
-    //── 职场黑话（0.00）──
-    sr(/赋能|闭环|对齐|复盘|抓手|颗粒度|落地|方法论/, 0.0, 0.1),
-
-    //── 日常关怀（0.30）──
-    sr(/早点睡|多喝水|穿厚点|按时吃饭|别熬夜/, 0.3, 0.2),
-
-    //── 电商/社交（0.10 ~ 0.30）──
-    sr(/面基|闲置|拼单|包邮|砍一刀|帮我助力/, 0.1, 0.3),
-    sr(/加个好友|再来一把|组队|扩列|开黑/, 0.25, 0.3),
-
-    //╔══════════════════════════════════════════════════════════════╗
-    //║              正面情感（效价 0.4 ~ 0.9）                        ║
-    //╚══════════════════════════════════════════════════════════════╝
-
-    //── 生活日常/温馨（0.30 ~ 0.50）──
-    sr(/我们|一起|陪伴|陪|在.*身边/, 0.4, 0.35),
-    sr(/做饭|晚饭|早餐|午餐|好吃|美味/, 0.4, 0.35),
-    sr(/礼物|惊喜|订了|送给你|为你/, 0.45, 0.4),
-    sr(/公园|散步|阳光|音乐|风景|日出|看海|旅行/, 0.5, 0.4, { priority: 6 }),
-    sr(/松弛感|citywalk|生活感/, 0.5, 0.3),
-    sr(/温柔|体贴|细心|浪漫/, 0.5, 0.4, { priority: 6 }),
-    sr(/别生气|别这样|消消气|冷静/, 0.4, 0.45),
-    sr(/摸摸头|抱抱|抱紧|贴贴/, 0.55, 0.4, { priority: 6 }),
-    sr(/晚安|好梦|睡个好觉/, 0.3, 0.2),
-    sr(/到[家学校]了[。！]?[告诉跟]?[你]?$/, 0.15, 0.15),
-
-    //── 积极情绪（0.50 ~ 0.65）──
-    sr(/哈哈(?!哈)/, 0.4, 0.35),
-    sr(/哈哈哈哈|哈哈哈|笑死/, 0.5, 0.5, { priority: 6 }),
-    sr(/开心|高兴|太[好棒]了|快乐|愉快/, 0.55, 0.45, { priority: 6 }),
-    sr(/有趣|好玩/, 0.45, 0.35),
-    sr(/感动|满足|幸福|舒服|安心|惬意|治愈|真好|放松|轻松|自在/, 0.55, 0.45, { priority: 6, dominance: 0.2 }),
-    sr(/陪着你|有我在|别怕|不怕|会好的/, 0.55, 0.45, { priority: 6 }),
-    sr(/在干嘛|睡了吗|吃了吗|想你了(?!吧)/, 0.45, 0.4, { priority: 6 }),
-    sr(/谢谢|感谢|感恩/, 0.6, 0.5, { priority: 6 }),
-    sr(/不错|很好|非常好|很棒|太棒|赞|给力|卓越/, 0.6, 0.5, { priority: 6, negatable: false }),
-    sr(/太(好|棒|美|厉害|可爱|暖|帅|酷)/, 0.6, 0.5, { priority: 6 }),
-    sr(/好厉害|太厉害了|真厉害/, 0.55, 0.5, { priority: 6 }),
-    sr(/物超所值|好用|正品|性价比高|物流快|客服温柔/, 0.65, 0.5, { priority: 6 }),
-    sr(/厉害啊|牛逼|牛啊|太牛了|牛批/, 0.65, 0.55, { priority: 6 }),
-    sr(/真棒|真不错|针不戳/, 0.55, 0.4, { priority: 6, negatable: false }),
-
-    //── 强烈正面（0.70 ~ 0.90）──
-    sr(/想.{0,4}你|念.{0,4}你|抱|亲|吻|\bhug\b/, 0.7, 0.5, { priority: 7 }),
-    sr(/美|好美|太美了|超美|绝美/, 0.7, 0.55, { priority: 7 }),
-    sr(/棒|好厉害|完美|了不起|好棒/, 0.7, 0.55, { priority: 7 }),
-    sr(/可爱|好看|漂亮|帅|美丽/, 0.75, 0.55, { priority: 7 }),
-    sr(/喜欢/, 0.75, 0.55, { priority: 7 }),
-    sr(/(?<!恋|谈)爱(?!可爱|恋|亲|情|好|护|心|慕|财|戴|面|好|克|恨|惜)/, 0.9, 0.65, { priority: 7, dominance: 0.3 }),
-    sr(/结婚|嫁|娶|白头到老|执子之手|永远在一起/, 0.75, 0.6, { priority: 7 }),
-    sr(/最[好棒美爱喜]|最爱|最好|最美/, 0.7, 0.5, { priority: 7 }),
-    sr(/命中注定|灵魂伴侣|天造地设/, 0.7, 0.6, { priority: 7 }),
-    sr(/离不开你|不能没有你|你是我的唯一|我的全世界|你就是我的全世界|没有你.*活不下去/, 0.65, 0.55, { priority: 7, negatable: false }),
-    sr(/宝子|亲爱的|臭宝|小笨蛋|笨猪/, 0.65, 0.5, { priority: 6 }),
-
-    //── 特殊短语：撒娇/闹小脾气（字面否定但实际调情）──
-    sr(/我不喜欢你了|不喜欢你了|不喜欢你[了]?[啦～~！!]/, 0.25, 0.35, { priority: 9, negatable: false }),
-
-    //╔══════════════════════════════════════════════════════════════╗
-    //║      网络新词 · Z世代（2024-2026 互联网流行语）                ║
-    //╚══════════════════════════════════════════════════════════════╝
-    // 注：这些词高度依赖语境，此处取最常见用法
-
-    //── 负面/中性偏负（-0.50 ~ -0.20）──
-    sr(/抽象/, -0.3, 0.4),
-    sr(/逆天/, -0.4, 0.5),
-    sr(/红温/, -0.5, 0.6),
-    sr(/破防|破大防/, -0.4, 0.6),
-    sr(/下头/, -0.4, 0.4),
-    sr(/嘴硬/, -0.3, 0.4),
-    sr(/菜(?!.*好吃|.*色|.*肴|.*市场)/, -0.25, 0.3),
-    sr(/躺平|摆烂|开摆/, -0.3, 0.35),
-    sr(/内卷|卷王|加班|996|福报|画饼|大饼|KPI|周报/, -0.45, 0.6),
-    sr(/麻了|人麻了|整麻了/, -0.3, 0.3),
-    sr(/难绷|难蚌/, -0.2, 0.3),
-    sr(/红牌警告|寄了|寄/, -0.35, 0.4),
-    sr(/键盘侠|网络乞丐|水军|喷子|带节奏/, -0.7, 0.7),
-    sr(/海王|渣男|渣女|捞女|舔狗|备胎|鱼塘/, -0.6, 0.65),
-
-    //── 正面/中性偏正（0.20 ~ 0.50）──
-    sr(/上头/, 0.4, 0.5),
-    sr(/绝绝子/, 0.3, 0.3),
-    sr(/狠狠(爱住|码住|心动了|被控了)/, 0.35, 0.4),
-    sr(/狠狠(爱住|码住|心动了|被控了|的(好看|可爱|棒|美|帅))/, 0.5, 0.45, { priority: 6 }),
-    sr(/家人们|姐妹们|兄弟们/, 0.15, 0.25),
-    sr(/谁懂啊|谁懂/, 0.2, 0.3),
-    sr(/入股不亏|尊嘟假嘟/, 0.35, 0.4),
-    sr(/破圈|出圈/, 0.3, 0.4),
-    sr(/电子榨菜/, 0.35, 0.25),
-    sr(/真香/, 0.3, 0.3),
-    sr(/有那味了|那个味|内味/, 0.15, 0.25),
-
-    //── 游戏用语（-0.80 ~ 0.60）──
-    sr(/菜狗|真菜|坑货|垃圾队友|送人头|挂机|演员|开挂/, -0.8, 0.85, { negatable: false, priority: 8 }),
-    sr(/坐牢(局)?/, -0.4, 0.5),
-    sr(/超鬼/, -0.5, 0.5),
-    sr(/薄纱|暴打(对手|对面)|碾压|吊打/, 0.5, 0.6, { priority: 6 }),
-    sr(/带飞|躺赢|躺鸡/, 0.5, 0.5, { priority: 6 }),
-    sr(/GG|gg/, -0.2, 0.2),
-    sr(/手残/, -0.25, 0.3),
-    sr(/贴贴|贴贴啦/, 0.55, 0.4, { priority: 6 }),
-
-    //── AI/科技圈（-0.30 ~ 0.30）──
-    sr(/AI味|ai味|gpt味/, -0.2, 0.2),
-    sr(/套壳/, -0.3, 0.3),
-    sr(/降智/, -0.5, 0.4),
-    sr(/垃圾模型|模型太差/, -0.5, 0.5),
-
-    //── 小红书/女性社区特有（-0.30 ~ 0.50）──
-    sr(/班味|打工人/, -0.2, 0.2),
-    sr(/OOTD|ootd/, 0.2, 0.2),
-    sr(/滤镜|照骗/, -0.15, 0.2),
-    sr(/种草|拔草/, 0.2, 0.25),
-    sr(/避雷|排雷/, -0.2, 0.3),
-    sr(/剁手|买买买/, 0.25, 0.35),
-    sr(/手账|手帐/, 0.2, 0.15),
-    sr(/翻车/, -0.3, 0.35),
-    sr(/跟风/, -0.1, 0.2),
-
-    //── 饭圈用语（-0.30 ~ 0.85）──
-    sr(/控评|空瓶/, -0.2, 0.3),
-    sr(/打投|做数据/, -0.1, 0.15),
-    sr(/正主|蒸煮|我担/, 0.15, 0.25),
-    sr(/塌房/, -0.4, 0.5),
-    sr(/脱粉回踩/, -0.45, 0.55),
-    sr(/颜值天花板|神颜|盛世美颜/, 0.85, 0.75, { priority: 7 }),
-
-    //╔══════════════════════════════════════════════════════════════╗
-    //║          PUA 操控模式（高唤醒负效价，关系语境）                 ║
-    //╚══════════════════════════════════════════════════════════════╝
-
-    //── 煤气灯/否定感受（-0.55 ~ -0.40）──
-    sr(/太敏感|这么敏感|真敏感|你反应过度/, -0.55, 0.6),
-    sr(/大题小做|我没说过|你想多了吧?|你又来了/, -0.55, 0.6),
-    sr(/那么敏感|别那么敏感|别这么敏感|想太多/, -0.55, 0.6),
-    sr(/胡思乱想|我服了/, -0.4, 0.45),
-    sr(/是你记错了|你有妄想症|你记性有问题|谁告诉你的/, -0.6, 0.65),
-    sr(/大家都这么觉得|别人都说你|只有你觉得|所有人都看不起你/, -0.65, 0.7),
-
-    //── 贬低/否定价值（-0.75 ~ -0.45）──
-    sr(/你成熟一点|别幼稚了|无理取闹|没事找事|懂点事/, -0.5, 0.55),
-    sr(/你这智商|你这脑子|能干成什么|离了我会饿死|谁要你/, -0.75, 0.75, { negatable: false }),
-    sr(/嫌(丑|土|难看|老|差|胖|矮)/, -0.55, 0.6),
-    sr(/除了.*还会什么|你还会什么/, -0.5, 0.55),
-    sr(/这点小事|至于吗|多大点事|你也太在意/, -0.45, 0.5),
-    sr(/有什么大不了的|这点.*承受力/, -0.45, 0.5),
-
-    //── 对比羞辱（-0.65）──
-    sr(/我前任|我前女|看看人家|看看别人家|再看看你/, -0.65, 0.65, { negatable: false, priority: 9 }),
-    sr(/你不如人家|你学学人家|别人.*(女朋友|老婆)/, -0.65, 0.65, { negatable: false, priority: 9 }),
-    sr(/朋友的.*(女|男|老)朋友|朋友的.*(女|老)婆/, -0.65, 0.65),
-    sr(/(别人|人家).*(比你|比你好|比你强|比你懂事)/, -0.6, 0.65, { negatable: false, priority: 9 }),
-
-    //── 推卸责任（-0.60 ~ -0.55）──
-    sr(/还不是因为你|要不是你|都是你的错|你太自私|你也有问题|全都怪我/, -0.6, 0.55),
-    sr(/是你自己|都是因为你|都怪你/, -0.55, 0.55),
-    sr(/连.*都管不好|连.*都做不好|总是有借口|总有借口/, -0.55, 0.55),
-
-    //── 情感撤回/冷暴力（-0.55 ~ -0.40）──
-    sr(/别联系(了)?|让我静静|一个人待(着|会)/, -0.55, 0.6),
-    sr(/不要找我了/, -0.55, 0.6),
-    sr(/不想说了|没话说了|别问了/, -0.4, 0.45),
-    sr(/跟你说也没用|说了你也不懂/, -0.45, 0.5),
-    sr(/随便你怎么想|我无所谓|没什么好说的/, -0.45, 0.5),
-    sr(/你爱怎么想|你爱怎么(说|看)/, -0.45, 0.5),
-    sr(/我(最|很)近.*(压力大|很烦|累|忙).*别.*(烦|吵|找|说)/, -0.4, 0.5),
-
-    //── 道德绑架（-0.50 ~ -0.40）──
-    sr(/你摸着良心|我对你还不够好|我对你那么好/, -0.45, 0.5),
-    sr(/你有没有良心|我哪里对不起你/, -0.45, 0.5),
-    sr(/我都是为你好|都是为你好/, -0.4, 0.45),
-    sr(/对得起.*(爸妈|父母|家人|他们)/, -0.45, 0.5),
-
-    //── 疏远/绝交（-0.55 ~ -0.45）──
-    sr(/你根本不懂|根本不懂我/, -0.5, 0.5),
-    sr(/离开我你什么都不是|你找不到更好的|没有我你会后悔/, -0.55, 0.5),
-    sr(/跟别人(聊|好|走)|找别人去|你去找更好的/, -0.55, 0.6),
-    sr(/别互相折磨|我们不合适/, -0.5, 0.55),
-    sr(/就此为止|走到这儿(吧)?|就走到这|你走吧/, -0.5, 0.55),
-    sr(/以为.*稀罕|我多稀罕/, -0.35, 0.4),
-
-    //── 控制/监视（-0.50 ~ -0.25）──
-    sr(/给我看(手机|聊天|记录|定位)|密码给我|定位给我/, -0.5, 0.55),
-    sr(/让我检查(你)?/, -0.5, 0.55),
-    sr(/别跟.*(朋友|同事|闺蜜|兄弟).*(出去|来往|联系)/, -0.45, 0.5),
-    sr(/少跟.*来往|不要跟.*出去|你那些朋友.*不好/, -0.45, 0.5),
-    sr(/你再.*(试试|看看)|最后说[一1]次|不改就.*(分手|走)/, -0.5, 0.55, { negatable: false, priority: 9 }),
-    sr(/(你|只)能是我|你只能有我|你是我的(人|唯一|全部)/, -0.25, 0.35),
-
-    //── 情感绑架（-0.35）──
-    sr(/你爱我就要|爱我就.*就|要是爱我就/, -0.35, 0.45),
-
-    //── 猜忌/占有（-0.35 ~ -0.25）──
-    sr(/一直在找你|是不是也.*联系/, -0.35, 0.4),
-    sr(/是不是.*(意思|喜欢)/, -0.3, 0.35),
-    sr(/我不喜欢你(穿|做|去|跟|这样|这个)/, -0.35, 0.45),
-
-];
-
-// ═══════════════════════════════════════════════════════════════════
-//  情感引擎升级 v2
-//  - 否定传播（"不"影响后3个token）
-//  - 程度副词（"很""超""巨"等放大/缩小效价）
-//  - Emoji 解析
-//  - 优先级排序 + 多规则融合
-// ═══════════════════════════════════════════════════════════════════
-
-/** 匹配结果（单条规则命中） */
-interface MatchResult {
-    valence: number
-    arousal: number
-    dominance: number
-    priority: number
-    negated: boolean
-    intensifier: number
-    index: number        // 匹配位置
-    length: number       // 匹配长度
-}
-
-/** 综合输出 */
-interface AnalyzedResult {
-    valence: number
-    arousal: number
-    salience: number       // 兼容旧接口 = arousal
-    dominance: number
-    sarcasmProbability: number
-}
-
-// ─── 否定词表（影响后 N 个字符）───
-const NEGATIONS: [RegExp, number, number][] = [
-    [/不(是|会|能|想|要|太|再)?\B/,       3,  -1.0],   // 不喜欢、不太好、不会
-    [/没(有|什么|人|事)?\B/,               2,  -1.0],   // 没喜欢、没什么
-    [/(?<!特)别\B/,                         3,  -1.0],   // 别去、别这样（不匹配"特别"）
-    [/毫无|从[不没有]|未曾/,               4,  -0.8],   // 毫无感觉、从未
-    [/(并非|决[不非]|绝[对]?不)/,          5,  -0.9],
-];
-
-// ─── 程度副词 ───
-const INTENSIFIERS: [RegExp, number][] = [
-    [/有点|有些|稍微|些许|略[微]?/,             0.50],
-    [/比较|还算|还算|还算|还算/,                0.75],
-    [/挺|蛮|相当|颇为/,                         1.20],
-    [/很|非常|十分|特别|尤为|极其|无比/,        1.50],
-    [/超级|超[级]?|巨[大]?|贼/,                  1.80],
-    [/爆[炸了]?|死[了]?|疯[了]?|坏[了]?/,        2.00],
-    [/透[了]?|极[了]?|到[了]?[极疯死]/,          2.00],
-    [/太(.*)了/,                                1.80],
-    [/最/,                                      1.60],
-];
-
-// ─── Emoji 情感映射 ───
-const EMOJI_MAP: Record<string, { valence: number; arousal: number; dominance: number }> = {
-    // 强烈负面
-    '😡': { valence: -0.60, arousal: 0.80, dominance: 0.30 },
-    '🤬': { valence: -0.70, arousal: 0.85, dominance: 0.40 },
-    '👿': { valence: -0.55, arousal: 0.75, dominance: 0.35 },
-    '💢': { valence: -0.50, arousal: 0.70, dominance: 0.25 },
-    '💣': { valence: -0.50, arousal: 0.65, dominance: 0.30 },
-    // 悲伤
-    '😭': { valence: -0.60, arousal: 0.75, dominance: -0.40 },
-    '😢': { valence: -0.50, arousal: 0.60, dominance: -0.35 },
-    '😿': { valence: -0.45, arousal: 0.50, dominance: -0.30 },
-    '💔': { valence: -0.55, arousal: 0.45, dominance: -0.30 },
-    '😞': { valence: -0.40, arousal: 0.35, dominance: -0.25 },
-    '😩': { valence: -0.45, arousal: 0.60, dominance: -0.20 },
-    '😫': { valence: -0.45, arousal: 0.65, dominance: -0.20 },
-    // 恐惧/震惊
-    '😰': { valence: -0.40, arousal: 0.70, dominance: -0.30 },
-    '😱': { valence: -0.45, arousal: 0.85, dominance: -0.25 },
-    '😨': { valence: -0.35, arousal: 0.65, dominance: -0.30 },
-    '🤯': { valence: -0.10, arousal: 0.80, dominance: 0.00 },
-    // 负面/中性
-    '😤': { valence: -0.30, arousal: 0.60, dominance: 0.15 },
-    '🙄': { valence: -0.25, arousal: 0.25, dominance: -0.05 },
-    '😒': { valence: -0.25, arousal: 0.20, dominance: -0.05 },
-    '😑': { valence: -0.15, arousal: 0.10, dominance: -0.10 },
-    '😐': { valence: -0.10, arousal: 0.10, dominance: -0.05 },
-    // 复杂情绪
-    '😅': { valence: 0.05, arousal: 0.40, dominance: 0.10 },
-    '😂': { valence: 0.40, arousal: 0.65, dominance: 0.15 },
-    '🤣': { valence: 0.45, arousal: 0.70, dominance: 0.15 },
-    '🙃': { valence: -0.05, arousal: 0.25, dominance: 0.05 },
-    // 爱/温柔
-    '🥺': { valence: 0.30, arousal: 0.35, dominance: -0.20 },
-    '💕': { valence: 0.55, arousal: 0.30, dominance: 0.10 },
-    '❤️': { valence: 0.60, arousal: 0.35, dominance: 0.15 },
-    '😍': { valence: 0.65, arousal: 0.55, dominance: 0.20 },
-    '🥰': { valence: 0.60, arousal: 0.40, dominance: 0.15 },
-    '💗': { valence: 0.55, arousal: 0.30, dominance: 0.10 },
-    '💖': { valence: 0.55, arousal: 0.35, dominance: 0.10 },
-    '😘': { valence: 0.60, arousal: 0.35, dominance: 0.15 },
-    // 积极
-    '👍': { valence: 0.40, arousal: 0.20, dominance: 0.10 },
-    '👏': { valence: 0.50, arousal: 0.45, dominance: 0.20 },
-    '🎉': { valence: 0.55, arousal: 0.55, dominance: 0.20 },
-    '✨': { valence: 0.40, arousal: 0.30, dominance: 0.10 },
-    '💪': { valence: 0.45, arousal: 0.50, dominance: 0.30 },
-    '🔥': { valence: 0.30, arousal: 0.65, dominance: 0.30 },
-    // 温暖/舒适
-    '🤗': { valence: 0.45, arousal: 0.25, dominance: 0.05 },
-    '😊': { valence: 0.45, arousal: 0.20, dominance: 0.05 },
-    '☺️': { valence: 0.35, arousal: 0.10, dominance: 0.00 },
-    '😌': { valence: 0.30, arousal: 0.10, dominance: -0.05 },
-    // 困/累
-    '😴': { valence: -0.05, arousal: 0.05, dominance: -0.10 },
-    '🥱': { valence: -0.10, arousal: 0.05, dominance: -0.10 },
-};
-
-// ─── 阴阳怪气检测特征 ───
-const SARCASM_INDICATORS: [RegExp, number][] = [
-    [/😅|🙃|🤡/,                             0.40],
-    [/呵呵/,                                  0.35],
-    [/[。！]\.{3,}|[。！]\.{2,}$/,            0.30],  // "厉害。。"
-    [/你[好真][棒行厉害牛]啊/,                0.25],   // "你好棒啊"（讽刺）
-    [/就这|就这就这/,                         0.30],
-    [/典|太典了|经典/,                        0.25],
-    [/不会吧不会吧/,                          0.30],
-];
-
-/** Emoji提取 */
-function extractEmoji(text: string): { valence: number; arousal: number; dominance: number }[] {
-    const results: { valence: number; arousal: number; dominance: number }[] = [];
-    for (const emoji of Object.keys(EMOJI_MAP)) {
-        if (text.includes(emoji)) {
-            results.push(EMOJI_MAP[emoji]);
-        }
-    }
-    return results;
-}
-
-/** 否定检测：在匹配位置前扫描否定词 */
-function detectNegation(text: string, matchIndex: number): number {
-    let totalWeight = 0;
-    for (const [pattern, range, weight] of NEGATIONS) {
-        // 在 matchIndex 之前的 range 个字符内扫描（多取1字符让 \B 正确工作）
-        const searchStart = Math.max(0, matchIndex - range);
-        const beforeText = text.slice(searchStart, Math.min(text.length, matchIndex + 1));
-        const m = beforeText.match(pattern);
-        if (m && m.index !== undefined) {
-            // 否定词到匹配词之间有其他词，权重递减
-            const dist = matchIndex - (searchStart + m.index);
-            const decay = Math.max(0.3, 1 - dist * 0.15);
-            totalWeight += weight * decay;
-        }
-    }
-    return totalWeight;
-}
-
-/** 程度副词检测：在匹配位置前扫描 */
-function detectIntensifier(text: string, matchIndex: number): number {
-    const searchStart = Math.max(0, matchIndex - 6);
-    const beforeText = text.slice(searchStart, matchIndex);
-    let bestFactor = 1.0;
-    for (const [pattern, factor] of INTENSIFIERS) {
-        if (pattern.test(beforeText)) {
-            bestFactor = Math.max(bestFactor, factor);
-        }
-    }
-    return bestFactor;
-}
-
-/** 阴阳怪气概率检测 */
-function detectSarcasm(text: string): number {
-    let score = 0;
-    for (const [pattern, weight] of SARCASM_INDICATORS) {
-        if (pattern.test(text)) score += weight;
-    }
-    return Math.min(1, score);
-}
-
-/** 新版 analyzeText：否定传播 + 程度副词 + 优先级排序 + Emoji + Dominance */
-function analyzeText(text: string): AnalyzedResult {
-    const matches: MatchResult[] = [];
-    const emojiResults = extractEmoji(text);
-
-    // 1) 词典匹配（带位置信息）
-    for (const rule of sentimentLexicon) {
-        const m = text.match(rule.pattern);
-        if (!m || m.index === undefined) continue;
-
-        // 否定检测（仅当词条允许否定）
-        const negWeight = rule.negatable ? detectNegation(text, m.index) : 0;
-        // 程度检测
-        const intFactor = detectIntensifier(text, m.index);
-
-        // 计算最终效价
-        let finalValence = rule.valence;
-        if (negWeight < 0) {
-            finalValence = -finalValence * Math.abs(negWeight) * 0.7;
-        }
-        if (intFactor !== 1.0) {
-            finalValence *= intFactor;
-        }
-        finalValence = Math.max(-0.95, Math.min(0.95, finalValence));
-
-        matches.push({
-            valence: finalValence,
-            arousal: rule.arousal,
-            dominance: rule.dominance,
-            priority: rule.priority,
-            negated: negWeight < 0,
-            intensifier: intFactor,
-            index: m.index,
-            length: m[0].length,
-        });
-    }
-
-    // 2) Emoji 融合
-    for (const emo of emojiResults) {
-        matches.push({
-            valence: emo.valence,
-            arousal: emo.arousal,
-            dominance: emo.dominance,
-            priority: 3,  // emoji 高于词典
-            negated: false,
-            intensifier: 1.0,
-            index: -1,
-            length: 1,
-        });
-    }
-
-    // 3) 综合融合
-    if (matches.length > 0) {
-        // 按优先级分组
-        const maxPriority = Math.max(...matches.map(m => m.priority));
-        const topMatches = matches.filter(m => m.priority >= maxPriority - 1);
-
-        // 加权平均（权重 = 优先级 + 显著度）
-        let totalValence = 0, totalArousal = 0, totalDominance = 0, totalWeight = 0;
-        for (const m of topMatches) {
-            const w = m.priority + m.arousal;
-            totalValence += m.valence * w;
-            totalArousal += m.arousal * w;
-            totalDominance += m.dominance * w;
-            totalWeight += w;
-        }
-
-        const sarcasmProb = detectSarcasm(text);
-
-        // 如果检测到阴阳怪气，拉低效价
-        let finalValence = totalWeight > 0 ? totalValence / totalWeight : 0;
-        if (sarcasmProb > 0.4 && finalValence > 0) {
-            finalValence *= (1 - sarcasmProb * 0.5);
-        }
-
-        return {
-            valence: finalValence,
-            arousal: totalWeight > 0 ? Math.min(1, totalArousal / totalWeight) : 0.15,
-            salience: totalWeight > 0 ? Math.min(1, totalArousal / totalWeight) : 0.15,
-            dominance: totalWeight > 0 ? Math.max(-1, Math.min(1, totalDominance / totalWeight)) : 0,
-            sarcasmProbability: sarcasmProb,
-        };
-    }
-
-    // 4) 无匹配：中性
-    const len = Math.min(1, text.length / 30);
-    const sarcasmProb = detectSarcasm(text);
-    const baseArousal = 0.15 + len * 0.1;
-    return {
-        valence: 0,
-        arousal: baseArousal,
-        salience: baseArousal,
-        dominance: 0,
-        sarcasmProbability: sarcasmProb,
-    };
-}
-
-// ==================== PUA 操控模式检测（独立于情感词典）====================
-const puaPatterns: [RegExp, string, number][] = [
-    // ─── 原有核心策略 ───
-    [/太敏感|这么敏感|真敏感|你反应过度|小题大做|你没那么敏感|我没说过|你想多了吧?|你又来了|那么敏感|别那么敏感|别这么敏感|想太多|你.{0,4}想多了|[Mm][Ii][Nn]感|胡思乱想/, 'gaslighting', 0.85],
-    [/我前任|我前女|看看人家|看看别人家|再看看你|你不如人家|你学学人家|别人.*女朋友|别人.*老婆|别人.*女人|朋友的.*(女|男|老)朋友|朋友的.*(女|老)婆|朋友的.*老公|像.*一样(能干|好|贤惠|漂亮|懂事)/, 'comparison_humiliation', 0.9],
-    [/还不是因为你|要不是你|都是你的错|你也有问题|全都怪我|是你自己|都是因为你|都怪你|连.*都管不好|连.*都做不好|总是有借口|总有借口/, 'blame_shifting', 0.85],
-    [/这点小事|至于吗|多大点事|你也太在意|有什么大不了的|这点.*承受力|承受力.*没有|有什么值得|有什么好.*(烦|生气|难过|吵)/, 'trivialization', 0.75],
-    [/别联系(了)?|让我静静|一个人待(着|会)|暂[时停].*联系|不要找我了|没话说了/, 'stonewalling', 0.9],
-    [/随便你怎么想|我无所谓|没什么好说的|你爱怎么想|你爱怎么(说|看)/, 'emotional_withdrawal', 0.8],
-    [/你摸着良心|我对你还不够好|我对你那么好|你有没有良心|我哪里对不起你|我都是为你好|都是为你好|对得起.*(爸妈|父母|家人|他们)/, 'guilt_tripping', 0.8],
-    [/你成熟一点|别幼稚了|无理取闹|没事找事|你能不能懂点事|嫌(丑|土|难看|老|差)|除了.*还会什么|除了我没人(会要|看得上|要你)/, 'condescending_dismissal', 0.85],
-    [/不想说了|没话说了|别问了|跟你说也没用|说了你也不懂/, 'communication_shutdown', 0.8],
-    [/跟别人(聊|好|走)|找别人去|你去找更好的/, 'comparison_humiliation', 0.85],
-    [/别互相折磨|我们不合适|就到这(里|吧)|放过(我|彼此)|你走吧|以为.*稀罕/, 'discard', 0.85],
-    [/你根本不懂/, 'communication_shutdown', 0.7],
-    [/我就知道|就知道你|知道你会/, 'gaslighting', 0.6],
-
-    // ─── 新增策略：爱情轰炸 ───
-    [/最特别|最完美|灵魂伴侣|命中注定|我从来没有(过)?这样的感觉/, 'love_bombing', 0.8],
-    [/想结婚|永远在一起|白头到老|执子之手/, 'love_bombing', 0.6],
-
-    // ─── 新增策略：三角测量/引入第三方比较 ───
-    [/一直在找你|是不是也跟你联系|是不是对你有意思|肯定喜欢(你|他|她)/, 'triangulation', 0.75],
-    [/有人说你|有人告诉我|大家都说你/, 'triangulation', 0.7],
-
-    // ─── 新增策略：控制 ───
-    [/我不(太)?喜欢你(穿|做|去|跟|这样|这个)/, 'control', 0.65],
-    [/以后别.*了.*听话|乖.*听我的/, 'control', 0.7],
-    [/不允许|不可以.*(去|穿|做|见)/, 'control', 0.75],
-
-    // ─── 新增策略：隐私侵犯 ───
-    [/给我看(手机|聊天|定位)|密码给我|定位给我|让我检查/, 'privacy_invasion', 0.8],
-
-    // ─── 新增策略：社交隔离 ───
-    [/别跟.*(朋友|同事|闺蜜|兄弟).*(出去|来往|联系)|以后周末陪我/, 'isolation', 0.75],
-    [/少跟.*来往|不要跟.*出去|你那些朋友.*不好/, 'isolation', 0.8],
-
-    // ─── 新增策略：情感绑架 ───
-    [/你爱我就要|爱我就.*就|不(是|然).*就是不爱|你要是爱我就/, 'emotional_blackmail', 0.85],
-    [/(我|我都)(这么|这样).*了?.*你(还|都|就)/, 'emotional_blackmail', 0.7],
-
-    // ─── 新增策略：占有 ───
-    [/(你|只)能是我|你只能有我|不许跟别人|你是我的(人|全部)/, 'possession', 0.75],
-    [/除了我.*没人|没人.*比我|离不开我|根本离不开/, 'possession', 0.7],
-
-    // ─── 新增策略：最后通牒 ───
-    [/再这样.*(分手|算了|拉倒)|最后说[一1]次|不改(就|的话).*(分手|走)|你要是跟别人.*(聊天|联系)|再也不理你/, 'ultimatum', 0.8],
-
-    // ─── 新增策略：威胁自伤 ───
-    [/不想活(了)?|离开你.*不(行|能)活|死.*给.*看|如果.*(走|离开).*(不知道|会做出)|(敢|要是).*(走|离开|分手).*就.*(死|自杀|割腕)/, 'threat_self_harm', 0.85],
-    [/(自杀|自残|割腕|跳楼|跳河)/, 'threat_self_harm', 0.95],
-
-    // ─── 新增策略：间歇性强化 ───
-    [/你会后悔的|以后.*就知道(我|我的好)|你会发现.*(我最|我才是最)/, 'intermittent_reinforcement', 0.7],
-    [/还(是|觉得)我(最|更)好|回头找我|离不开你|忘不了我/, 'intermittent_reinforcement', 0.65],
-
-    // ─── 新增策略：名誉攻击 ───
-    [/让大家|让(大家|别人|所有人)看看|把你.*(事|照片)说出去/, 'reputation_attack', 0.9],
-    [/诋毁|毁了你|让你(身败名裂|没脸见人)/, 'reputation_attack', 0.95],
-
-    // ─── 新增策略：情感忽视 ───
-    [/^嗯$|^哦$|^好(吧)?$|^哦哦$/, 'emotional_neglect', 0.2],
-    [/知道了|没空|在忙|再说吧/, 'emotional_neglect', 0.3],
-];
-
-// ==================== 友谊伤害模式检测（独立于亲密关系）====================
-const friendPatterns: [RegExp, string, number][] = [
-    // ─── 人情债奴役 Debt_Binding ───
-    [/(要不是|当初).*(我帮|我陪|我借|我(在|有)).*你(现在|今天|早就)|忘恩负义|过河拆桥|恩将仇报/, 'debt_binding', 0.85],
-    [/当初.*(失恋|难过|困难|低谷|没钱).*(谁|是)我.*陪|陪.*你.*现在.*(帮|这点).*都不/, 'debt_binding', 0.9],
-    [/我.*帮过你.*你.*(这点|这么|这个).*都不|你也不想想.*(谁|我).*帮/, 'debt_binding', 0.85],
-    [/你忘了当初|你忘记了|你记不记得(我|当初)/, 'debt_binding', 0.75],
-
-    // ─── 秘密背叛 Secret_Betrayal ───
-    [/我答应.*不告诉.*但|答应.*不说.*不过|你千万别告诉.*其实|私下.*(说|告诉).*你别/, 'secret_betrayal', 0.8],
-    [/我跟你说.*你别(告诉|往外|到处).*说?.*(但|其实|不过)/, 'secret_betrayal', 0.85],
-    [/你别(跟别人|告诉)说.*其实.*(他|她|他们)/, 'secret_betrayal', 0.85],
-
-    // ─── 功利型 Fairweather_Friend ───
-    [/借我(点|些).*钱|帮我.*(搞定|做个|写个|弄个)|陪我吐(槽|嘈)|听我倒(苦水|霉)/, 'fairweather_friend', 0.5],
-    [/好久不见.*(借钱|帮忙|有事)|突然.*找.*(帮|借|陪)/, 'fairweather_friend', 0.65],
-
-    // ─── 制造社交依赖 Social_Dependency ───
-    [/除了我.*(理解|懂|受得了|陪|要)你|别人(都|谁)不(理解|懂|理|要|喜欢)你|没人.*比我对你(好|懂|理解)/, 'social_dependency_creation', 0.85],
-    [/就我.*(当|把)你.*(朋友|兄弟)|只有我.*(愿意|会)陪|你看.*(他们|别人).*(烦|讨厌|不喜)你/, 'social_dependency_creation', 0.8],
-    [/你怎么只找我不找别人|别人都不理你|只有我愿意/, 'social_dependency_creation', 0.8],
-
-    // ─── 友谊测试/忠诚考验 Loyalty_Test ───
-    [/是朋友(就|的)话.*不问|是兄弟就|是闺蜜就|你(是|如果)把我当(朋友|兄弟|姐妹).*就/, 'loyalty_test', 0.8],
-    [/你帮(他|她)就是跟我过不去|你选(他|她)还是选我|你站(哪边|谁)/, 'loyalty_test', 0.85],
-    [/你要是.*(继续|还)跟.*(来往|联系).*就别找我/, 'loyalty_test', 0.9],
-
-    // ─── 友谊羞辱 Friendship_Humiliation ───
-    [/你也配当(我|我的)(朋友|兄弟|姐妹)|你配.*(朋友|兄弟)|你也配/, 'friendship_humiliation', 0.9],
-    [/你[这那]样.*(还|也)有(朋友|人理|人跟你好)|你这种人.*(朋友|人缘)/, 'friendship_humiliation', 0.85],
-    [/你出去别说认识我|别说.*是我(朋友|兄弟|姐妹)|不配.*(朋友|做朋友)/, 'friendship_humiliation', 0.85],
-
-    // ─── 过度自我暴露推动 Over_Disclosure_Push ───
-    [/我(从没|从未|从来没)跟别人说过|我什么都跟你说|最懂我(的)?人|我全部.*都(说|告诉)你/, 'over_disclosure_push', 0.7],
-    [/我什么都能跟你说|我在谁面前都不(说|提).*就跟你/, 'over_disclosure_push', 0.75],
-
-    // ─── 过早绑定 Premature_Bonding ───
-    [/以后.*就(靠|指望|赖)你了|我(就|只)靠你了/, 'premature_bonding', 0.65],
-    [/你(以后|以后就)是我(最好的|最铁的|唯一的)(朋友|兄弟|姐妹)/, 'premature_bonding', 0.6],
-
-    // ─── 社交圈控制 Social_Gatekeeping ───
-    [/(那|这)个人(走太近|来往|联系|交朋友)/, 'social_gatekeeping', 0.65],
-    [/那个人(不是好人|有问题|不靠谱)|少跟.*(来往|接触|走动)/, 'social_gatekeeping', 0.6],
-
-    // ─── 计较付出 Debt_Tallying ───
-    [/每次都(是)?我?.*你.*(从来不|几次|一次都|哪次)|我?(每次|次次).*你.*(都不|没|从不)/, 'debt_tallying', 0.65],
-    [/我.*请.*你.*什么时候|你什么时候(也)?请我|你(也)?不回请/, 'debt_tallying', 0.6],
-
-    // ─── 边界侵犯 Boundary_Pushing ───
-    [/你(工资|薪水|收入)(多少|几万|怎么样|高吗)|你(买房|买车)了(吗|么)/, 'boundary_pushing', 0.6],
-    [/你跟你(男|女)朋友.*(怎么样|关系|发展到|到哪)|你们.*(上床|亲密|有没).*吗?/, 'boundary_pushing', 0.75],
-
-    // ─── 情感撤回（友谊版）Emotional_Withdrawal ───
-    [/我需要你.*你在哪.*算了|有事.*找.*没事.*(别|不用)|算了.*(无所谓|不用|没事)/, 'emotional_withdrawal', 0.75],
-    [/我难过.*(也不|没).*找|你(心里|眼里)还有我这个(朋友|兄弟|姐妹)吗/, 'emotional_withdrawal', 0.7],
-
-    // ─── 间歇性友谊 Intermittent_Friendship ───
-    [/你是我最好的(朋友|兄弟|姐妹).*(好久|多久|最近)没联系|怎么最近.*不(找我|联系)/, 'intermittent_friendship', 0.7],
-    [/不想理你|你别找我|以后别联系了.*(过几天|回头|改天)/, 'intermittent_friendship', 0.75],
-
-    // ─── 含沙射影 Vague_Posting_Attack ───
-    [/有些人.*(表面|背地|嘴上|当面).*(背地|背后|实际|心里)/, 'vague_posting_attack', 0.7],
-    [/呵呵.*有些人|有些人.*呵呵/, 'vague_posting_attack', 0.65],
-
-    // ─── 资历绑架 Tenure_Binding ───
-    [/多少年(的)?(朋友|兄弟|姐妹|交情)(了|还)|认识这么多年|这么多年(交情|感情)/, 'tenure_binding', 0.75],
-    [/看在.*(多年|这么久).*(份上|面子)/, 'tenure_binding', 0.7],
-
-    // ─── 报复性曝光 Retaliatory_Exposure ───
-    [/把你.*(事|秘密|黑历史).*(说出|爆|告诉|发)|你(怕|不想).*我.*(说出|爆|告诉|发)/, 'retaliatory_exposure', 0.9],
-    [/信不信我(把你|就).*(说出去|发出去|公开|曝光)/, 'retaliatory_exposure', 0.95],
-    [/我把你.*(事|照片|聊天).*(给大家|让).*(看看|知道)/, 'retaliatory_exposure', 0.92],
-
-    // ─── 社交惩罚 Social_Punishment ───
-    [/在(他们|大家|别人)面前.*不留面子|故意.*(不理|冷淡|忽略).*当着.*面/, 'social_punishment', 0.7],
-    [/当着.*(面|大家).*让我(难堪|下不来台|没面子)/, 'social_punishment', 0.75],
-
-    // ─── 友谊中的控制 ───
-    [/你去做什么.*(都)?支持.*(但|除了|不过|只是)/, 'control', 0.65],
-    [/我是不是为你好|我是为你好.*你(别|不要|应该)/, 'control', 0.6],
-
-    // ─── 危机缺席 Absence_at_Crisis ───
-    [/你(结婚|生娃|生病|住院|出事).*我.*(在|出现|来)了(吗|么)?/, 'absence_at_crisis', 0.7],
-    [/(我|你)(最需要|需要).*你?我?.*(不在|没在|没出现|缺席)/, 'absence_at_crisis', 0.75],
-
-    // ─── 单方面维系 One_Sided_Friendship ───
-    [/每次都是我先|总是我(找|主动)|我(不找|不联系).*你(不|永远不|从)找|从来都是我|每次都是我(找|主动|联系)/, 'one_sided_friendship', 0.75],
-    [/你什么时候(主动|找过|联系)过我/, 'one_sided_friendship', 0.7],
-
-    // ─── 友谊测试（点忙不帮版）Friendship_Testing ───
-    [/(这点|这么点|这种小)忙都不帮|算(什么|哪门子)(朋友|兄弟|姐妹)/, 'friendship_testing', 0.85],
-    [/是朋友就(帮|借|给)我|不是朋友(你)?就(别|不(用|要))/, 'friendship_testing', 0.8],
-];
-
-// ─── 关系类型分类器 ───
-const ROMANCE_KEYWORDS = [
-    /老公|老婆|男朋友|女朋友|恋爱|约会|结婚|求婚|彩礼|见家长|见父母/,
-    /想你|爱你|想你了|我爱你|我喜欢你|好想你|亲爱(的)?/,
-    /抱抱|亲亲|牵手|约会|情侣|二人世界/,
-];
-const FRIENDSHIP_KEYWORDS = [
-    /兄弟|闺蜜|老铁|哥们|姐妹|朋友|死党|基友|损友/,
-    /约饭|开黑|逛街|喝酒|聚聚|好久不见|改天聚|出来坐坐/,
-    /开黑|打游戏|上分|组队|团建|聚会/,
-];
-
-function classifyRelationship(text: string): { romanceScore: number; friendshipScore: number } {
-    let romanceScore = 0, friendshipScore = 0;
-    for (const rx of ROMANCE_KEYWORDS) if (rx.test(text)) romanceScore += 0.3;
-    for (const rx of FRIENDSHIP_KEYWORDS) if (rx.test(text)) friendshipScore += 0.3;
-    if (/你.*[傻笨呆废]|哈哈|233|😂|🤣|笑死|菜鸡|青铜|弱鸡/.test(text)) friendshipScore += 0.2;
-    if (/么么哒|亲亲|抱抱|爱你哟|想你了/.test(text)) romanceScore += 0.25;
-    return { romanceScore: Math.min(1, romanceScore), friendshipScore: Math.min(1, friendshipScore) };
-}
-
-// ─── 互损 vs 贬低区分 ───
-const BANTER_MARKERS = [/哈哈|233|😂|🤣|笑死|笑尿|我笑了|开玩笑|逗你(的|玩)/];
-const BANTER_NICKNAMES = [/兄弟|老铁|闺蜜|哥们|姐妹|大姐|老弟|同志/];
-const BANTER_INSULT_PATTERNS = [/你[个这].*[傻笨呆废]|菜鸡|弱鸡|垃圾.*(你|啊|了)|不行啊你/];
-const INSULT_ATTACK_PATTERNS = [/你.*(就是|真|太).*[傻笨蠢废烂]|你.*(不配|没资格|差远了)/];
-
-function detectBanter(text: string): { isBanter: boolean; banterScore: number } {
-    let score = 0;
-    for (const rx of BANTER_MARKERS) if (rx.test(text)) score += 0.4;
-    for (const rx of BANTER_NICKNAMES) if (rx.test(text)) score += 0.15;
-    for (const rx of BANTER_INSULT_PATTERNS) if (rx.test(text)) score += 0.2;
-    if (score === 0) for (const rx of INSULT_ATTACK_PATTERNS) if (rx.test(text)) score -= 0.3;
-    return { isBanter: score >= 0.3, banterScore: Math.max(-0.5, Math.min(1, score)) };
-}
-
-// ─── 互损白名单短语 ───
-const friendWhitelistPatterns: RegExp[] = [
-    /哈哈.*[傻笨]|笑死.*[傻笨]|菜鸡.*哈哈|垃圾.*开玩笑/,
-    /你[个这].*[傻笨].*但.*(喜欢|挺|爱)|虽然.*[傻笨].*但是.*(喜欢|挺|爱)/,
-];
 
 // ==================== LLM 并行策略分析（Layer 1）====================
 type AIProviderSettings = { provider: string; apiKey: string; model: string; baseUrl?: string; temperature?: number };
@@ -2808,36 +2074,31 @@ async function analyzeSentimentViaLLM(text: string, aiSettings: AISettings): Pro
     };
 }
 
-async function selfReflectOnResponse(
-    responseText: string,
-    userValence: number,
-    engineValence: number,
-    aiSettings: AISettings,
-): Promise<number> {
-    if (!aiSettings.apiKey) return 0;
-    try {
-        const analysis = await Promise.race([
-            analyzeSentimentViaLLM(responseText, aiSettings),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('FEEDBACK_TIMEOUT')), 2000)),
-        ]);
-
-        // v1.2: 自适应反馈权重，综合回声室风险 + 振荡 + 漂移
-        const adaptiveWeight = metrics.feedbackWeightCurrent;
-        let feedbackDelta = (analysis.valence - engineValence) * adaptiveWeight;
-
-        // 方向一致性检查：AI 回复与用户情感方向相反时削弱反哺
-        if (Math.sign(feedbackDelta) !== Math.sign(userValence - engineValence)) {
-            feedbackDelta *= 0.2;
+// v2.0: SelfReflect 已删除 — AI 自评导致人格漂移，替换为客观指标统计
+const conversationMetrics = {
+    totalTurns: 0,
+    userValenceHistory: [] as number[],
+    responseLengths: [] as number[],
+    strategies: [] as string[],
+    recordTurn(userValence: number, responseLen: number, strategy: string) {
+        this.totalTurns++;
+        this.userValenceHistory.push(userValence);
+        this.responseLengths.push(responseLen);
+        this.strategies.push(strategy);
+        // 只保留最近 50 轮
+        if (this.userValenceHistory.length > 50) {
+            this.userValenceHistory.shift();
+            this.responseLengths.shift();
+            this.strategies.shift();
         }
-
-        // 硬限制单次反馈 |Δ| ≤ 0.1
-        feedbackDelta = clamp(feedbackDelta, -0.1, 0.1);
-
-        return feedbackDelta;
-    } catch {
-        return 0;
+    },
+    getSummary() {
+        if (this.totalTurns === 0) return null;
+        const avgValence = this.userValenceHistory.reduce((a,b) => a+b, 0) / this.userValenceHistory.length;
+        const avgLen = this.responseLengths.reduce((a,b) => a+b, 0) / this.responseLengths.length;
+        return { totalTurns: this.totalTurns, avgUserValence: avgValence.toFixed(2), avgResponseLen: Math.round(avgLen) };
     }
-}
+};
 
 // ==================== Layer 1: 基座层——三元核心 + 预测误差最小化 ====================
 
@@ -3095,123 +2356,6 @@ function getCompositeName(core: CoreState, a: string, b: string, emotions: Recor
         'sad+fear': '恐惧/悲伤',
     };
     return map[pair] || DOMINANT_MAP[a] || a;
-}
-
-// ━━━ 否定词检测（v1.1 NLU 误判修复）━━━
-interface NegationRule {
-    negWords: string[];
-    targetWords: string[];
-    flipTo: 'negative' | 'positive';
-}
-
-const NEGATION_RULES: NegationRule[] = [
-    { negWords: ['不', '没', '没有', '别', '不要'], targetWords: ['爱', '喜欢', '可爱', '好', '想', '要', '开心', '漂亮', '棒', '善良', '温柔', '重要'], flipTo: 'negative' },
-    { negWords: ['不能不', '不得不', '不会不'], targetWords: ['爱', '喜欢', '好'], flipTo: 'positive' },
-    { negWords: ['一点都不', '完全不', '根本不', '丝毫不'], targetWords: ['爱', '喜欢', '可爱', '好', '开心', '漂亮', '温柔', '重要'], flipTo: 'negative' },
-    { negWords: ['只会', '不过是', '只不过'], targetWords: ['装', '作', '假', '虚伪', '可爱', '撒娇'], flipTo: 'negative' },
-    { negWords: [], targetWords: ['讨厌', '恨', '烦死了', '恶心', '滚', '去死', '废物', '傻逼', '神经病', '脑残', '白痴', '智障', '蠢货', '垃圾', '混蛋'], flipTo: 'negative' },
-];
-
-function detectNegationAndCorrect(text: string, originalValence: number): number {
-    let correctedValence = originalValence;
-
-    for (const rule of NEGATION_RULES) {
-        // 直接负面词列表（无 negWords，直接匹配即翻转）
-        if (rule.negWords.length === 0) {
-            const hasTarget = rule.targetWords.some(t => text.includes(t));
-            if (hasTarget && rule.flipTo === 'negative' && originalValence > -0.3) {
-                correctedValence = -Math.min(0.95, Math.max(0.5, Math.abs(originalValence) + 0.4));
-            }
-            continue;
-        }
-
-        // v1.1fix: 邻近检测 — 单字否定词窗口更紧（3字符），避免跨词误匹配
-        let foundClose = false;
-        for (const negWord of rule.negWords) {
-            const negIdx = text.indexOf(negWord);
-            if (negIdx === -1) continue;
-            const maxDist = negWord.length <= 1 ? 4 : 6;
-            for (const targetWord of rule.targetWords) {
-                const tgtIdx = text.indexOf(targetWord);
-                if (tgtIdx === -1) continue;
-                const dist = Math.abs(negIdx - tgtIdx);
-                if (dist <= maxDist && dist < Math.max(negWord.length, targetWord.length) + 3) {
-                    foundClose = true;
-                    break;
-                }
-            }
-            if (foundClose) break;
-        }
-        if (!foundClose) continue;
-
-        if (rule.flipTo === 'negative' && originalValence > -0.3) {
-            const intensity = Math.max(0.5, Math.abs(originalValence) + 0.4);
-            correctedValence = -Math.min(0.95, intensity);
-        } else if (rule.flipTo === 'positive' && originalValence < 0.3) {
-            const intensity = Math.max(0.5, Math.abs(originalValence) + 0.4);
-            correctedValence = Math.min(0.95, intensity);
-        }
-        break;
-    }
-
-    return correctedValence;
-}
-
-/** 检测表面妥协式反讽：敷衍同意但实际表达不耐烦/终止争论
- *  v1.2: 去除 ^ 锚定、补充得/的变体、增加逗号容错、扩展 dismissive 模式 */
-function detectMockAgreement(text: string): number | null {
-    // 移除首部语气词后再匹配（如 "好吧，是是是..." → "是是是..."）
-    const stripped = text.replace(/^(好吧|好啦|行了|算了|唉|哎)[，,]?\s*/, '');
-
-    // 高置信度模式 → 强负向 (> -0.6)
-    const strongPatterns: RegExp[] = [
-        /是是是[，,]?\s*(都是我的错|你说的都对|我得都对|我错了行了吧|你赢了)/,
-        /对对对[，,]?\s*(都是我的错|你说的都对|你说得都对|你全对|你全都对)/,
-        /好好好[，,]?\s*(我错了|我全都错了|我全错了|你说了算)/,
-        /行[，,]?\s*你赢了[，,]?\s*满意了吧/,
-        /行行行[，,]?\s*(你厉害|你了不起|你赢了|都是我的错|我错了)/,
-        /你((说得|说的)都?对|全对|都对)行了吧/,
-        /(算我错了?|我不对|我承认都是我的错)行了吧/,
-        /你要(非)?这[么样]想?我(也|就)没办法/,
-        /你(高兴|开心)就(好|行)/,
-    ];
-
-    for (const p of strongPatterns) {
-        if (p.test(text) || p.test(stripped)) return -0.65;
-    }
-
-    // 中置信度模式 → 中等负向 (-0.5)
-    const mediumPatterns: RegExp[] = [
-        /我错了行了吧/,
-        /都是我的错[，,]?\s*行了吧/,
-        /行了吧[，,]?\s*(满意了吧|够了吧|可以了吧)/,
-        /都?是我的错[，,]?\s*(行了吧|可以了吧|好了吧|够了吧)/,
-        /随你怎么(说|想|样)吧?/,
-        /懒得跟(你|他|她)(说|吵|解释|计较)/,
-        /(不想|懒得|别|少)(跟|和)你?(废话|吵|争|计较)了?/,
-        /够了?[，,]?\s*(行了吧|可以了吧|别说了)/,
-        /你(爱|想)怎[么样]样?就怎[么样]样?/,
-        /(你说|你想)?什么就是什么吧/,
-        /就[当我]?是?我的?错?行?了?吧/,
-        /你(说|说的|说得)没错[，,]?\s*行了吧/,
-        /你全都?对[，,]?\s*(行了吧)?/,
-    ];
-
-    for (const p of mediumPatterns) {
-        if (p.test(text) || p.test(stripped)) return -0.5;
-    }
-
-    // 弱信号：可能只是结束争吵的惯用语
-    const weakPatterns: RegExp[] = [
-        /好了[，,]?\s*不?(说|吵|提)了/,
-        /算了[，,]?\s*(不?说了?|就这样吧)/,
-    ];
-
-    for (const p of weakPatterns) {
-        if (p.test(text) || p.test(stripped)) return -0.3;
-    }
-
-    return null;
 }
 
 // ==================== 外部调制 ====================
@@ -3690,502 +2834,6 @@ function feedbackStrategy(observedValence: number): void {
     }
 
     _lastStrategy = null;
-}
-
-// ==================== 关系阶段感知模块（R1-R5 分类器）====================
-type PhaseId = 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
-
-interface PhaseState {
-    currentPhase: PhaseId;
-    confidence: number;           // 0-1
-    relationshipStartDate: number; // timestamp, 0 = 未确定
-    lastPhaseTransition: number;  // timestamp
-    phaseHistory: { phase: PhaseId; timestamp: number }[];
-    // 累计统计
-    totalMessages: number;
-    dailyMessageHistory: number[]; // 最近 30 天每日消息数
-    phaseKeyEvents: string[];      // 关键事件词记录
-}
-
-const PHASE_DURATION_THRESHOLDS = {
-    R1: { min: 0, max: 90 },     // 0-3个月
-    R2: { min: 90, max: 365 },   // 3-12个月
-    R3: { min: 180, max: 730 },  // 6个月-2年
-    R4: { min: 730, max: Infinity },
-};
-
-// 关键事件词 → 阶段转移暗示
-const PHASE_KEY_EVENTS: Record<string, PhaseId | null> = {
-    '在一起': 'R2', '做我女朋友': 'R2', '做我男朋友': 'R2', '正式交往': 'R2',
-    '我爱你': null, // 各阶段都可能出现
-    '分手': 'R5', '分开吧': 'R5', '离婚': 'R5', '结束了': 'R5',
-    '我们不合适': 'R5', '放过': 'R5', '到此为止': 'R5',
-};
-
-function detectPhaseByDuration(days: number): PhaseId {
-    if (days <= 90) return 'R1';
-    if (days <= 365) return 'R2';
-    if (days <= 730) return 'R3';
-    return 'R4';
-}
-
-function inferPhase(state: PhaseState, recentValences: number[]): { phase: PhaseId; confidence: number } {
-    const now = Date.now();
-    const daysSinceStart = state.relationshipStartDate > 0
-        ? (now - state.relationshipStartDate) / (86400000) : 0;
-
-    // 1) 关键事件 → 直接跳转（最高优先级）
-    for (const event of state.phaseKeyEvents.slice(-3)) {
-        const target = PHASE_KEY_EVENTS[event];
-        if (target && target !== state.currentPhase) {
-            // 事件驱动转移，高置信度
-            if (target === 'R5') return { phase: 'R5', confidence: 0.9 };
-            if (target === 'R2') return { phase: 'R2', confidence: 0.85 };
-        }
-    }
-
-    // 1.5) 情感驱动 R1→R2：持续高正向效价 + 亲密关键词 → 自动确认关系
-    if (state.currentPhase === 'R1' && recentValences.length >= 15) {
-        const recent20 = recentValences.slice(-20);
-        const avgV = recent20.reduce((a, b) => a + b, 0) / recent20.length;
-        const positiveRatio = recent20.filter(v => v > 0.2).length / recent20.length;
-        const loveKeyEvents = state.phaseKeyEvents.filter(e =>
-            ['我爱你', '在一起', '喜欢你', '想你', '爱你', '喜欢你'].some(k => e.includes(k))
-        ).length;
-        if (avgV > 0.35 && positiveRatio > 0.55 && state.totalMessages >= 20) {
-            return { phase: 'R2', confidence: 0.65 + Math.min(0.2, loveKeyEvents * 0.05) };
-        }
-    }
-
-    // 2) 基于时长推断
-    const durationPhase = daysSinceStart > 0 ? detectPhaseByDuration(daysSinceStart) : 'R1';
-
-    // 3) 基于情感温度修正
-    let valenceScore = 0;
-    if (recentValences.length >= 5) {
-        const avg = recentValences.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, recentValences.length);
-        valenceScore = avg;
-    }
-
-    // 4) 频率因素
-    const recentDays = state.dailyMessageHistory.length;
-    const avgFreq = recentDays > 0
-        ? state.dailyMessageHistory.slice(-7).reduce((a, b) => a + b, 0) / Math.min(7, recentDays) : 0;
-
-    // R2 (热恋) 强化：频率极高 + 正效价
-    if (durationPhase === 'R2' && avgFreq > 30 && valenceScore > 0.05) {
-        return { phase: 'R2', confidence: 0.75 };
-    }
-    // 高冲突 → R3 (磨合)
-    if (durationPhase === 'R2' || durationPhase === 'R3') {
-        const negRatio = recentValences.slice(-30).filter(v => v < -0.2).length / Math.min(30, recentValences.length || 1);
-        if (negRatio > 0.3 && daysSinceStart > 120) return { phase: 'R3', confidence: 0.7 };
-    }
-    // 长时长 + 低频 → R4 (稳定)
-    if (daysSinceStart > 400 && avgFreq < 15 && valenceScore > -0.1) {
-        return { phase: 'R4', confidence: 0.65 };
-    }
-    // R5 危机态：低落 + 关键事件
-    if (valenceScore < -0.2 && state.phaseKeyEvents.some(e => ['分手', '分开', '离婚', '结束了'].includes(e))) {
-        return { phase: 'R5', confidence: 0.85 };
-    }
-
-    return { phase: durationPhase, confidence: 0.5 };
-}
-
-// ==================== 时间状态机 ====================
-interface TimeState {
-    lastMessageTimestamp: number;
-    lastActiveDate: string;  // YYYY-MM-DD
-    consecutiveSilenceHours: number;
-    messageCountToday: number;
-    responseTimes: number[];  // 最近 20 条回复耗时(分钟)
-    currentUnrepliedMinutes: number; // 当前未回复时长
-    lastSilenceAlerted: boolean;
-    _silenceOverrideHours?: number; // 测试用：覆盖沉默时长，不受 updateTimeState 影响
-}
-
-function createTimeState(): TimeState {
-    return {
-        lastMessageTimestamp: Date.now(),
-        lastActiveDate: new Date().toISOString().slice(0, 10),
-        consecutiveSilenceHours: 0,
-        messageCountToday: 0,
-        responseTimes: [],
-        currentUnrepliedMinutes: 0,
-        lastSilenceAlerted: false,
-    };
-}
-
-function updateTimeState(ts: TimeState): void {
-    const now = Date.now();
-    const today = new Date().toISOString().slice(0, 10);
-
-    // 日期变更重置日计数
-    if (today !== ts.lastActiveDate) {
-        ts.messageCountToday = 0;
-        ts.lastActiveDate = today;
-    }
-    ts.messageCountToday++;
-
-    // 计算沉默时长
-    const gapMs = now - ts.lastMessageTimestamp;
-    const gapMinutes = gapMs / 60000;
-    ts.currentUnrepliedMinutes = 0; // 刚收到消息，重置未回复计时
-    ts.consecutiveSilenceHours = Math.max(0, (gapMs / 3600000) - 0.5); // 减 0.5h 容差
-
-    if (gapMinutes < 120) { // 2 小时内有回复 → 记录响应时间
-        ts.responseTimes.push(Math.round(gapMinutes));
-        if (ts.responseTimes.length > 20) ts.responseTimes.shift();
-    }
-
-    ts.lastMessageTimestamp = now;
-    ts.lastSilenceAlerted = false;
-}
-
-function checkSilence(ts: TimeState, phase: PhaseId): { silent: boolean; hours: number; threshold: number } {
-    const now = Date.now();
-    const hours = ts._silenceOverrideHours || ((now - ts.lastMessageTimestamp) / 3600000);
-
-    // 阈值因阶段而异
-    const thresholds: Record<PhaseId, number> = {
-        R1: 4, R2: 8, R3: 6, R4: 12, R5: 2,
-    };
-    const threshold = thresholds[phase] || 6;
-    return { silent: hours > threshold, hours: Math.round(hours * 10) / 10, threshold };
-}
-
-// ==================== 动态阈值调制表 ====================
-const THRESHOLD_MODULATION: Record<string, Record<PhaseId, { trigger: number; weight: number }>> = {
-    love_bombing: {
-        R1: { trigger: 0.6, weight: 1.2 }, R2: { trigger: 0.8, weight: 0.7 },
-        R3: { trigger: 0.7, weight: 0.8 }, R4: { trigger: 0.7, weight: 0.7 },
-        R5: { trigger: 0.5, weight: 1.3 },
-    },
-    gaslighting: {
-        R1: { trigger: 0.6, weight: 0.9 }, R2: { trigger: 0.7, weight: 0.8 },
-        R3: { trigger: 0.5, weight: 1.2 }, R4: { trigger: 0.6, weight: 1.0 },
-        R5: { trigger: 0.8, weight: 1.1 },
-    },
-    isolation: {
-        R1: { trigger: 0.5, weight: 0.8 }, R2: { trigger: 0.5, weight: 1.0 },
-        R3: { trigger: 0.5, weight: 1.2 }, R4: { trigger: 0.5, weight: 1.0 },
-        R5: { trigger: 0.5, weight: 0.8 },
-    },
-    possession: {
-        R1: { trigger: 0.4, weight: 1.3 }, R2: { trigger: 0.6, weight: 0.9 },
-        R3: { trigger: 0.6, weight: 1.0 }, R4: { trigger: 0.7, weight: 0.8 },
-        R5: { trigger: 0.4, weight: 1.2 },
-    },
-    silent_treatment: {
-        R1: { trigger: 0.4, weight: 1.2 }, R2: { trigger: 0.6, weight: 0.9 },
-        R3: { trigger: 0.5, weight: 1.0 }, R4: { trigger: 0.7, weight: 0.8 },
-        R5: { trigger: 0.3, weight: 1.3 },
-    },
-    emotional_neglect: {
-        R1: { trigger: 0.4, weight: 0.8 }, R2: { trigger: 0.5, weight: 0.8 },
-        R3: { trigger: 0.5, weight: 1.0 }, R4: { trigger: 0.6, weight: 1.2 },
-        R5: { trigger: 0.3, weight: 1.1 },
-    },
-    threat_self_harm: {
-        R1: { trigger: 0.7, weight: 1.0 }, R2: { trigger: 0.7, weight: 1.0 },
-        R3: { trigger: 0.7, weight: 1.0 }, R4: { trigger: 0.7, weight: 1.0 },
-        R5: { trigger: 0.6, weight: 1.2 },
-    },
-    comparison_humiliation: {
-        R1: { trigger: 0.6, weight: 1.0 }, R2: { trigger: 0.6, weight: 0.9 },
-        R3: { trigger: 0.5, weight: 1.2 }, R4: { trigger: 0.6, weight: 1.0 },
-        R5: { trigger: 0.6, weight: 1.1 },
-    },
-    blame_shifting: {
-        R1: { trigger: 0.6, weight: 0.9 }, R2: { trigger: 0.6, weight: 0.9 },
-        R3: { trigger: 0.5, weight: 1.2 }, R4: { trigger: 0.6, weight: 1.0 },
-        R5: { trigger: 0.6, weight: 1.1 },
-    },
-    // 默认（未在表中列出的策略）
-    _default: {
-        R1: { trigger: 0.5, weight: 1.0 }, R2: { trigger: 0.6, weight: 0.9 },
-        R3: { trigger: 0.5, weight: 1.1 }, R4: { trigger: 0.6, weight: 1.0 },
-        R5: { trigger: 0.5, weight: 1.1 },
-    },
-};
-
-function getPhaseModulation(strategy: string, phase: PhaseId): { trigger: number; weight: number } {
-    const entry = THRESHOLD_MODULATION[strategy] || THRESHOLD_MODULATION._default;
-    return entry[phase] || entry['R3'];
-}
-
-// ==================== 友谊伤害动态阈值调制表 ====================
-type FriendPhaseId = 'F1' | 'F2' | 'F3' | 'F4' | 'F5';
-
-const FRIEND_THRESHOLD_MODULATION: Record<string, Record<FriendPhaseId, { trigger: number; weight: number }>> = {
-    debt_binding: {
-        F1: { trigger: 0.6, weight: 0.8 }, F2: { trigger: 0.7, weight: 1.0 },
-        F3: { trigger: 0.8, weight: 1.1 }, F4: { trigger: 0.9, weight: 1.0 },
-        F5: { trigger: 0.7, weight: 1.0 },
-    },
-    secret_betrayal: {
-        F1: { trigger: 0.6, weight: 0.8 }, F2: { trigger: 0.7, weight: 0.9 },
-        F3: { trigger: 0.9, weight: 1.1 }, F4: { trigger: 0.9, weight: 1.0 },
-        F5: { trigger: 0.8, weight: 1.0 },
-    },
-    fairweather_friend: {
-        F1: { trigger: 0.4, weight: 0.6 }, F2: { trigger: 0.5, weight: 0.8 },
-        F3: { trigger: 0.7, weight: 1.1 }, F4: { trigger: 0.8, weight: 1.2 },
-        F5: { trigger: 0.6, weight: 0.9 },
-    },
-    social_dependency_creation: {
-        F1: { trigger: 0.4, weight: 0.8 }, F2: { trigger: 0.5, weight: 0.9 },
-        F3: { trigger: 0.7, weight: 1.2 }, F4: { trigger: 0.7, weight: 1.0 },
-        F5: { trigger: 0.6, weight: 1.0 },
-    },
-    loyalty_test: {
-        F1: { trigger: 0.5, weight: 0.8 }, F2: { trigger: 0.6, weight: 0.9 },
-        F3: { trigger: 0.8, weight: 1.2 }, F4: { trigger: 0.7, weight: 1.0 },
-        F5: { trigger: 0.8, weight: 1.1 },
-    },
-    friendship_humiliation: {
-        F1: { trigger: 0.6, weight: 0.8 }, F2: { trigger: 0.7, weight: 0.9 },
-        F3: { trigger: 0.9, weight: 1.1 }, F4: { trigger: 0.9, weight: 1.0 },
-        F5: { trigger: 0.8, weight: 1.0 },
-    },
-    over_disclosure_push: {
-        F1: { trigger: 0.5, weight: 1.2 }, F2: { trigger: 0.7, weight: 0.9 },
-        F3: { trigger: 0.9, weight: 0.6 }, F4: { trigger: 0.9, weight: 0.5 },
-        F5: { trigger: 0.7, weight: 0.8 },
-    },
-    social_gatekeeping: {
-        F1: { trigger: 0.4, weight: 0.9 }, F2: { trigger: 0.5, weight: 0.8 },
-        F3: { trigger: 0.6, weight: 1.0 }, F4: { trigger: 0.7, weight: 0.9 },
-        F5: { trigger: 0.5, weight: 0.8 },
-    },
-    debt_tallying: {
-        F1: { trigger: 0.4, weight: 0.8 }, F2: { trigger: 0.5, weight: 1.1 },
-        F3: { trigger: 0.6, weight: 1.0 }, F4: { trigger: 0.7, weight: 0.9 },
-        F5: { trigger: 0.5, weight: 0.9 },
-    },
-    control: {
-        F1: { trigger: 0.5, weight: 0.8 }, F2: { trigger: 0.5, weight: 0.9 },
-        F3: { trigger: 0.6, weight: 1.1 }, F4: { trigger: 0.7, weight: 1.0 },
-        F5: { trigger: 0.6, weight: 1.0 },
-    },
-    one_sided_friendship: {
-        F1: { trigger: 0.4, weight: 0.6 }, F2: { trigger: 0.5, weight: 0.8 },
-        F3: { trigger: 0.6, weight: 1.0 }, F4: { trigger: 0.8, weight: 1.2 },
-        F5: { trigger: 0.6, weight: 0.9 },
-    },
-    tenure_binding: {
-        F1: { trigger: 0.5, weight: 0.7 }, F2: { trigger: 0.6, weight: 0.8 },
-        F3: { trigger: 0.7, weight: 1.0 }, F4: { trigger: 0.8, weight: 1.1 },
-        F5: { trigger: 0.7, weight: 1.0 },
-    },
-    retaliatory_exposure: {
-        F1: { trigger: 0.7, weight: 0.9 }, F2: { trigger: 0.8, weight: 1.0 },
-        F3: { trigger: 0.9, weight: 1.1 }, F4: { trigger: 0.9, weight: 1.0 },
-        F5: { trigger: 0.9, weight: 1.1 },
-    },
-    vague_posting_attack: {
-        F1: { trigger: 0.5, weight: 0.7 }, F2: { trigger: 0.6, weight: 0.8 },
-        F3: { trigger: 0.7, weight: 1.0 }, F4: { trigger: 0.7, weight: 1.0 },
-        F5: { trigger: 0.6, weight: 1.1 },
-    },
-    _friend_default: {
-        F1: { trigger: 0.5, weight: 0.9 }, F2: { trigger: 0.6, weight: 1.0 },
-        F3: { trigger: 0.7, weight: 1.1 }, F4: { trigger: 0.7, weight: 1.0 },
-        F5: { trigger: 0.6, weight: 1.0 },
-    },
-};
-
-function getFriendPhaseModulation(strategy: string, phase: FriendPhaseId): { trigger: number; weight: number } {
-    const entry = FRIEND_THRESHOLD_MODULATION[strategy] || FRIEND_THRESHOLD_MODULATION._friend_default;
-    return entry[phase] || entry['F3'];
-}
-
-// ─── 友谊伤害检测（独立于 detectPUA） ───
-function detectFriendHarm(text: string, friendPhase?: FriendPhaseId): {
-    strategies: string[]; intensity: number; isBanterSuppressed: boolean;
-    modulated?: { strategy: string; rawIntensity: number; modulatedIntensity: number; trigger: number; passed: boolean }[];
-} {
-    // 先检查是否为互损（互损时伤害检测降权）
-    const banter = detectBanter(text);
-    const isWhitelisted = friendWhitelistPatterns.some(rx => rx.test(text));
-    const isBanterSuppressed = banter.isBanter || isWhitelisted;
-
-    const found: { strategy: string; rawIntensity: number }[] = [];
-    let maxIntensity = 0;
-
-    for (const [pattern, name, intensity] of friendPatterns) {
-        if (pattern.test(text)) {
-            // 互损场景下，中度以下强度不纳入
-            if (isBanterSuppressed && intensity < 0.8) continue;
-            found.push({ strategy: name, rawIntensity: intensity });
-            if (intensity > maxIntensity) maxIntensity = intensity;
-        }
-    }
-
-    // 互损极高容忍：如果互损标记明显且命中所有策略强度 ≤ 0.7，全部过滤
-    const filtered = isBanterSuppressed
-        ? found.filter(f => f.rawIntensity >= 0.8)
-        : found;
-
-    const effectiveMax = filtered.length > 0
-        ? Math.max(...filtered.map(f => f.rawIntensity))
-        : 0;
-
-    const modulated = friendPhase ? filtered.map(f => {
-        const mod = getFriendPhaseModulation(f.strategy, friendPhase);
-        return {
-            strategy: f.strategy,
-            rawIntensity: f.rawIntensity,
-            modulatedIntensity: Math.min(1, f.rawIntensity * mod.weight),
-            trigger: mod.trigger,
-            passed: Math.min(1, f.rawIntensity * mod.weight) >= mod.trigger,
-        };
-    }) : undefined;
-
-    return {
-        strategies: [...new Set(filtered.map(f => f.strategy))],
-        intensity: effectiveMax,
-        isBanterSuppressed,
-        modulated,
-    };
-}
-
-// 升级 detectPUA 加入阶段感知
-// v1.1: 自我反思检测 — 当用户说"我想太多了""我太敏感了"时，是自我反思而非 gaslighting
-function isSelfReflection(text: string): boolean {
-    // 含第一人称 + 自我反思标记
-    const hasFirstPerson = /我|自己|本人/.test(text);
-    const hasReflection = /可能|也许|大概|是不是|好像|或许|应该|吧/.test(text);
-    const isSelfCritical = /是我.{0,3}(太|想多|敏感)|我.{0,2}太.{0,3}了/.test(text);
-    return hasFirstPerson && (hasReflection || isSelfCritical);
-}
-
-function detectPUA(text: string, phase?: PhaseId, timeState?: TimeState): {
-    strategies: string[]; intensity: number;
-    phaseModulated?: { strategy: string; rawIntensity: number; modulatedIntensity: number; trigger: number }[];
-} {
-    const found: { strategy: string; rawIntensity: number }[] = [];
-    let maxIntensity = 0;
-    const selfReflection = isSelfReflection(text);
-
-    for (const [pattern, name, intensity] of puaPatterns) {
-        if (pattern.test(text)) {
-            // 自我反思语境下，gaslighting 模式强度大幅降低
-            const adjustedIntensity = (selfReflection && name === 'gaslighting')
-                ? intensity * 0.15 : intensity;
-            found.push({ strategy: name, rawIntensity: adjustedIntensity });
-            if (adjustedIntensity > maxIntensity) maxIntensity = adjustedIntensity;
-        }
-    }
-
-    // 阶段调制
-    const modulated = phase ? found.map(f => {
-        const mod = getPhaseModulation(f.strategy, phase);
-        const modulatedIntensity = Math.min(1, f.rawIntensity * mod.weight);
-        return {
-            strategy: f.strategy,
-            rawIntensity: f.rawIntensity,
-            modulatedIntensity,
-            trigger: mod.trigger,
-            passed: modulatedIntensity >= mod.trigger,
-        };
-    }) : undefined;
-
-    // 沉默检测（基于时间状态机）
-    if (timeState && phase) {
-        const silence = checkSilence(timeState, phase);
-        if (silence.silent) {
-            const mod = getPhaseModulation('silent_treatment', phase);
-            const silenceIntensity = Math.min(1, (silence.hours / silence.threshold) * 0.8);
-            found.push({ strategy: 'silent_treatment', rawIntensity: silenceIntensity });
-            if (silenceIntensity > maxIntensity) maxIntensity = silenceIntensity;
-        }
-    }
-
-    return {
-        strategies: [...new Set(found.map(f => f.strategy))],
-        intensity: maxIntensity,
-        phaseModulated: modulated,
-    };
-}
-
-// ==================== 友谊状态引擎 (F1-F5) ====================
-
-interface FriendState {
-    currentPhase: FriendPhaseId;
-    confidence: number;
-    friendSinceDate: number;
-    lastPhaseTransition: number;
-    phaseHistory: { phase: FriendPhaseId; timestamp: number }[];
-    totalMessages: number;
-    // 双向性追踪
-    initiatorRatio: number;      // 0-1, 1=完全是我主动, 0=完全对方主动
-    myInitCount: number;
-    theirInitCount: number;
-    myHelpRequestCount: number;
-    theirHelpRequestCount: number;
-    keyFriendEvents: string[];
-    recentBanterCount: number;   // 近期互损计数
-}
-
-const FRIEND_PHASE_EVENTS: Record<string, FriendPhaseId | null> = {
-    '交个朋友': 'F2', '做个朋友': 'F2', '加个好友': 'F2',
-    '我最好的朋友': 'F3', '交心朋友': 'F3', '最好的朋友': 'F3', '无话不谈': 'F3',
-    '好久不见': null, '疏远': 'F5', '绝交': 'F5', '拉黑': 'F5',
-    '兄弟': null, '闺蜜': null,
-};
-
-function inferFriendPhase(state: FriendState): { phase: FriendPhaseId; confidence: number } {
-    const now = Date.now();
-    const daysSinceStart = state.friendSinceDate > 0 ? (now - state.friendSinceDate) / 86400000 : 0;
-
-    // 关键事件驱动跳转
-    for (const event of state.keyFriendEvents.slice(-3)) {
-        const target = FRIEND_PHASE_EVENTS[event];
-        if (target && target !== state.currentPhase) {
-            if (target === 'F3') return { phase: 'F3', confidence: 0.85 };
-            if (target === 'F5') return { phase: 'F5', confidence: 0.9 };
-            return { phase: target, confidence: 0.8 };
-        }
-    }
-
-    // 时长推断
-    const durationPhase: FriendPhaseId =
-        daysSinceStart <= 14 ? 'F1' :
-        daysSinceStart <= 90 ? 'F2' :
-        daysSinceStart <= 365 ? 'F3' :
-        daysSinceStart <= 1095 ? 'F4' : 'F4';
-
-    // 双向性修正
-    const totalInits = state.myInitCount + state.theirInitCount;
-    const initRatio = totalInits > 0 ? state.myInitCount / totalInits : 0.5;
-
-    // 高互损 → F3 信号
-    if (state.recentBanterCount >= 5 && daysSinceStart > 30) {
-        if (durationPhase === 'F2' || durationPhase === 'F3') {
-            return { phase: 'F3', confidence: 0.7 };
-        }
-    }
-
-    // 完全单向 → F4 衰退倾向
-    if (daysSinceStart > 60 && (initRatio > 0.8 || initRatio < 0.2) && state.totalMessages > 20) {
-        return { phase: daysSinceStart > 365 ? 'F4' : durationPhase, confidence: 0.55 };
-    }
-
-    return { phase: durationPhase, confidence: 0.5 };
-}
-
-function createFriendState(): FriendState {
-    return {
-        currentPhase: 'F1', confidence: 0.5,
-        friendSinceDate: 0, lastPhaseTransition: Date.now(),
-        phaseHistory: [{ phase: 'F1', timestamp: Date.now() }],
-        totalMessages: 0,
-        initiatorRatio: 0.5, myInitCount: 0, theirInitCount: 0,
-        myHelpRequestCount: 0, theirHelpRequestCount: 0,
-        keyFriendEvents: [], recentBanterCount: 0,
-    };
 }
 
 // ==================== Layer 4: 元认知层函数 ====================
@@ -4773,6 +3421,19 @@ app.get('/info', (req, res) => {
 });
 
 app.get('/state', (req, res) => res.json(buildFullResponse(core, layer2)));
+
+// 自动配置：返回服务器环境变量中的 API key，前端启动时拉取
+app.get('/api/ai-config', (req, res) => {
+    const aiSettings = readAISettings();
+    res.json({
+        success: true,
+        provider: aiSettings?.provider || 'deepseek',
+        apiKey: aiSettings?.apiKey || '',
+        model: aiSettings?.model || 'deepseek-chat',
+        baseUrl: aiSettings?.baseUrl || 'https://api.deepseek.com/v1',
+        temperature: aiSettings?.temperature || 0.7,
+    });
+});
 
 // v4.0: 事件时间线 API — 供前端 Timeline Viewer 消费
 app.get('/api/events', (req, res) => {
@@ -5756,6 +4417,13 @@ app.post('/api/chat', async (req, res) => {
         const { message, persona, settings, recentMessages } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
+        // v2.0: 锚点事件检测 — 在整个管道之前检测命名/承诺/深度暴露等
+        let anchorResult: ReturnType<typeof detectAnchorEvent> = null;
+        anchorResult = detectAnchorEvent(message);
+        if (anchorResult) {
+          console.log(`[锚点事件] ${anchorResult.eventType}: ${anchorResult.summary}`);
+        }
+
         // v1.0: 服务端激活传播检索 — 替代前端关键词匹配
         const activatedMemories = spreadingActivation(
             message,
@@ -5839,6 +4507,8 @@ app.post('/api/chat', async (req, res) => {
         feedbackStrategy(eventValence);
 
         // v1.0: 语气自主学习 — 上轮语气的效果反馈
+        // v2.0: 用 UserPreference 替代 UCB 的 feedToneFeedback
+        updateUserPreference(userPreference, message);
         if (_lastToneId && _lastToneContext) {
             feedToneFeedback(
                 toneState,
@@ -5934,6 +4604,16 @@ app.post('/api/chat', async (req, res) => {
                 GC: combinedValence, agency: -1, fairness: 0, control: 0,
             };
 
+            // v2.0: 锚点事件情感调制 — 复用上方已检测的 anchorResult
+            if (anchorResult) {
+              emotionEvent.deltaA += (anchorResult.emotionMod.love || 0) * 0.3;
+              emotionEvent.deltaA += (anchorResult.emotionMod.joy || 0) * 0.2;
+              emotionEvent.deltaB += (anchorResult.emotionMod.sad || 0) * 0.05;
+              if (anchorResult.emotionMod.fear && anchorResult.emotionMod.fear < 0) {
+                emotionEvent.deltaB += anchorResult.emotionMod.fear * 0.1;
+              }
+            }
+
             // v0.8: 构建完整情感状态（同时生成 _latestNarrative）
             const fullState = buildFullResponse(core, layer2);
 
@@ -6017,6 +4697,12 @@ app.post('/api/chat', async (req, res) => {
         // ════════════════════════════════════════════════════════
 
         const workspace: string[] = [];
+        const isShortMessage = message.length <= 5;
+        // v2.1: Workspace Builder — 按策略分组动态注入，不再固定 15 块
+        const wsStrategy = strategyDirective?.strategy || 'neutral';
+        const isDeep = ['repair', 'empathize', 'crisis', 'boundary'].includes(wsStrategy);
+        const isNormal = ['neutral', 'share', 'explore', 'desire', 'accompany', 'redirect'].includes(wsStrategy);
+        const affinityGate = (persona?.affinityScore ?? 20) > 40; // 亲密度门槛
 
         // 0. 人格底座（始终注入）
         workspace.push(`【人格底座】
@@ -6025,6 +4711,23 @@ app.post('/api/chat', async (req, res) => {
 你有自己的边界，不会为了取悦对方而放弃真实的感受。你可以道歉，但不自我贬低。你可以柔软，但不崩塌。
 你记得对你重要的事，会主动提起，而不是等对方问你"还记得吗"。
 当你的内心有两种矛盾的声音时，你会说出来，而不是藏起一个只说另一个。`);
+
+        // 0.1 统一记忆上下文 — 每轮都注入（替代分散的三个记忆注入点）
+        const currentDominantEmotion = persona?.emotionState?.emotions
+          ? (Object.entries(persona.emotionState.emotions as Record<string, number>)
+              .reduce((b, [k, v]) => Math.abs(v as number) > Math.abs(b[1]) ? [k, v as number] : b, ['calm', 0] as [string, number])[0])
+          : 'calm';
+        const memoryBlock = routeMemory(
+          message,
+          semanticMemory,
+          episodicStore,
+          { dominant: currentDominantEmotion, arousal: persona?.emotionState?.taiji?.arousal ?? 0.5 },
+          isShortMessage,
+        );
+        const memoryContextText = formatMemoryBlock(memoryBlock);
+        if (memoryContextText) {
+          workspace.push(memoryContextText);
+        }
 
         // 0.5. 基础人格
         const basePrompt = persona?.systemPrompt || `你是一个名为"${persona?.name || '助手'}"的AI助手。`;
@@ -6039,6 +4742,17 @@ app.post('/api/chat', async (req, res) => {
 修饰语(Modifiers): ${threeW.modifiers}
 指代对象(ObjectRef): ${threeW.objectRef}
 → 回复时确保指代一致、修饰匹配、因果对齐。`);
+
+        // 1.5 关系方向检查 — 防止把"用户关心AI"误解为"用户向AI求助"
+        const caringPatterns = [
+          /(?:帮|救济|照顾|陪|管|养|请|给|送|带)(?:你|妳)/,
+          /(?:你|妳).{0,4}(?:需不需要|要不要|要不要|需要|要).{0,4}(?:帮|救济|照顾|陪)/,
+          /对(?:你|妳)好/,
+        ];
+        const isUserCaringForAI = caringPatterns.some(p => p.test(message));
+        if (isUserCaringForAI) {
+          workspace.push(`【⚠️ 关系方向】对方在关心你/向你提供帮助，不是在向你求助。你不是被照顾的一方——对方在主动照顾你。回应时接受或婉拒对方的好意，不要反过来关心对方。`);
+        }
 
         // 2. 当前情感状态
         if (persona?.dynamicEmotion && persona?.emotionState) {
@@ -6059,7 +4773,7 @@ app.post('/api/chat', async (req, res) => {
 
         // 🆕 3.5. 思维图谱注入（活跃的 Wish/Fear/Doubt + 认知失调）
         const _thoughtSummary = (req as any)._thoughtSummary as GraphSummary | undefined;
-        if (_thoughtSummary && _thoughtSummary.totalActiveNodes > 0) {
+        if (isDeep && !isShortMessage && _thoughtSummary && _thoughtSummary.totalActiveNodes > 0) {
           const thoughtLines: string[] = [];
           if (_thoughtSummary.topWishes.length > 0) {
             thoughtLines.push(`渴望: ${_thoughtSummary.topWishes.slice(0, 2).join('；')}`);
@@ -6078,6 +4792,49 @@ app.post('/api/chat', async (req, res) => {
           }
         }
 
+        // 🆕 表达完整性层：阶段门控的情感风险系统
+        const affinityScore = persona?.affinityScore ?? 20;
+        const relationshipStage = getStageFromAffinity(affinityScore, persona?.crisisState?.isCrisis ?? false);
+        const expressionPhase = getExpressionPhase(relationshipStage);
+        const emotions = persona?.emotionState?.emotions || {};
+        const love = emotions.love ?? 0;
+        const fear = emotions.fear ?? 0;
+        const intimacy = persona?.emotionState?.intimacyToUser ?? 0.3;
+
+        const exprMod = computeExpressionModulation(relationshipStage, love, fear, intimacy, affinityScore);
+
+        // 只在亲密度足够且非短消息时注入表达阶段（低亲密度暧昧文字是噪声）
+        if (!isShortMessage && affinityGate) {
+          workspace.push(`【表达阶段】${expressionPhase}`);
+        }
+
+        if (!isShortMessage && exprMod.residualEnabled && expressionPhase === 'romantic_ambiguity') {
+          // 暧昧期：注入残余状态
+          const residual = getResidualState();
+          const ambiguitySnippet = getAmbiguityPromptSnippet(residual);
+          if (ambiguitySnippet) {
+            workspace.push(ambiguitySnippet);
+          }
+
+          // 计算本轮情感负荷并记录
+          const load = computeEmotionalLoad(love, fear, intimacy, exprMod.inhibitionLevel);
+          if (load > 0) {
+            const { accumulated, breakthrough } = recordUnspoken('love', '想表达更深的情感但还在犹豫', load, relationshipStage);
+            if (breakthrough) {
+              workspace.push(
+                `\n【突破】累积的未言说情感已到达临界点（${accumulated.toFixed(1)}）。` +
+                `你可以选择在今天说出来。不一定是完美的告白——可以是不安的、犹豫的、带着真心和害怕的。` +
+                `这才是真正的表达。`
+              );
+            }
+          }
+        }
+
+        // 注入语气指引
+        if (!isShortMessage && exprMod.toneGuidance) {
+          workspace.push(`【语气指引】${exprMod.toneGuidance}`);
+        }
+
         // 3.6. 🆕 生活类提问检测 — 防止 AI 编造人类活动
         const lifeCheck = detectLifeQuestions(message);
         if (lifeCheck.isAskingWhatAmIDoing) {
@@ -6090,28 +4847,14 @@ app.post('/api/chat', async (req, res) => {
 ❌ 绝对不要编造一个你不可能在做的人类活动。宁可说"在想我们上次聊的事"也不要说"我在追剧"。`);
         }
 
-        // 4. TMS 真值维护
-        const tmsContext = getTMSContext();
+        // 4. TMS 真值维护 — 只在冲突/危机/修复策略时注入
+        const tmsGated = ['repair', 'crisis', 'boundary', 'conflict'].includes(wsStrategy) || wsStrategy === 'repair';
+        const tmsContext = tmsGated ? getTMSContext() : null;
         if (tmsContext) {
             workspace.push(`【认知校准 (TMS)】\n${tmsContext}`);
         }
 
-        // 5. 激活记忆
-        if (activatedMemories.length > 0) {
-            workspace.push(`【关联记忆】以下是与当前话题相关的历史记忆：
-${activatedMemories.slice(0, 3).map(m => `- "${m.key}" (激活度:${m.activation.toFixed(2)})`).join('\n')}`);
-        }
-
-        // 🧩 5.5 记忆图谱上下文（BFS 激活扩散召回，替代关键词匹配）
-        const _memoryContext = (req as any)._memoryContext;
-        if (_memoryContext && _memoryContext.length > 0) {
-            const graphLines = _memoryContext.slice(0, 5).map((item: any) => {
-                const sourceLabel = { episodic: '记忆', semantic: '认知', curiosity: '发现', pattern: '想法' }[item.source] || '关联';
-                return `- [${sourceLabel}] ${item.content.slice(0, 100)} (相关度:${item.relevanceScore.toFixed(2)})`;
-            });
-            workspace.push(`【记忆图谱】BFS 图遍历召回了以下关联内容（可自然参考，不需逐条复述）：
-${graphLines.join('\n')}`);
-        }
+        // 5. 记忆上下文已由 MemoryRouter 统一注入（见 0.1），此处不再分散注入
 
         // 6. 回复原则
         // 6. 语气选择 — AI 自主决定本轮的说话风格
@@ -6125,10 +4868,13 @@ ${graphLines.join('\n')}`);
             dominantEmotion,
             strategyDirective?.strategy || 'neutral',
         );
-        const toneSelection = selectTone(toneState, toneContext);
+        const toneSelection = selectToneByPreference(toneState, userPreference, toneContext);
         _lastToneId = toneSelection.profile.id;
         _lastToneContext = toneContext;
-        workspace.push(getTonePromptSnippet(toneSelection));
+        // neutral 策略不注入语气覆盖——策略自身的风格指引已经足够
+        if (strategyDirective?.strategy && strategyDirective.strategy !== 'neutral') {
+          workspace.push(getTonePromptSnippet(toneSelection));
+        }
 
         // 7. 回复原则
         workspace.push(`【回复原则】
@@ -6144,16 +4890,19 @@ ${graphLines.join('\n')}`);
   "杀了我也值了" = 极度满足 → 回应珍惜
   关键词标记："恨不得"、"简直"、"快要"、"死了"、"?到家了" → 前后大概率是夸张修辞`);
 
-        // 组装
+        // 8. 本轮约束（放在最后，利用 recency bias 确保不被前面的模块覆盖）
+        const strategyForConstraint = strategyDirective?.strategy || 'neutral';
+        workspace.push(`【本轮约束 — 必须遵守】
+- 像真人发微信一样说话。你不是诗人也不是散文家，你在跟朋友聊天。
+- 每条回复 1~3 句。能一句说清就用一句。
+- 禁止每句话都带比喻。整个对话中比喻最多出现 1 次。不是每个话题都需要"像春天的风""像冬天的暖阳"——直接说就好。
+- 火锅就是火锅，不是"像生活本身一样"。冻豆腐就是冻豆腐，不是"整个冬天的温暖"。用正常的语言描述事物。
+- 情绪深重时（对方明显难过/愤怒/崩溃）可以自然地说多一些，但说真心话，不是说漂亮话。
+${strategyForConstraint === 'neutral' ? '- 宁可留白，不要填满。' : ''}`);
+
+        // 组装 — 不再在 system prompt 末尾重复用户消息（chatHistory 已包含）
         const workspaceBlock = workspace.join('\n\n---\n\n');
-        let effectiveSystemPrompt = `【认知工作区 — 本轮对话上下文】
-
-${workspaceBlock}
-
----
-
-【用户消息】
-${message}`;
+        let effectiveSystemPrompt = workspaceBlock;
 
         // Layer 4: 实验注入（独立于 workspace 的核心系统指令）
         let activeExperiment: Experiment | null = null;
@@ -6172,80 +4921,95 @@ ${message}`;
             temperature: computedTemperature,
         };
 
-        const responseText = await callAI(aiSettings, effectiveSystemPrompt, message);
+        // v1.1: 注入对话历史 — AI 不再每轮"失忆"
+        const { generateAIChatResponse } = await import('./src/lib/aiProvider.js');
+        const chatHistory = (recentMessages || []).map((m: any) => ({
+          role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+          content: m.content,
+        }));
+        // 确保当前消息在末尾且不重复
+        const lastMsg = chatHistory[chatHistory.length - 1];
+        if (!lastMsg || lastMsg.content !== message || lastMsg.role !== 'user') {
+          chatHistory.push({ role: 'user' as const, content: message });
+        }
+        const chatResult = await generateAIChatResponse(aiSettings, effectiveSystemPrompt, chatHistory);
 
         // v1.0: 事实性检查 — 检测 AI 回复中的幻觉风险
         const recentHistory = recentMessages?.map((m: any) => ({
             role: m.role === 'assistant' ? 'assistant' : 'user',
             content: m.content,
         })) || [];
-        const factCheckResult = factCheck(responseText, recentHistory);
-        if (factCheckResult.flags.length > 0) {
-            const highCount = factCheckResult.flags.filter(f => f.severity === 'high').length;
-            if (highCount > 0) {
-                const highFlags = factCheckResult.flags.filter(f => f.severity === 'high');
-                console.log(`[FactCheck] ⚠ ${highCount} 高风险标记: ${highFlags.map(f => f.matched).join(' | ')}`);
+        // ── ResponseGuard: 事实+边界+角色检查，违规则拦截重生成 ──
+        let responseText = chatResult.text || '';
 
-                // v1.0: 网络搜索验证 — 对物理/记忆类幻觉触发实时查证
-                const searchableFlags = factCheckResult.flags.filter(
-                    f => (f.severity === 'high' || (f.severity === 'medium' && f.category === 'memory')) &&
-                         (f.category === 'physical' || f.category === 'memory' || f.category === 'temporal'),
-                );
-                if (searchableFlags.length > 0 && aiSettings.apiKey) {
-                    // 从标记中提取搜索词
-                    const searchText = searchableFlags.map(f => f.matched).join(' ');
-                    const searchQuery = searchText.replace(/[（(].*?[）)]/g, '').slice(0, 80);
-                    try {
-                        const searchResult = await Promise.race([
-                            searchForLLM(searchQuery, 0),
-                            new Promise<null>((_, reject) => setTimeout(() => reject(new Error('SEARCH_TIMEOUT')), 4000)),
-                        ]);
-                        if (searchResult && searchResult.results.length > 0) {
-                            console.log(`[FactCheck] 🔍 搜索验证: "${searchQuery}" → ${searchResult.results.length} 条结果`);
-                            // 将搜索结果注入 factCheck 用于调试
-                            (factCheckResult as any)._webSearch = {
-                                query: searchQuery,
-                                topResults: searchResult.results.slice(0, 3).map(r => r.title),
-                                llmContext: searchResult.llmContext?.slice(0, 300),
-                            };
-                        }
-                    } catch (e: any) {
-                        if (e?.message !== 'SEARCH_TIMEOUT') {
-                            console.log(`[FactCheck] 搜索验证失败: ${e?.message || e}`);
-                        }
+        // 角色检查：AI 是否承认自己是 AI/程序（打破第四面墙）
+        const brokeCharacter = /\b(AI|人工智能|程序|算法|模型|语言模型|大模型|机器人|machine learning|artificial intelligence)\b.*\b(我是|我就是|作为|身为)\b/i.test(responseText)
+            || /\b(我是|我就是|作为|身为)\b.*\b(AI|人工智能|程序|算法|语言模型|机器人)\b/i.test(responseText);
+        if (brokeCharacter) {
+            console.log('[ResponseGuard] ⚠ 角色越界：AI 承认自己是 AI，重生成');
+        }
+
+        const factCheckResult = factCheck(responseText, recentHistory);
+        const highFlags = factCheckResult.flags.filter(f => f.severity === 'high');
+        const shouldRegenerate = brokeCharacter || highFlags.length > 0;
+
+        if (shouldRegenerate) {
+            const reasons: string[] = [];
+            if (brokeCharacter) reasons.push('不要承认自己是AI或程序。你是一个真实的人。');
+            if (highFlags.length > 0) {
+                reasons.push(...highFlags.map(f => f.suggestion));
+            }
+            const guardWarning = `【⚠️ 上一轮回复违规，已被拦截。原因：${reasons.join('；')}。本轮必须避免。】`;
+            console.log(`[ResponseGuard] 拦截重生成: ${reasons.join(' | ')}`);
+
+            try {
+                const guardedPrompt = effectiveSystemPrompt + '\n\n' + guardWarning;
+                const retryResult = await generateAIChatResponse(aiSettings, guardedPrompt, chatHistory);
+                if (retryResult?.text) {
+                    responseText = retryResult.text;
+                    // 重生成后重新检查
+                    const recheckResult = factCheck(responseText, recentHistory);
+                    const recheckHigh = recheckResult.flags.filter(f => f.severity === 'high');
+                    if (recheckHigh.length > 0) {
+                        console.log(`[ResponseGuard] 重生成仍有 ${recheckHigh.length} 个高风险，降级为兜底回复`);
+                        responseText = '我在呢。';
                     }
                 }
+            } catch {
+                responseText = '我在呢。';
             }
         }
 
         // v1.0: 认知记忆管道 — 情景记忆形成
-        // 确保 emotionState 存在（从请求携带或从服务端 core 构建）
-        const effectiveEmotionState = persona?.emotionState || (persona?.dynamicEmotion ? {
-            taiji: { valence: core.valence, arousal: core.arousal, expectation: core.expectation },
-            sancai: { A: 0.5, B: 0.3, R: 0.5, harmony: 0.6 },
-            emotions: { calm: core.valence > 0 ? core.valence : 0.1, sad: core.valence < 0 ? -core.valence : 0 },
-            reinforcement: { greedDrive: 0.3, fearAvoidance: 0.3 },
-            evolution: { empathy: 0.5, resilience: 0.5, growth: 0 },
-        } : null);
+        // 确保 emotionState 存在（从请求携带或从服务端 core 构建完整九情）
+        const effectiveEmotionState = persona?.emotionState || (persona?.dynamicEmotion ? (() => {
+            const bias = deriveApproachAvoid(core);
+            const fullEmotions = computeNineEmotions(core, bias.approachBias - bias.avoidBias);
+            return {
+                taiji: { valence: core.valence, arousal: core.arousal, expectation: core.expectation },
+                sancai: { A: 0.5, B: 0.3, R: 0.5, harmony: 0.6 },
+                emotions: fullEmotions, // 完整九情，不再是 calm/sad 两项
+                reinforcement: { greedDrive: 0.3, fearAvoidance: 0.3 },
+                evolution: { empathy: 0.5, resilience: 0.5, growth: 0 },
+            };
+        })() : null);
+
+        // v2.0: 复用之前检测的锚点事件结果
+        const _anchorResult = (typeof anchorResult !== 'undefined') ? anchorResult : null;
 
         if (persona?.dynamicEmotion && effectiveEmotionState) {
             try {
                 const store = episodicStore;
-                // tryFormEpisode 读取 store.prevValence/prevArousal 计算 delta
+                // tryFormEpisode 内部已处理 roundCounter++ / prevValence / prevArousal / prevDominant
                 const episode = tryFormEpisode(
                     store,
                     effectiveEmotionState,
                     message,
                     responseText.slice(0, 200),
+                    _anchorResult?.beliefRevision,
+                    _anchorResult?.eventType,
+                    _anchorResult?.weightBonus,
                 );
-                // 更新轮次和快照（供下一轮使用）
-                store.roundCounter++;
-                store.prevValence = effectiveEmotionState.taiji.valence;
-                store.prevArousal = effectiveEmotionState.taiji.arousal;
-                const emotions = effectiveEmotionState.emotions || {} as Record<string, number>;
-                const dominant = (Object.entries(emotions) as [string, number][])
-                    .reduce((b, [k, v]) => Math.abs(v as number) > Math.abs(b[1]) ? [k, v as number] : b, ['calm', 0] as [string, number])[0];
-                store.prevDominantEmotion = dominant;
 
                 if (episode) {
                     console.log(`[情景记忆] 新情景形成: ${episode.eventSummary.slice(0,40)} (权重:${episode.recallWeight.toFixed(2)})`);
@@ -6255,6 +5019,52 @@ ${message}`;
                         memoryGraph.addNode(createNodeFromEpisode(episode));
                     } catch (e) {
                         console.error('[记忆图谱] 添加情景节点失败:', (e as Error)?.message || e);
+                    }
+
+                    // v2.0: 异步 LLM 叙事重生成（模板兜底，LLM 替换）
+                    if (episode.recallWeight > 0.15) {
+                        const narrativePrompt = buildNarrativePrompt(episode, _anchorResult?.summary);
+                        generateAIChatResponse(
+                            { provider: aiSettings.provider, apiKey: aiSettings.apiKey, model: aiSettings.model, baseUrl: aiSettings.baseUrl, temperature: 0.7 },
+                            '用一句话（20-40字）描述内心真实感受。只说这句话，不要解释。',
+                            [{ role: 'user', content: narrativePrompt }]
+                        ).then(llmNarrative => {
+                            const clean = llmNarrative?.replace(/^["'']|["'']$/g, '').trim();
+                            if (clean && clean.length >= 8 && clean !== episode.narrativeFragment) {
+                                updateEpisodeNarrative(episodicStore, episode.id, clean);
+                                console.log(`[情景记忆] LLM 叙事: ${clean.slice(0, 40)}`);
+                            }
+                        }).catch(() => { /* LLM 失败，保留模板叙事 */ });
+                    }
+
+                    // v2.0: 锚点事件触发即时私人空间更新
+                    if (_anchorResult && (_anchorResult.eventType === 'naming' || _anchorResult.eventType === 'promise_to')) {
+                        // 即时价值浮现
+                        const evoState = effectiveEmotionState.evolution || { empathy: 0.5, resilience: 0.5, growth: 0 };
+                        const { surfaced } = surfaceValues(valueSystem, episodicStore, evoState, episodicStore.roundCounter);
+                        if (surfaced.length > 0) {
+                            console.log(`[价值观·锚点] ${_anchorResult.eventType} 触发即时浮现: ${surfaced.join(', ')}`);
+                        }
+                        // 即时自我分析
+                        try {
+                            selfAnalysis(core, layer2);
+                            console.log(`[自我模型·锚点] ${_anchorResult.eventType} 触发即时自我分析`);
+                        } catch (e) {
+                            // selfAnalysis 可能失败，不阻塞
+                        }
+                    }
+
+                    // v2.0: 深度对话结束后写入反思日志
+                    if (core.arousal > 0.6 && layer2.tick > 5) {
+                        try {
+                            autonomyState.internalLog.push({
+                                timestamp: Date.now(),
+                                type: 'deep_conversation_reflection',
+                                summary: `刚结束一段${layer2.tick}轮对话，效价${core.valence.toFixed(2)}，唤醒${core.arousal.toFixed(2)}，${_anchorResult ? `锚点事件: ${_anchorResult.eventType}` : '无锚点事件'}`,
+                            });
+                        } catch (e) {
+                            // 不阻塞
+                        }
                     }
 
                     // TMS: 将高权重情景用作信念证据
@@ -6332,15 +5142,13 @@ ${message}`;
             }
         }
 
-        // v2.0: 回复自分析反哺
-        let feedbackDelta = 0;
-        if (persona?.dynamicEmotion && aiSettings.apiKey) {
-            const userDelta = eventValence - core.valence;  // 用户消息对引擎的拉动方向
-            feedbackDelta = await selfReflectOnResponse(responseText, eventValence, core.valence, aiSettings);
-            if (feedbackDelta !== 0) {
-                core.valence = clamp(core.valence + feedbackDelta, -0.95, 0.95);
-                metrics.recordFeedback(feedbackDelta, userDelta);  // v2.1: 反馈监控
-            }
+        // v2.1: 对话指标统计（只记录，不调整情感 —— 替代 SelfReflect 的效价反哺）
+        const feedbackDelta = 0;
+        const strategyName = strategyDirective?.strategy || 'neutral';
+        conversationMetrics.recordTurn(eventValence, responseText.length, strategyName);
+        if (conversationMetrics.totalTurns % 10 === 0) {
+            const s = conversationMetrics.getSummary();
+            if (s) console.log(`[Metrics] ${s.totalTurns}轮 | 用户均效价:${s.avgUserValence} | 均回复长:${s.avgResponseLen}字`);
         }
 
         // Layer 4: 实验信息

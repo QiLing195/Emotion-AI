@@ -48,7 +48,9 @@ export type EventName =
   | 'StateSaved'
   | 'StateLoaded'
   // 🧠 思维图谱
-  | 'ThoughtGenerated';
+  | 'ThoughtGenerated'
+  // 💕 亲密加速器
+  | 'IntimacyAccelerated';
 
 // ── 事件元数据（协议定义） ──
 export interface EventMeta {
@@ -84,6 +86,7 @@ const EVENT_META: Record<EventName, EventMeta> = {
   StateSaved:                { level: 'system',    source: 'system',    label: '状态保存' },
   StateLoaded:               { level: 'system',    source: 'system',    label: '状态加载' },
   ThoughtGenerated:          { level: 'cognitive', source: 'cognition', label: '思维生成' },
+  IntimacyAccelerated:       { level: 'cognitive', source: 'emotion',   label: '亲密加速' },
 };
 
 // ── 升级后的事件结构 ──
@@ -116,7 +119,7 @@ function genId(): string {
 }
 
 function genCorrelationId(): string {
-  return `corr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  return `corr_${crypto.randomUUID()}`;
 }
 
 type EventHandler = (event: BusEvent) => void;

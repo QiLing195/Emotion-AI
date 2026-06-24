@@ -4,7 +4,7 @@
 // 优先级：🟡 中 — 策略选择影响对话体验
 
 import { describe, it, expect } from 'vitest';
-import { selectStrategy, getStrategyDescription, resolveExploreTopics } from '../dialogueStrategy';
+import { selectStrategy, resolveExploreTopics } from '../dialogueStrategy';
 import type { StrategyContext } from '../dialogueStrategy';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../emotionEngine';
 import type { ConflictState } from '../conflictManager';
@@ -633,20 +633,5 @@ describe('selectStrategy — Sprint C patternCandidates 触发探索', () => {
     expect(result.strategy).toBe('share');
     expect(result.params.shareableDiscoveries).toBeDefined();
     expect(result.params.shareableDiscoveries!.length).toBeGreaterThan(0);
-  });
-});
-
-// ════════════════════════════════════════════════════════════
-// 6. getStrategyDescription
-// ════════════════════════════════════════════════════════════
-
-describe('getStrategyDescription', () => {
-  it('所有策略类型都应有描述', () => {
-    const types = ['empathize', 'redirect', 'explore', 'accompany', 'share', 'repair', 'boundary', 'desire', 'neutral'] as const;
-    for (const t of types) {
-      const desc = getStrategyDescription(t);
-      expect(desc).toBeTruthy();
-      expect(desc.length).toBeGreaterThan(5);
-    }
   });
 });

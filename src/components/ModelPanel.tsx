@@ -31,6 +31,46 @@ const STRATEGY_COLORS: Record<string, string> = {
   neutral: '#95a5a6',
 };
 
+// ── 图标：Activity（示波器） ──
+function ActivityIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16l4-8 4 4 4-6" />
+    </svg>
+  );
+}
+
+// ── 预设切换器 ──
+function PresetSwitcher() {
+  const presets = useAIBrainStore(s => s.presets);
+  const activePresetId = useAIBrainStore(s => s.activePresetId);
+  const setActivePresetId = useAIBrainStore(s => s.setActivePresetId);
+
+  if (!presets || presets.length <= 1) return null;
+
+  return (
+    <div className="px-4 py-2 border-b divider-soft">
+      <div className="text-xs text-moon-400 uppercase tracking-wider mb-1.5">人格预设</div>
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map(p => (
+          <button
+            key={p.id}
+            onClick={() => setActivePresetId(p.id)}
+            className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
+              activePresetId === p.id
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── 迷你柱状图 ──
 function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
@@ -80,7 +120,12 @@ function Row({ label, value, unit, color }: { label: string; value: string; unit
 // 主组件
 // ════════════════════════════════════════════════════
 
-export default function ModelPanel() {
+export default function ModelPanel({ showSettings, showOscilloscope, onSettingsClick, onOscilloscopeClick }: {
+  showSettings?: boolean;
+  showOscilloscope?: boolean;
+  onSettingsClick?: () => void;
+  onOscilloscopeClick?: () => void;
+}) {
   // 500ms 轮询 store 快照，Zustand 的 getState 始终返回最新值
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -119,12 +164,44 @@ export default function ModelPanel() {
     <div className="w-[360px] flex-shrink-0 glass-strong overflow-y-auto flex flex-col shadow-float z-10">
       {/* 标题 */}
       <div className="px-4 py-3 border-b divider-soft">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-moon-800">三模型观测台</span>
-          <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse-soft" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-moon-800">三模型观测台</span>
+            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse-soft" />
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onSettingsClick}
+              className={`p-1.5 rounded-lg transition-all ${
+                showSettings
+                  ? 'bg-indigo-100 text-indigo-600'
+                  : 'text-moon-400 hover:text-moon-600 hover:bg-slate-100'
+              }`}
+              title="设置"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+            <button
+              onClick={onOscilloscopeClick}
+              className={`p-1.5 rounded-lg transition-all ${
+                showOscilloscope
+                  ? 'bg-rose-100 text-rose-600'
+                  : 'text-moon-400 hover:text-moon-600 hover:bg-slate-100'
+              }`}
+              title="认知示波器"
+            >
+              <ActivityIcon />
+            </button>
+          </div>
         </div>
         <div className="text-xs text-moon-400 mt-0.5">Emotion · Cognition · Strategy</div>
       </div>
+
+      {/* 人格预设切换 */}
+      <PresetSwitcher />
 
       {/* 情感模型 */}
       <CollapsibleSection title="情感模型 Emotion" icon="❤️">

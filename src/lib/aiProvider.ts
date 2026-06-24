@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
+import { sleep } from './utils';
 
 export interface AISettings {
   provider: 'gemini' | 'openai' | 'custom';
@@ -46,7 +47,7 @@ async function retryAsync<T>(
       // Calculate exponential backoff with jitter
       const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
       console.warn(`AI API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(delay)}ms:`, error.message);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await sleep(delay);
     }
   }
 
@@ -103,6 +104,7 @@ export async function generateAIResponse(
         contents: userPrompt,
         config: {
           systemInstruction: systemPrompt,
+          maxOutputTokens: 600,
           responseMimeType: isJson ? "application/json" : "text/plain",
           temperature,
           tools: settings.enableWebSearch ? [{ googleSearch: {} }] : undefined,
@@ -238,6 +240,7 @@ export async function generateAIChatResponse(
         contents,
         config: {
           systemInstruction: systemPrompt,
+          maxOutputTokens: 600,
           responseMimeType: isJson ? "application/json" : "text/plain",
           temperature,
           tools: finalTools.length > 0 ? finalTools : undefined,
@@ -274,6 +277,7 @@ export async function generateAIChatResponse(
           { role: 'system', content: systemPrompt },
           ...messages
         ],
+        max_tokens: 600,
         response_format: isJson ? { type: "json_object" } : undefined,
         temperature,
       });

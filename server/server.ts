@@ -12,7 +12,23 @@ import { WeChatOfficialAccountChannel } from './services/channels/wechat.js';
 import { MockIoTProvider } from './services/providers/mockIoT.js';
 import { mcpService } from './services/mcpService.js';
 import { firebaseService } from './services/firebase.js';
-import { IAIEngine, IMessageChannel, IIoTProvider } from './services/interfaces.js';
+import type { Application } from 'express';
+import type { EmotionState } from '../src/lib/emotionEngine.js';
+
+// ponytail: inlined from deleted server/services/interfaces.ts
+import type { EmotionEvent } from '../src/lib/emotionEngine.js';
+
+interface IMessageChannel {
+  id: string;
+  name: string;
+  registerRoutes(app: Application, aiEngine: DefaultAIEngine): void;
+  setConfig(config: any): void;
+}
+interface IIoTProvider {
+  id: string;
+  name: string;
+  toggleDevice(deviceId: string, status: 'on' | 'off'): Promise<{ success: boolean; message?: string }>;
+}
 
 // Phase 2: Strategy layer injection
 import { aiCoordinator } from './services/aiCoordinator.js';
@@ -85,7 +101,7 @@ const serverEventLog: ServerEvent[] = [];
 export class AIGirlfriendServer {
   private app: express.Application;
   private server: http.Server;
-  private aiEngine: IAIEngine;
+  private aiEngine: DefaultAIEngine;
   private messageChannels: IMessageChannel[] = [];
   private iotProviders: IIoTProvider[] = [];
 
@@ -167,7 +183,7 @@ export class AIGirlfriendServer {
         }
 
         // 开始认知链
-        const corrId = `corr_srv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const corrId = `corr_srv_${crypto.randomUUID()}`;
         const msgEventId = serverEmit('UserMessageReceived', { messageLength: message.length }, { correlationId: corrId, source: 'user' });
 
         // ── Phase 2: 策略层装填 —— 调用 aiCoordinator 获取情绪加权模式 ──

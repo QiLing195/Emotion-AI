@@ -567,19 +567,3 @@ export function resolveExploreTopics(ctx: StrategyContext): string[] {
 
   return topics.slice(0, 5);
 }
-
-export function getStrategyDescription(strategy: StrategyType): string {
-  const descriptions: Record<StrategyType, string> = {
-    empathize: '共情跟随 — 用户情绪强烈，优先情感回应',
-    redirect: '转移注意 — 连续负面需自然转向',
-    explore: '好奇探索 — 检测到新兴趣信号',
-    accompany: '沉默陪伴 — 用户无力感，简洁回应',
-    share: '主动分享 — 情绪平稳可分享发现',
-    repair: '冲突修复 — 检测到摩擦需修复关系',
-    boundary: '设立边界 — 滥用检测触发，保护自我尊严',
-    desire: '内在驱动 — 表达内心真实的渴望和冲动',
-    neutral: '中性回应 — 默认自然对话',
-    crisis: '危机干预 — 自伤/自杀检测，紧急模式',
-  };
-  return descriptions[strategy];
-}

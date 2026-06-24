@@ -522,7 +522,7 @@ function fmtDelta(cur: number, base: number): string {
 // ── 从 anomaly 推导基线 CognitiveObservatory ──
 // EWMA 代表最近趋势，需要近似一个 CognitiveObservatory 结构
 export function inferBaselineObservatory(current: CognitiveObservatory, flags: AnomalyFlag[]): CognitiveObservatory {
-  const base = JSON.parse(JSON.stringify(current)) as CognitiveObservatory;
+  const base = structuredClone(current);
 
   // 用 EWMA 值回填各项指标
   for (const flag of flags) {

@@ -2,8 +2,12 @@ import { EmotionState, INITIAL_EMOTION_STATE, EmotionEvent } from '../../src/lib
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { generateAIResponse, generateAIChatResponse, AISettings } from '../../src/lib/aiProvider.js';
 import { extractJSON } from '../utils/index.js';
-import { IAIEngine, ChatResponse } from './interfaces.js';
 import { firebaseService } from './firebase.js';
+
+export interface ChatResponse {
+  text: string;
+  emotionEvent?: EmotionEvent;
+}
 
 export interface ClientContext {
   clientSystemPrompt?: string;
@@ -12,7 +16,7 @@ export interface ClientContext {
   recentMessages?: { role: string; content: string; imageUrl?: string }[];
 }
 
-export class DefaultAIEngine implements IAIEngine {
+export class DefaultAIEngine {
   private config: any = null;
   emotionState: EmotionState = INITIAL_EMOTION_STATE;
 

@@ -38,7 +38,7 @@ function Combobox<T = string>({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const comboboxId = id || `combobox-${Math.random().toString(36).substring(2, 9)}`;
+  const comboboxId = id || `combobox-${crypto.randomUUID()}`;
 
   // Find the selected option
   const selectedOption = options.find(opt => opt.value === value);

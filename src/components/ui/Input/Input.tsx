@@ -31,7 +31,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const inputId = id || `input-${Math.random().toString(36).substring(2, 9)}`;
+    const inputId = id || `input-${crypto.randomUUID()}`;
 
     const variantClasses = {
       default:

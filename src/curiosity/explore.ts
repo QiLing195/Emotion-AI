@@ -127,7 +127,7 @@ async function runExploration(): Promise<void> {
                 const sameTopicCount = discoveries.filter(ex => ex.topic === d.topic).length;
                 const noveltyBonus = sameTopicCount >= 3 ? baseBonus * 0.5 : baseBonus;
                 const discovery: Discovery = {
-                    id: `disc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                    id: `disc_${crypto.randomUUID()}`,
                     ...d,
                     quality: Math.min(1, d.quality + noveltyBonus),
                     timestamp: Date.now(),

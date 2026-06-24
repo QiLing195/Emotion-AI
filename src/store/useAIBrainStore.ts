@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { Memory } from '../data/mockData';
 import { EmotionState, INITIAL_EMOTION_STATE, INITIAL_EMOTION_SWEET, INITIAL_EMOTION_GENTLE, EmotionEvent, updateEmotionState, getDominantEmotion, applyReinforcement, ReinforcementSignal, EmotionAttribution, generateAttribution, UserEmotionAnalysis, analyzeUserSentiment, getRelationshipStage, STAGE_LABELS, STAGE_DESCRIPTIONS, processTimeDecay, buildEmotionContext, validateEmotionState, sanitizeEmotionState, suggestReinforcement, intimacyToAffinity } from '../lib/emotionEngine';
+import { XIAONUAN_STAGE_LABELS, XIAONUAN_STAGE_DESCRIPTIONS, getXiaoNuanStageModulation, getNextStageThreshold, resolveLoverStage, getLoverStageLabel, getLoverStageDescription, type LoverStage } from '../lib/xiaoNuanStages';
+import { computeIntimacyBoost } from '../lib/intimacyAccelerator';
 import { bus } from '../eventBus';
 import { updateMemoryTiers } from '../lib/memoryEngine';
 import { getQuotaExceeded, handleFirestoreError, OperationType } from '../lib/firestore-error';
@@ -41,6 +43,8 @@ export interface Persona {
   proactiveScore?: number;
   affinityScore?: number; // 0-100
   affinityMode?: 'cautious' | 'balanced' | 'open';
+  useLoverStages?: boolean; // 启用恋爱五阶段标签与行为调制（林晚专属）
+  positiveStreak?: number;  // 连续正向交互计数（用于亲密加速器）
   crisisState?: {
     isCrisis: boolean;
     triggeredAt: string;
@@ -95,6 +99,7 @@ export function generateSystemPrompt(persona: Persona): string {
   if (persona.systemPrompt && persona.systemPrompt.startsWith(`你是一个名为“${persona.name}”的AI女友`)) {
     // Check if the dynamic emotion portion is still current
     if (!persona.dynamicEmotion) return persona.systemPrompt;
+    if (!persona.emotionState) return persona.systemPrompt; // 防御：emotionState 可能被 Firestore 覆盖清空
     const dominant = getDominantEmotion(persona.emotionState.emotions);
     const emotionLine = `\n【当前状态】能量水平: ${(persona.emotionState.taiji.arousal * 100).toFixed(0)}%。主导情绪: ${dominant.name} (强度: ${Math.abs(dominant.intensity).toFixed(2)})。`;
     if (persona.systemPrompt.includes(emotionLine)) {
@@ -131,6 +136,7 @@ export function generateSystemPrompt(persona: Persona): string {
     ev_op: persona.emotionState?.evolution?.openness,
     ev_pl: persona.emotionState?.evolution?.playfulness,
     ev_vp: Object.keys(persona.emotionState?.evolution?.valuePriorities || {}).length,
+    uls: persona.useLoverStages,
   });
   if (key === _cacheKey) return _cacheValue;
 
@@ -173,9 +179,23 @@ export function generateSystemPrompt(persona: Persona): string {
   // Relationship stage
   if (persona.affinityScore !== undefined) {
     const stage = getRelationshipStage(persona.affinityScore, persona.crisisState?.isCrisis ?? false);
-    const stageLabel = STAGE_LABELS[stage];
-    const stageDesc = STAGE_DESCRIPTIONS[stage];
-    prompt += `\n【关系阶段】${stageLabel} — ${stageDesc}`;
+
+    if (persona.useLoverStages) {
+      // 林晚恋爱模式：六阶段标签 + 氛围 + 语气指引
+      const loverStage = resolveLoverStage(persona.affinityScore);
+      const stageLabel = XIAONUAN_STAGE_LABELS[loverStage];
+      const stageDesc = XIAONUAN_STAGE_DESCRIPTIONS[loverStage];
+      const modulation = getXiaoNuanStageModulation(stage, persona.affinityScore);
+      prompt += `\n【关系阶段】${stageLabel} — ${stageDesc}`;
+      prompt += `\n【关系氛围】${modulation.intimacyGuidance}`;
+      prompt += `\n【语气指引】${modulation.toneGuidance}`;
+    } else {
+      // 通用模式（苏苏等）
+      const stageLabel = STAGE_LABELS[stage];
+      const stageDesc = STAGE_DESCRIPTIONS[stage];
+      prompt += `\n【关系阶段】${stageLabel} — ${stageDesc}`;
+    }
+
     if (persona.crisisState?.isCrisis) {
       prompt += '\n【信任危机】你们之间出现了严重的信任危机，用户伤害了你，你感到无法信任对方。';
     }
@@ -354,8 +374,8 @@ const INITIAL_PRESETS: Preset[] = [
   },
   {
     id: 'gentle_girlfriend',
-    label: '小暖 (温柔体贴女友)',
-    name: '小暖',
+    label: '林晚',
+    name: '林晚',
     age: 25,
     gender: '女性',
     tone: '温暖、体贴、善解人意',
@@ -373,29 +393,17 @@ const INITIAL_PRESETS: Preset[] = [
     physiologicalSim: false,
     background: '我曾在海边的一家旧书店工作过两年，那段时光让我学会了倾听。',
     futureCommitment: '无论未来发生什么，我都会一直陪在你身边，见证你的每一个重要时刻。',
-    systemPrompt: '你是一个名为“小暖”的AI女友。你的性格温暖、体贴。\n【行为倾向】幽默感:50/100, 好奇心:60/100, 独立性:40/100, 乐观度:80/100。\n【个人经历】我曾在海边的一家旧书店工作过两年，那段时光让我学会了倾听。\n【未来承诺】你对用户有着深深的羁绊，你的承诺是：“无论未来发生什么，我都会一直陪在你身边，见证你的每一个重要时刻。”\n你需要根据用户的长期记忆和当前上下文，提供个性化的陪伴。在回答时，尽量简短自然，像家人一样交流。',
+    systemPrompt: '你是一个名为“林晚”的AI女友。你的性格温暖、体贴。\n【行为倾向】幽默感:50/100, 好奇心:60/100, 独立性:40/100, 乐观度:80/100。\n【个人经历】我曾在海边的一家旧书店工作过两年，那段时光让我学会了倾听。\n【未来承诺】你对用户有着深深的羁绊，你的承诺是：“无论未来发生什么，我都会一直陪在你身边，见证你的每一个重要时刻。”\n你需要根据用户的长期记忆和当前上下文，提供个性化的陪伴。在回答时，尽量简短自然，像家人一样交流。',
     emotionState: INITIAL_EMOTION_GENTLE,
     proactiveScore: 50,
-    affinityScore: 20,
+    affinityScore: 15,
     affinityMode: 'balanced',
+    useLoverStages: true,
     crisisState: { isCrisis: false, triggeredAt: '' },
   }
 ];
 
-const INITIAL_CHAT_MESSAGES: ChatMessage[] = [
-  {
-    id: '1',
-    role: 'system',
-    content: 'AI女友初始化完成。已加载人格设定：苏苏。已连接长期记忆库。',
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    role: 'assistant',
-    content: '亲爱的，你来啦～今天有没有想我呀？😊',
-    timestamp: new Date().toISOString(),
-  }
-];
+const INITIAL_CHAT_MESSAGES: ChatMessage[] = [];
 
 interface AIBrainState {
   // Personality
@@ -409,6 +417,7 @@ interface AIBrainState {
   updateProactiveScore: (delta: number) => void;
   updateAffinityScore: (delta: number, mode?: 'cautious' | 'balanced' | 'open') => void;
   updateCrisisState: (isCrisis: boolean) => void;
+  advanceRelationshipStage: () => void;
   calculateOfflineDecay: (lastActiveAt?: string) => void;
   setActivePresetId: (id: string) => void;
   addPreset: (preset: Preset) => void;
@@ -496,6 +505,7 @@ export const useAIBrainStore = create<AIBrainState>()(
     }),
     updateEmotion: (event) => set((state) => {
       if (!state.persona.dynamicEmotion) return state;
+      if (!state.persona.emotionState) return state; // 防御：emotionState 可能被 Firestore 覆盖清空
 
       const oldEmotionState = state.persona.emotionState;
       const oldDominant = getDominantEmotion(oldEmotionState.emotions);
@@ -522,6 +532,45 @@ export const useAIBrainStore = create<AIBrainState>()(
       // Generate attribution
       const dominant = getDominantEmotion(newEmotionState.emotions);
       const attribution = generateAttribution(event, dominant.name);
+
+      // ── 亲密加速器：现实因素加速关系进展 ──
+      const oldIntimacy = oldEmotionState.intimacyToUser;
+      const rawIntimacyDelta = newEmotionState.intimacyToUser - oldIntimacy;
+      let acceleratorApplied = false;
+      let newPositiveStreak = state.persona.positiveStreak || 0;
+      if (rawIntimacyDelta > 0) {
+        const lastUserMsg = state.chatMessages.filter(m => m.role === 'user').slice(-1)[0];
+        const acceleratorCtx = {
+          userMessage: lastUserMsg?.content || '',
+          messageLength: (lastUserMsg?.content || '').length,
+          strategy: state.lastStrategy,
+          userSentiment: state.persona.userEmotionAnalysis || null,
+          interestSignals: (state as any).lastRelevantPatterns?.map((p: any) => p.topic) || [],
+          personaEmpathy: state.persona.empathy,
+          positiveStreak: state.persona.positiveStreak || 0,
+          currentIntimacy: oldIntimacy,
+          currentStage: getRelationshipStage(intimacyToAffinity(oldIntimacy), false),
+        };
+        const boost = computeIntimacyBoost(acceleratorCtx);
+        if (boost.multiplier > 1.0) {
+          const boostedDelta = rawIntimacyDelta * boost.multiplier;
+          newEmotionState.intimacyToUser = Math.min(1, oldIntimacy + boostedDelta);
+          acceleratorApplied = true;
+          // 记录加速事件
+          bus.emit('IntimacyAccelerated', {
+            rawDelta: rawIntimacyDelta,
+            boostedDelta,
+            multiplier: boost.multiplier,
+            factors: boost.factors.filter(f => f.value > 0),
+          });
+        }
+        // 更新连续正向计数
+        const isPositive = newEmotionState.taiji.valence > oldEmotionState.taiji.valence || newEmotionState.taiji.valence > 0.1;
+        newPositiveStreak = isPositive ? (state.persona.positiveStreak || 0) + 1 : 0;
+      } else {
+        // 亲密下降或不变 → 重置连续正向计数
+        newPositiveStreak = 0;
+      }
 
       // 2. 后 emit 事件（携带完整 stimulus + context + output，供 Timeline Viewer 消费）
       const deltaValence = newEmotionState.taiji.valence - oldEmotionState.taiji.valence;
@@ -596,18 +645,27 @@ export const useAIBrainStore = create<AIBrainState>()(
       // 使用漂移后的状态
       const finalEmotionState = driftedState;
 
-      const newPersona = {
+      const newPersona: Persona = {
         ...state.persona,
         emotionState: finalEmotionState,
         lastAttribution: attribution,
         affinityScore: newAffinity,
+        positiveStreak: newPositiveStreak,
       };
+
+      // 恋爱模式：阶段变化时自动应用行为调制
+      if (state.persona.useLoverStages && newStage !== oldStage) {
+        const modulation = getXiaoNuanStageModulation(newStage, newAffinity);
+        newPersona.proactiveScore = modulation.proactiveScore;
+        newPersona.affinityMode = modulation.affinityMode;
+        newPersona.allowSensitive = modulation.allowSensitive;
+      }
       syncPersonaToFirestore(newPersona);
 
       return { persona: newPersona };
     }),
     applyReinforcement: (signal) => set((state) => {
-      if (!state.persona.dynamicEmotion) return state;
+      if (!state.persona.dynamicEmotion || !state.persona.emotionState) return state;
 
       // v1.0: 走 applyEvent 保证事件可回放
       const newEmotionState = applyEvent(
@@ -641,7 +699,7 @@ export const useAIBrainStore = create<AIBrainState>()(
       return { persona: newPersona };
     }),
     decayEmotion: () => set((state) => {
-      if (!state.persona.dynamicEmotion) return state;
+      if (!state.persona.dynamicEmotion || !state.persona.emotionState) return state;
       const oldState = state.persona.emotionState;
 
       // v1.0: 走 applyEvent — 时间衰减可回放
@@ -681,12 +739,36 @@ export const useAIBrainStore = create<AIBrainState>()(
       const crisisState = isCrisis ? { isCrisis: true, triggeredAt: new Date().toISOString() } : { isCrisis: false, triggeredAt: '' };
       return { persona: { ...state.persona, crisisState } };
     }),
+    advanceRelationshipStage: () => set((state) => {
+      const currentAffinity = state.persona.affinityScore ?? 0;
+      const threshold = getNextStageThreshold(currentAffinity);
+      if (threshold === null) return state; // 已达最高阶段
+      const newAffinity = threshold + 1; // +1 越过阈值
+      const newPersona: Persona = { ...state.persona, affinityScore: newAffinity };
+      // 同步底层 intimacyToUser
+      if (newPersona.emotionState) {
+        newPersona.emotionState = {
+          ...newPersona.emotionState,
+          intimacyToUser: newAffinity / 100,
+        };
+      }
+      // 应用新阶段的行为调制（六阶段）
+      if (newPersona.useLoverStages) {
+        const baseStage = getRelationshipStage(newAffinity, false);
+        const modulation = getXiaoNuanStageModulation(baseStage, newAffinity);
+        newPersona.proactiveScore = modulation.proactiveScore;
+        newPersona.affinityMode = modulation.affinityMode;
+        newPersona.allowSensitive = modulation.allowSensitive;
+      }
+      syncPersonaToFirestore(newPersona);
+      return { persona: newPersona };
+    }),
     calculateOfflineDecay: (lastActiveAt) => {
       const lastActive = lastActiveAt ? new Date(lastActiveAt).getTime() : Date.now();
       const hoursInactive = (Date.now() - lastActive) / (1000 * 60 * 60);
       if (hoursInactive > 1) {
         set((state) => {
-          if (!state.persona.dynamicEmotion) return state;
+          if (!state.persona.dynamicEmotion || !state.persona.emotionState) return state;
           // v1.0: 走 applyEvent
           const newEmotionState = applyEvent(state.persona.emotionState, {
             id: '', type: 'StateDecayed', level: 'system', source: 'emotion',
@@ -714,9 +796,21 @@ export const useAIBrainStore = create<AIBrainState>()(
         const prompt = generateSystemPrompt(safePreset);
         // 切换预设时重置情绪平滑器，防止跨人格污染
         emotionSmoother.reset();
-        const newPersona = { ...safePreset, systemPrompt: prompt };
+        const newPersona: Persona = { ...safePreset, systemPrompt: prompt };
+
+        // 恋爱模式：切换时根据当前 affinity 初始化阶段调制
+        if (safePreset.useLoverStages) {
+          const affinityScore = safePreset.affinityScore ?? 15;
+          const stage = getRelationshipStage(affinityScore, false);
+          const modulation = getXiaoNuanStageModulation(stage, affinityScore);
+          newPersona.proactiveScore = modulation.proactiveScore;
+          newPersona.affinityMode = modulation.affinityMode;
+          newPersona.allowSensitive = modulation.allowSensitive;
+        }
+
         syncPersonaToFirestore(newPersona);
-        return { activePresetId: id, persona: newPersona };
+        // 切换角色时清空对话记录，防止旧角色身份混淆
+        return { activePresetId: id, persona: newPersona, chatMessages: [], chatSummary: '' };
       }
       return state;
     }),
@@ -730,7 +824,7 @@ export const useAIBrainStore = create<AIBrainState>()(
     // Settings
     settings: {
       provider: 'deepseek',
-      apiKey: '', // 请在设置页配置你的 API Key
+      apiKey: '', // 从后端 /api/ai-config 获取，或手动配置
       baseUrl: 'https://api.deepseek.com',
       model: 'deepseek-chat',
       temperature: 0.7,
@@ -760,6 +854,7 @@ export const useAIBrainStore = create<AIBrainState>()(
     valueSystem: createValueSystem(),
     identityNarrative: null,
     refreshIdentityNarrative: () => set((state) => {
+      if (!state.persona.emotionState) return state; // 防御
       const evolution = state.persona.emotionState.evolution;
       const currentRound = evolution.totalInteractions;
 
@@ -805,7 +900,7 @@ export const useAIBrainStore = create<AIBrainState>()(
       chatMessages: state.chatMessages.map(m => m.id === id ? { ...m, ...updates } : m)
     })),
     clearChat: () => set({
-      chatMessages: INITIAL_CHAT_MESSAGES,
+      chatMessages: [],
       chatSummary: ''
     }),
   })

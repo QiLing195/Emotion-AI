@@ -64,7 +64,7 @@ export function resetQuotaLock() {
   console.log('[Quota] Lock manually reset');
 }
 
-export let isQuotaExceeded = false; // Legacy variable for compatibility
+let isQuotaExceeded = false; // Internal state, access via getQuotaExceeded()
 
 // Get current quota state with expiration check
 export function getQuotaExceeded(): boolean {
@@ -97,7 +97,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   // Safe error info without sensitive user data
   const errInfo = {
     error: error instanceof Error ? error.message : String(error),
-    // Guest mode - fixed user info
     authInfo: {
       userId: 'guest',
       isAnonymous: true
@@ -106,6 +105,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  // Throw a generic error to client, not the detailed info
-  throw new Error(`Firestore ${operationType} operation failed on ${path || 'unknown path'}`);
+  // 不抛出 — Firestore 错误不应导致页面崩溃，静默降级即可
 }

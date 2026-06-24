@@ -23,20 +23,3 @@ export function extractJSON(text: string): any {
     return {};
   }
 }
-
-export function convertSchemaToGemini(schema: any): any {
-  if (!schema) return schema;
-  if (Array.isArray(schema)) return schema.map(convertSchemaToGemini);
-  if (typeof schema === 'object') {
-    const newSchema: any = {};
-    for (const key in schema) {
-      if (key === 'type' && typeof schema[key] === 'string') {
-        newSchema[key] = schema[key].toUpperCase();
-      } else {
-        newSchema[key] = convertSchemaToGemini(schema[key]);
-      }
-    }
-    return newSchema;
-  }
-  return schema;
-}

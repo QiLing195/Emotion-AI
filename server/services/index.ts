@@ -1,6 +1,3 @@
-// Export interfaces
-export type { IAIEngine, IMessageChannel, IIoTProvider } from './interfaces.js';
-
 // Export AI Engine
 export { DefaultAIEngine } from './aiEngine';
 
@@ -19,5 +16,5 @@ export { mcpService } from './mcpService';
 export { firebaseService } from './firebase';
 
 // Export utilities
-export { extractJSON, convertSchemaToGemini } from '../utils/index';
+export { extractJSON } from '../utils/index';
 export { ALLOWED_MCP_TOOLS, isToolAllowed } from './mcp';

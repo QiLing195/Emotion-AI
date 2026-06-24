@@ -91,7 +91,7 @@ function applyDiscoveryStored(discoveries: Discovery[], payload: DiscoveryStored
 
   // 如果只有摘要信息（旧代码路径），构造最小 discovery
   const minimalDiscovery: Discovery = {
-    id: `disc_replay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: `disc_replay_${crypto.randomUUID()}`,
     title: `${payload.topic} 发现`,
     content: '',
     topic: payload.topic,

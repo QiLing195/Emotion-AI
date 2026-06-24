@@ -461,16 +461,6 @@ class TrendTracker {
     };
   }
 
-  /** 测试用：绕过去重，直接写入快照 */
-  _recordForTest(obs: CognitiveObservatory): void {
-    const ts = obs.timestamp || Date.now();
-    this.snapshots.push(this.toSnapshot(obs, ts));
-    this.lastRecordTime = ts;
-    if (this.snapshots.length > this.maxSnapshots) {
-      this.snapshots.splice(0, this.snapshots.length - this.maxSnapshots);
-    }
-  }
-
   /** 清空历史 */
   reset(): void {
     this.snapshots = [];

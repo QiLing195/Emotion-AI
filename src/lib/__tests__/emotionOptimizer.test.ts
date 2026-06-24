@@ -9,9 +9,8 @@ import {
   computeArousalUpdate,
   applySmoothReversal,
   EmotionSmoother,
-  updateSancaiFromYinYang,
 } from '../emotionOptimizer';
-import type { EvolutionState, YinYangState, SancaiState } from '../emotionEngine';
+import type { EvolutionState } from '../emotionEngine';
 
 // ── 测试辅助：构造默认 EvolutionState ──
 function makeEvolution(overrides: Partial<EvolutionState> = {}): EvolutionState {
@@ -253,58 +252,6 @@ describe('EmotionSmoother', () => {
     const result = smoother.smooth({ joy: 0.2, sad: 0.6 });
     // 无历史，直接返回当前值
     expect(result).toEqual({ joy: 0.2, sad: 0.6 });
-  });
-});
-
-// ════════════════════════════════════════════════════════════
-// 6. updateSancaiFromYinYang — 阴阳→三才职责澄清
-// ════════════════════════════════════════════════════════════
-
-describe('updateSancaiFromYinYang', () => {
-  it('approachBias > avoidBias 时 A 应趋近正、B 趋近 0', () => {
-    const yinyang: YinYangState = {
-      approachBias: 0.6,
-      avoidBias: 0.1,
-      reversalPressure: 0,
-      extremityDuration: 0,
-    };
-    const sancai: SancaiState = { A: 0, B: 0, R: 0.5, harmony: 1 };
-    const result = updateSancaiFromYinYang(sancai, yinyang, 0.3);
-    expect(result.A).toBeGreaterThan(result.B);
-  });
-
-  it('R 在 A 和 B 都低时应保持较高（理性），冲突高时降低', () => {
-    const calmYY: YinYangState = {
-      approachBias: 0.1, avoidBias: 0.1,
-      reversalPressure: 0, extremityDuration: 0,
-    };
-    const intenseYY: YinYangState = {
-      approachBias: 0.8, avoidBias: 0.7,
-      reversalPressure: 0, extremityDuration: 0,
-    };
-    const sancai: SancaiState = { A: 0.5, B: 0.5, R: 0.5, harmony: 0.5 };
-
-    const calm = updateSancaiFromYinYang(sancai, calmYY, 0.3);
-    const intense = updateSancaiFromYinYang(sancai, intenseYY, 0.3);
-
-    expect(calm.R).toBeGreaterThan(intense.R);
-  });
-
-  it('harmony 在 A≈B 时应接近 1，差异大时降低', () => {
-    const balancedYY: YinYangState = {
-      approachBias: 0.5, avoidBias: 0.5,
-      reversalPressure: 0, extremityDuration: 0,
-    };
-    const unbalancedYY: YinYangState = {
-      approachBias: 0.9, avoidBias: 0.1,
-      reversalPressure: 0, extremityDuration: 0,
-    };
-    const sancai: SancaiState = { A: 0.5, B: 0.5, R: 0.5, harmony: 0.5 };
-
-    const balanced = updateSancaiFromYinYang(sancai, balancedYY, 0.3);
-    const unbalanced = updateSancaiFromYinYang(sancai, unbalancedYY, 0.3);
-
-    expect(balanced.harmony).toBeGreaterThan(unbalanced.harmony);
   });
 });
 

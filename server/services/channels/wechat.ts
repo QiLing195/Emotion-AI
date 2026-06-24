@@ -1,13 +1,12 @@
 import { Application, Request, Response } from 'express';
 import crypto from 'crypto';
-import { IMessageChannel } from '../interfaces.js';
-import { IAIEngine } from '../interfaces.js';
+import { DefaultAIEngine } from '../aiEngine.js';
 
-export class WeChatOfficialAccountChannel implements IMessageChannel {
+export class WeChatOfficialAccountChannel {
   id = 'wechat_official';
   name = '微信公众号';
   private config: any = null;
-  private aiEngine: IAIEngine | null = null;
+  private aiEngine: DefaultAIEngine | null = null;
 
   setConfig(config: any) {
     this.config = config;
@@ -71,7 +70,7 @@ export class WeChatOfficialAccountChannel implements IMessageChannel {
     }
   }
 
-  registerRoutes(app: Application, aiEngine: IAIEngine) {
+  registerRoutes(app: Application, aiEngine: DefaultAIEngine) {
     this.aiEngine = aiEngine;
 
     // WeChat verification endpoint (GET)

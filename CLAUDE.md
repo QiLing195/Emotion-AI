@@ -101,9 +101,9 @@ server/services/ ← 后端服务层
 
 | 优先级 | 项目 | 说明 |
 |--------|------|------|
-| 🔴 高 | server.ts 接入 aiCoordinator | 管道钩子已齐备，待调用 `enrichStrategyContext` |
-| 🔴 高 | server.ts 拆分 | 6514行单体 → `server/` 模块化架构 |
-| 🟡 中 | S5/S8 强连接激活 | pipelineHooks 已写好，需接入回复管道 |
-| 🟡 中 | S7 价值→策略连接 | 价值体系已实现但未连接到策略 |
+| ✅ 已解决 | server.ts 接入 aiCoordinator | aiCoordinator.processTurn() 已集成于主聊天管道 (server.ts:5949) |
+| 🔴 高 | server.ts 拆分 | 6462行单体 → `server/` 模块化架构 |
+| ✅ 已解决 | S5/S8 强连接激活 | 已在 aiCoordinator.processTurn() 内部激活 |
+| ✅ 已解决 | S7 价值→策略连接 | commit 55810a3 已激活 |
 | 🟢 低 | emotionEngine alpha 动态化 | S6 仅完成 lossAversion，alpha 值仍为常量 |
 | 🟢 低 | curiosity/ 全局状态消除 | 仍有模块级依赖注入变量 |

@@ -8,15 +8,37 @@ import { doc, getDoc, setDoc, collection, onSnapshot, query, orderBy, limit } fr
 import { handleFirestoreError, OperationType, getQuotaExceeded } from './lib/firestore-error';
 import ModelPanel from './components/ModelPanel';
 import ChatView from './views/ChatView';
+import SettingsView from './views/SettingsView';
 import CognitiveOscilloscope from './components/overlays/CognitiveOscilloscope';
-import { Activity } from 'lucide-react';
 
 export default function App() {
   const persona = useAIBrainStore(s => s.persona);
   const decayEmotion = useAIBrainStore(s => s.decayEmotion);
   const calculateOfflineDecay = useAIBrainStore(s => s.calculateOfflineDecay);
   const userStatus = useAIBrainStore(s => s.userStatus);
+  const settings = useAIBrainStore(s => s.settings);
+  const setSettings = useAIBrainStore(s => s.setSettings);
   const [showOscilloscope, setShowOscilloscope] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // ── 启动时自动拉取 API key ──
+  useEffect(() => {
+    if (settings.apiKey) return; // 已有 key 则跳过
+    fetch('/api/ai-config')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.apiKey) {
+          setSettings({
+            provider: data.provider || 'deepseek',
+            apiKey: data.apiKey,
+            model: data.model || 'deepseek-chat',
+            baseUrl: data.baseUrl || 'https://api.deepseek.com/v1',
+            temperature: data.temperature ?? 0.7,
+          });
+        }
+      })
+      .catch(() => {}); // 静默失败，用户手动配置
+  }, []); // 仅首次挂载
 
   // ── 情感衰减定时器 ──
   useEffect(() => {
@@ -65,7 +87,17 @@ export default function App() {
           if (data.lastActiveAt && data.persona?.dynamicEmotion) {
             calculateOfflineDecay(data.lastActiveAt);
           }
-          if (data.persona) useAIBrainStore.setState({ persona: data.persona });
+          if (data.persona) {
+            // 合并 emotionState：Firestore 保存时剥离了动态状态，从内存补上
+            const currentPersona = useAIBrainStore.getState().persona;
+            useAIBrainStore.setState({
+              persona: {
+                ...currentPersona,
+                ...data.persona,
+                emotionState: data.persona.emotionState || currentPersona.emotionState,
+              }
+            });
+          }
           if (data.settings) useAIBrainStore.setState({ settings: data.settings });
         } else {
           if (!getQuotaExceeded()) {
@@ -78,7 +110,10 @@ export default function App() {
       const messagesQuery = query(collection(db, 'users', userId, 'messages'), orderBy('timestamp', 'desc'), limit(50));
       unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
         const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)).reverse();
-        useAIBrainStore.setState({ chatMessages: msgs });
+        // 只有 Firestore 实际有数据，或本地为空时才同步。防止 Firestore 重连时空快照清空内存中的对话。
+        if (msgs.length > 0 || useAIBrainStore.getState().chatMessages.length === 0) {
+          useAIBrainStore.setState({ chatMessages: msgs });
+        }
       }, (error) => handleFirestoreError(error, OperationType.GET, `users/${userId}/messages`));
 
       heartbeatTimer = setInterval(() => {
@@ -99,21 +134,30 @@ export default function App() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gradient-to-br from-surface-50 via-surface-100 to-rose-50/20">
-      <ModelPanel />
+      <ModelPanel
+        showSettings={showSettings}
+        showOscilloscope={showOscilloscope}
+        onSettingsClick={() => setShowSettings(!showSettings)}
+        onOscilloscopeClick={() => setShowOscilloscope(!showOscilloscope)}
+      />
       <ChatView />
 
-      {/* 认知示波器切换按钮 */}
-      <button
-        onClick={() => setShowOscilloscope(!showOscilloscope)}
-        className={`fixed bottom-4 right-4 z-50 p-2.5 rounded-full shadow-lg border transition-all ${
-          showOscilloscope
-            ? 'bg-coral-500 border-coral-400 text-white shadow-glow'
-            : 'glass border-surface-300 text-moon-400 hover:text-moon-600 hover:border-rose-300 hover:shadow-soft'
-        }`}
-        title="认知示波器"
-      >
-        <Activity className="w-4 h-4" />
-      </button>
+      {/* 设置页覆盖层 */}
+      {showSettings && (
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <SettingsView />
+            <div className="sticky bottom-0 bg-white border-t p-4 flex justify-end">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+              >
+                完成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 认知示波器覆盖层 */}
       {showOscilloscope && (
