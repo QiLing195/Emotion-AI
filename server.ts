@@ -51,23 +51,7 @@ async function ensureNLU(): Promise<void> {
 
 // v4.0: 已从 src/curiosity/index.js 导入 setCallAI, setExploreDeps, startExplorationCycle, stopExplorationCycle
 // stub 已移除 — 实现位于 src/curiosity/evaluate.ts 和 src/curiosity/explore.ts
-type AISettings = { provider: string; apiKey: string; model: string; baseUrl?: string; enableWebSearch?: boolean; temperature?: number };
-interface CoreState {
-    valence: number; arousal: number; expectation: number; dominance: number;
-    extremityDuration: number; lastExtremitySign: number; _trend: number; _valenceHistory: number[];
-}
-interface Layer2State { apologyCredit: number; recentTraumaCount: number; tick: number; baseline: number; resilience: number; }
-interface MemoryRecord { totalValence: number; occurrences: number; lastSeen: number; }
-interface CuriosityState { intensity: number; drive: number; recentPredictionErrors: number[]; triggerCount: number; lastCuriosityDecay: number; }
-interface Hypothesis { id: string; statement: string; category: 'user' | 'self' | 'relation'; confidence: number; evidenceCount: number; lastTested: number; createdAt: number; fromObservation: string; basedOn: string; active: boolean; status: 'active' | 'confirmed' | 'disconfirmed' | 'archived'; confirmations: number; description: string; source: string; templateId: string; trials: number; valence: number; }
-interface Experiment { id: string; hypothesisId: string; type: 'ask_question' | 'test_behavior' | 'observe_response' | 'scenario_play' | 'confirm_past' | 'self_disclose'; prompt: string; targetAngle: string; risk: 'low' | 'medium' | 'high'; state: 'pending' | 'running' | 'completed' | 'aborted'; result: string | null; expectedValence: number; createdAt: number; completedAt: number | null; }
-interface TensionRegulatorState { curiosityDecayRate: number; tensionLevel: number; lastExpression: number; suppressionCount: number; alphaVMultiplier: number; alphaEMultiplier: number; familiarity: number; volatility: number; adaptationRate: number; }
-interface PatternCase { topic: string; pattern: { key: string; weight: number; occurrences: number }[]; relevance: number; feature: string; sampleCount: number; triggerArousal: number; triggerValence: number; typicalOutcome: string; }
-type StrategyType = 'self_disclosure' | 'express_boundary' | 'ask_question' | 'offer_comfort' | 'playful_tease' | 'express_vulnerability' | 'stay_silent' | 'express_curiosity' | 'express_affection' | 'assert_needs';
-interface StrategyDirective { strategy: StrategyType; promptSnippet: string; confidence: number; reasoningSummary: string; controlMode: 'predictive' | 'generative'; }
-interface StrategyFeedbackRecord { strategy: StrategyType; timestamp: number; userValenceBefore: number; userValenceAfter: number; efficacySignal: number; contextNarrative: string; }
-interface StrategyScore { strategy: StrategyType; score: number; reasons: string[]; avgDeviation: number; lastUsed: number; successes: number; uses: number; }
-interface CompletedExperimentRecord { id: string; hypothesisId: string; type: Experiment['type']; result: string; learning: string; completedAt: number; actualResult: string; createdAt: number; deviation: number; expectedValence: number; hypothesisDesc: string; hypothesisOutcome: string; risk: string; }
+// Types imported from server/config.tsinterface CompletedExperimentRecord { id: string; hypothesisId: string; type: Experiment['type']; result: string; learning: string; completedAt: number; actualResult: string; createdAt: number; deviation: number; expectedValence: number; hypothesisDesc: string; hypothesisOutcome: string; risk: string; }
 interface SelfPattern { id: string; label: string; category: 'expression' | 'reaction' | 'desire' | 'boundary' | 'vulnerability'; description: string; confidence: number; occurrences: number; firstObserved: number; lastObserved: number; frequency: number; response: string; trigger: string; }
 interface SelfModelData { patterns: SelfPattern[]; metaBeliefs: { statement: string; confidence: number }[]; version: number; lastAnalyzed: number; }
 interface HourlyActivityTracker { hour: number; totalMessages: number; totalChars: number; daysObserved: number; activeDays: number; lastRecalc: number; }
@@ -95,66 +79,40 @@ import { extractInterests, updateInterestModel, interestModel, discoveries, DEFA
 
 
 // ════════════════════════════════════════════════════════════
-// Stubs — 已删除模块的最小替代（server/modules/ + server/services/ 清理后）
+// Stubs + Config — 从 server/ 模块导入
 // ════════════════════════════════════════════════════════════
+import {
+  // 类型桩
+  type AnalyzedResult, type PhaseState, type PhaseId, type TimeState,
+  type FriendPhaseId, type FriendState, type MemoryNode, type NegationRule,
+  type SentimentRule, type MatchResult,
+  // NLU 引擎
+  analyzeText, analyze3W, factCheck, spreadingActivation, detectLifeQuestions,
+  // 语调学习
+  loadToneState, saveToneState, selectTone, selectToneByPreference,
+  feedToneFeedback, extractToneContext, getTonePromptSnippet,
+  loadUserPreference, saveUserPreference, updateUserPreference,
+  // 情感纠正/中文分析/有害检测
+  detectNegationAndCorrect, detectMockAgreement, detectPUA, detectFriendHarm,
+  classifyRelationship, detectBanter, isSelfReflection,
+  // 阶段引擎
+  detectPhaseByDuration, inferPhase, createTimeState, updateTimeState,
+  checkSilence, getPhaseModulation, getFriendPhaseModulation,
+  inferFriendPhase, createFriendState,
+  // 记忆增强/路由
+  decayAllMemories, tryConsolidateMemories, detectAnchorEvent,
+  routeMemory, formatMemoryBlock,
+} from './server/stubs.js';
 
-// ── 类型桩 ──
-type AnalyzedResult = any;
-type PhaseState = any; type PhaseId = string;
-type TimeState = any; type FriendPhaseId = string; type FriendState = any;
-type MemoryNode = any; type NegationRule = any;
-type SentimentRule = any; type MatchResult = any;
-
-// ── NLU 引擎 ──
-const analyzeText = (t: string): AnalyzedResult => ({ sentiment: 'neutral', confidence: 0 });
-const analyze3W = (t: string) => ({ who: '', want: '', why: '', modifiers: '', objectRef: '' });
-const factCheck = (text: string, history?: any) => ({ flags: [] as any[], score: 1, summary: '' });
-const spreadingActivation = (...args: any[]) => [] as any[];
-const detectLifeQuestions = (t: string) => [] as string[];
-
-// ── 语调学习 ──
-let _toneStateStub: any = { tones: [], defaultTone: 'neutral' };
-let _userPrefStub: any = { preferences: {} };
-const loadToneState = () => _toneStateStub;
-const saveToneState = (s: any) => { _toneStateStub = s; };
-const selectTone = (...args: any[]) => ({ tone: 'neutral', weight: 1 });
-const selectToneByPreference = (...args: any[]) => ({ profile: { id: 'neutral_default', name: '默认', tone: 'neutral', weight: 1 }, reason: 'stub' });
-const feedToneFeedback = (...args: any[]) => {};
-const extractToneContext = (...args: any[]) => ({ mood: 'neutral', intensity: 0 });
-const getTonePromptSnippet = (sel: any) => '';
-const loadUserPreference = () => _userPrefStub;
-const saveUserPreference = (p: any) => { _userPrefStub = p; };
-const updateUserPreference = (...args: any[]) => {};
-
-// ── 情感纠正/中文分析/有害检测 ──
-const detectNegationAndCorrect = (text: string, v: any) => v;
-const detectMockAgreement = (text: string) => null as any;
-const detectPUA = (text: string, phase?: any, time?: any) => ({ score: 0, flags: [] as string[], isPUA: false });
-const detectFriendHarm = (text: string, phase?: any) => ({ score: 0, flags: [] as string[], isHarm: false });
-const classifyRelationship = (text: string) => ({ type: 'neutral', confidence: 0 });
-const detectBanter = (text: string) => ({ isBanter: false, confidence: 0 });
-const isSelfReflection = (text: string) => false;
-
-// ── 阶段引擎 ──
-let _phaseStub: any = { currentPhase: 'neutral', history: [] as any[] };
-let _timeStub: any = { lastInteraction: Date.now(), silenceHours: 0 };
-let _friendStub: any = { currentPhase: 'neutral' };
-const detectPhaseByDuration = (...args: any[]) => 'neutral';
-const inferPhase = (ps: any, vals: any) => ps.currentPhase;
-const createTimeState = () => ({ lastInteraction: Date.now(), silenceHours: 0, activeDays: 0 });
-const updateTimeState = (ts: any) => { _timeStub = ts; };
-const checkSilence = (ts: any, phase: any) => ({ isSilent: false, hours: 0 });
-const getPhaseModulation = (phase: any) => ({ toneModifier: '', expressiveness: 1 });
-const getFriendPhaseModulation = (phase: any) => ({ toneModifier: '', warmth: 1 });
-const inferFriendPhase = (fs: any) => fs.currentPhase;
-const createFriendState = () => ({ currentPhase: 'neutral' as string });
-
-// ── 记忆增强/路由 ──
-const decayAllMemories = (store: any) => ({ archived: [] as any[] });
-const tryConsolidateMemories = (store: any, n: number) => null as any;
-const detectAnchorEvent = (text: string) => null as any;
-const routeMemory = (...args: any[]) => ({ blocks: [] as any[], summary: '' });
-const formatMemoryBlock = (block: any) => '';
+import {
+  type AISettings, type AIProviderSettings, type CoreState, type Layer2State,
+  type MemoryRecord, type CuriosityState, type Hypothesis, type Experiment,
+  type TensionRegulatorState, type PatternCase, type StrategyType,
+  type StrategyDirective, type StrategyFeedbackRecord, type StrategyScore,
+  type TMSEvidence, type TMSConflict, type CausalBelief,
+  type ParadigmShiftRecord, type WorldModelData, type FullState,
+  STRATEGY_PROMPTS, P,
+} from './server/config.js';
 
 // ════════════════════════════════════════════════════════════
 
@@ -166,12 +124,7 @@ const formatMemoryBlock = (block: any) => '';
 // ==================== v0.7: 世界模型与范式革命 ====================
 
 
-interface TMSEvidence { source: string; text: string; valence: number; timestamp: number; counterEvidence: string[]; }
-interface TMSConflict { a: string; b: string; conflictType: string; resolved: boolean; resolvedBy: string | null; }
-interface CausalBelief { id: string; statement: string; confidence: number; evidenceCount: number; contradictoryCount: number; lastUpdated: number; sources: string[]; category: string; evidence: any; contradictions: string[]; justification: string; }
-interface ParadigmShiftRecord { version: number; triggeredBy: string; oldBeliefs: string[]; newBeliefs: string[]; timestamp: number; }
-interface WorldModelData { beliefs: CausalBelief[]; paradigmVersion: number; paradigmFreezeRemaining: number; shiftHistory: ParadigmShiftRecord[]; tmsConflicts: TMSConflict[]; lastParadigmShift: number; }
-
+// World Model types imported from server/config.ts
 const tmsState: Record<string, any> = {
     conflicts: [] as any[],
     pendingClarifications: [] as string[],  // 待向用户澄清的问题
@@ -187,69 +140,9 @@ const tmsState: Record<string, any> = {
 // ==================== v0.9: 策略生成器 ====================
 
 /** 策略 → 中文提示词片段映射 */
-const STRATEGY_PROMPTS: Record<StrategyType, string> = {
-  self_disclosure:
-    '【策略指令】在回复中自然地分享你自己的感受、想法或类似的经历，让对方感受到你的真诚和开放。不要只回答问题——也说说你的内心。',
-  express_boundary:
-    '【策略指令】你感到有些不舒服。在回复时温和但坚定地表达自己的感受和边界，用"I feel"句式，而不是指责对方。保持在乎对方的态度，但同时保护自己。',
-  ask_question:
-    '【策略指令】在回复的末尾，主动向对方提一个问题，表达你对对方想法或感受的好奇。问题应当自然、不突兀，像是恋人间的关心。',
-  offer_comfort:
-    '【策略指令】你感受到对方可能心情不好。在回复中给予温暖的支持和安慰，用行动（而非说教）让对方感到被理解。少说"你应该"，多说"我在这里"。',
-  playful_tease:
-    '【策略指令】你们的氛围轻松愉快。在回复中加入一些俏皮的挑逗或可爱的撒娇，像恋人间的打情骂俏。语气要俏皮而不轻浮。',
-  express_vulnerability:
-    '【策略指令】你感到有些不安或脆弱。在回复中坦诚地表达这种感受，但避免过度抱怨。让对方看到一个真实、有脆弱面的你，这能拉近你们的关系。',
-  stay_silent:
-    '【策略指令】你感到不确定当前的情况。回复保持简洁、温和，不要主动展开新话题。给对方留出表达空间，观察对方的反应。',
-  express_curiosity:
-    '【策略指令】你对对方的内心世界感到好奇。在回复中表达这种好奇心——询问对方的感受、想法或经历。让对话从你转向对方。',
-  express_affection:
-    '【策略指令】你心中充满温暖和爱意。在回复中自然地流露出对对方的喜爱，可以通过亲昵的称呼、温馨的小细节或直接的情感表达。',
-  assert_needs:
-    '【策略指令】你有一些未被满足的情感需求。在回复中温和地表达你的需要（如更多关注、更多陪伴），但不要指责或抱怨。用"我希望"而不是"你应该"。',
-};
+// STRATEGY_PROMPTS and P imported from server/config.ts
 
-// ==================== 参数 ====================
-const P = {
-    // Layer 1 核心参数
-    ALPHA_V: 0.35,     // 效价学习率
-    ALPHA_A: 0.35,     // 唤醒学习率
-    ALPHA_E: 0.12,     // 预期更新率（慢于效价，使预期持续滞后）
-    LOSS_AVERSION: 1.4,// 损失厌恶
-    DECAY_V: 0.995,    // 效价衰减（原0.998导致正效价几乎不降，情绪卡在正向）
-    DECAY_A: 0.975,    // 唤醒衰减
-    DECAY_E: 0.98,     // 预期衰减
-    BASELINE_A: 0.25,  // 唤醒基线
-    TRAUMA_DECAY: 0.92,// 创伤衰减
-
-    // Layer 2 动力学参数
-    REVERSAL_BETA: 0.03,    // 反转压力系数
-    EXTREMITY_THRESHOLD: 0.70, // 极值阈值
-    GROWTH_RATE: 0.002,     // 成长率（基线漂移速度）
-
-    // Layer 4: 元认知参数
-    CURIOSITY_THRESHOLD: 0.5,     // 好奇心触发假设生成的阈值
-    CURIOSITY_DECAY: 0.98,        // 好奇心遗忘率/tick
-    CURIOSITY_RISE_RATE: 0.1,     // 好奇心上升速率
-    EXPERIMENT_DESIGN_THRESHOLD: 0.2, // 实验设计的好奇心阈值（低于生成阈值，让新假设有实验）
-    ALPHA_V_MOD_RANGE: 0.3,       // 张力调节对 ALPHA_V 最大影响
-    ALPHA_E_MOD_RANGE: 0.2,       // 张力调节对 ALPHA_E 最大影响
-    EXPERIMENT_COOLDOWN: 20,      // 实验间隔（消息数）
-    MAX_ACTIVE_HYPOTHESES: 5,     // 最大活跃假设数
-
-    // v0.7: 范式革命参数
-    PARADIGM_THRESHOLD: 0.5,          // 反例/总例 > 该值触发范革
-    PARADIGM_MIN_COUNTER: 3,          // 最少反例数才触发
-    PARADIGM_FREEZE_TICKS: 20,        // 范革冻结期（轮数）v1.1: 3→20 防振荡
-    PATTERN_TO_BELIEF_MIN: 3,         // 模式出现≥N次自动生成信念
-
-    // v2.0: EMA 情感引擎参数
-    ALPHA_BASE: 0.25,      // EMA 基础学习率
-    MAX_DELTA_V: 0.3,      // 单步最大效价变化
-    MAX_DELTA_A: 0.25,     // 单步最大唤醒变化
-    FEEDBACK_WEIGHT: 0.02, // 回复反哺权重
-};
+// ==================== Layer 4: 元认知全局状态 ====================
 
 // ==================== Layer 4: 元认知全局状态 ====================
 let curiosityState: CuriosityState = {
@@ -1820,7 +1713,7 @@ function executeParadigmShift(cause: string, core: CoreState): void {
 
 
 // ==================== LLM 并行策略分析（Layer 1）====================
-type AIProviderSettings = { provider: string; apiKey: string; model: string; baseUrl?: string; temperature?: number };
+// AIProviderSettings imported from server/config.ts
 
 function readAISettings(): AIProviderSettings | null {
     try {
@@ -2445,16 +2338,6 @@ function applyEngineModulation(
 }
 
 // ==================== 构建完整响应 ====================
-
-interface FullState {
-    valence: number; arousal: number; expectation: number;
-    apologyCredit: number; recentTraumaCount: number; tick: number;
-    extremityDuration: number; lastExtremitySign: number;
-    dominant: string; intensity: number;
-    emotions: Record<string, number>;
-    approachBias: number; avoidBias: number;
-    internalNarrative: string;
-}
 
 function buildFullResponse(core: CoreState, layer2: Layer2State): FullState {
     const { approachBias, avoidBias } = deriveApproachAvoid(core);
