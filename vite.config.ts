@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
@@ -28,7 +29,10 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      https: {} as any, // 摄像头/语音 API 需要安全上下文（自签证书）
+      https: {
+        key: fs.readFileSync('/tmp/vite-key.pem'),
+        cert: fs.readFileSync('/tmp/vite-cert.pem'),
+      },
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
