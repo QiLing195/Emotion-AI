@@ -3,30 +3,48 @@
 let speaking = false;
 let pendingQueue: string[] = [];
 
-function findChineseVoice(): SpeechSynthesisVoice | null {
+// 优先有情感的中文女声（按表现力排序）
+const VOICE_PREFERENCE = [
+  'Xiaoxiao',   // Edge: 活泼少女 — 最有情感表现力
+  'Xiaoyi',     // Edge: 温柔姐姐
+  'Xiaochen',   // Edge: 沉静女声
+  'Yunxi',      // Edge: 青年男声
+  'Yunyang',    // Edge: 专业男声
+];
+
+function findBestVoice(): SpeechSynthesisVoice | null {
   const voices = speechSynthesis.getVoices();
-  // 优先中文女声
-  const preferred = voices.find(v =>
-    v.lang.startsWith('zh') && v.name.includes('Xiaoxiao'));
-  if (preferred) return preferred;
-  // 任意中文女声
+
+  // 1. 优先匹配偏好列表中的语音（Edge 自然语音，有情感）
+  for (const pref of VOICE_PREFERENCE) {
+    const match = voices.find(v =>
+      v.lang.startsWith('zh') && v.name.includes(pref));
+    if (match) return match;
+  }
+
+  // 2. 任意中文女声
   const female = voices.find(v =>
-    v.lang.startsWith('zh') && /女|female|girl/i.test(v.name));
+    v.lang.startsWith('zh') && /女|female|girl|Xiao|Yun/.test(v.name));
   if (female) return female;
-  // 任意中文
+
+  // 3. 任意中文
   return voices.find(v => v.lang.startsWith('zh')) || null;
+}
+
+// 移除括号内容（中英文括号）、markdown、emoji
+function cleanText(text: string): string {
+  return text
+    .replace(/[（(][^）)]*[）)]/g, '')   // 去掉括号及内容
+    .replace(/[*_~`#\[\]]/g, '')         // markdown 符号
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '') // emoji
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function speakText(text: string, autoPlay = false): void {
   if (!autoPlay) return;
 
-  // 清理文本中的 markdown 和 emoji
-  const clean = text
-    .replace(/[*_~`#\[\]()]/g, '')
-    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
+  const clean = cleanText(text);
   if (!clean) return;
 
   if (speaking) {
@@ -39,10 +57,10 @@ export function speakText(text: string, autoPlay = false): void {
 
 function doSpeak(text: string): void {
   const utterance = new SpeechSynthesisUtterance(text);
-  const voice = findChineseVoice();
+  const voice = findBestVoice();
   if (voice) utterance.voice = voice;
-  utterance.rate = 1.0;
-  utterance.pitch = 1.1;
+  utterance.rate = 0.95;    // 稍慢一点，更有感情
+  utterance.pitch = 1.05;
   utterance.volume = 1.0;
 
   speaking = true;
@@ -60,7 +78,7 @@ function doSpeak(text: string): void {
     pendingQueue = [];
   };
 
-  speechSynthesis.cancel(); // 打断当前播放
+  speechSynthesis.cancel();
   speechSynthesis.speak(utterance);
 }
 
@@ -74,7 +92,6 @@ export function isSpeaking(): boolean {
   return speaking;
 }
 
-// 预加载语音列表（Chrome 需要异步获取）
 export function initVoiceOutput(): void {
   speechSynthesis.getVoices();
   speechSynthesis.onvoiceschanged = () => {
