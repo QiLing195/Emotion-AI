@@ -269,13 +269,36 @@ export async function generateAIChatResponse(
         functionCalls: response.functionCalls
       };
     } else {
-      // OpenAI implementation (simplified for now, assuming no tools for OpenAI in this specific context)
+      // OpenAI / DeepSeek / 兼容提供商
       const openai = getOrCreateClient(settings) as OpenAI;
+
+      // ponytail: 把 imageUrl 转成 OpenAI vision 格式
+      const apiMessages = messages.map(msg => {
+        if (msg.imageUrl) {
+          return {
+            role: msg.role,
+            content: [
+              { type: 'text' as const, text: msg.content },
+              { type: 'image_url' as const, image_url: { url: msg.imageUrl } },
+            ],
+          };
+        }
+        return { role: msg.role, content: msg.content };
+      });
+
+      // DeepSeek 不支持图片
+      if ((settings as any).provider === 'deepseek') {
+        const hasImage = messages.some(m => m.imageUrl);
+        if (hasImage) {
+          throw new Error('DeepSeek 不支持图片分析，请使用 Gemini 或 GPT-4V');
+        }
+      }
+
       const response = await openai.chat.completions.create({
         model: settings.model || 'gpt-4-turbo',
         messages: [
           { role: 'system', content: systemPrompt },
-          ...messages
+          ...apiMessages as any,
         ],
         max_tokens: 600,
         response_format: isJson ? { type: "json_object" } : undefined,
