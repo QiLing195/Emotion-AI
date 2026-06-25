@@ -1,6 +1,6 @@
 // ── 三栏布局 ──
 // 左：ModelPanel | 中：ChatView | 右：MediaPanel（摄像头+音频）
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useAIBrainStore } from './store/useAIBrainStore';
 import { db } from './firebase';
 import { doc, getDoc, setDoc, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
@@ -22,6 +22,27 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
   const [voiceText, setVoiceText] = useState('');
+
+  // ── 可拖拽分隔线 ──
+  const [mediaWidth, setMediaWidth] = useState(38); // 百分比
+  const dragging = useRef(false);
+  const handleDragStart = useCallback(() => { dragging.current = true; }, []);
+  const handleDrag = useCallback((e: { clientX: number; currentTarget: EventTarget | null }) => {
+    if (!dragging.current) return;
+    const el = e.currentTarget as HTMLElement | null;
+    const container = el?.parentElement;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const pct = ((rect.right - e.clientX) / rect.width) * 100;
+    setMediaWidth(Math.max(20, Math.min(50, pct)));
+  }, []);
+  const handleDragEnd = useCallback(() => { dragging.current = false; }, []);
+
+  useEffect(() => {
+    const up = () => { dragging.current = false; };
+    window.addEventListener('mouseup', up);
+    return () => window.removeEventListener('mouseup', up);
+  }, []);
 
   // ── 启动时从服务器同步关系状态（防止刷新重置朋友阶段）──
   useEffect(() => {
@@ -172,9 +193,15 @@ export default function App() {
         onSettingsClick={() => setShowSettings(!showSettings)}
         onOscilloscopeClick={() => setShowOscilloscope(!showOscilloscope)}
       />
-      <div className="flex-1 flex min-w-0">
+      <div className="flex-1 flex min-w-0" onMouseMove={handleDrag} onMouseUp={handleDragEnd}>
         <ChatView voiceOn={voiceOn} voiceText={voiceText} onVoiceTextConsumed={() => setVoiceText('')} />
-        <div className="w-[38%] min-w-[280px] max-w-[420px] shrink-0" style={{ flexBasis: '38%' }}>
+        {/* 可拖拽分隔线 */}
+        <div
+          onMouseDown={handleDragStart}
+          className="w-1.5 cursor-col-resize bg-transparent hover:bg-indigo-300/60 active:bg-indigo-400/80 transition-colors shrink-0 select-none"
+          title="拖拽调整宽度"
+        />
+        <div style={{ width: `${mediaWidth}%`, minWidth: 220, maxWidth: '50%' }} className="shrink-0">
           <MediaPanel
             voiceOn={voiceOn}
             onVoiceToggle={setVoiceOn}
