@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Volume2 } from 'lucide-react';
+import { Sparkles, Volume2, Clock, Activity } from 'lucide-react';
 import { Persona } from '../../store/useAIBrainStore';
 
 export interface BehaviorParamsProps {
@@ -135,6 +135,83 @@ const BehaviorParams: React.FC<BehaviorParamsProps> = ({
               <span>主动建议/探索</span>
             </div>
           </div>
+        </div>
+
+        {/* ── 自主性行为调校 ── */}
+        <div className="border-t border-slate-100 pt-6">
+          <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-4">
+            <Clock className="w-4 h-4 text-indigo-500" />
+            主动消息节奏
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  每日上限
+                </label>
+                <span className="text-sm text-slate-500 font-mono">{persona.proactiveFrequency ?? 3} 条</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={persona.proactiveFrequency ?? 3}
+                onChange={e => setPersona({...persona, proactiveFrequency: parseInt(e.target.value)})}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>克制</span>
+                <span>频繁</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  触发敏感度
+                </label>
+                <span className="text-sm text-slate-500 font-mono">{persona.proactiveThreshold ?? 65}%</span>
+              </div>
+              <input
+                type="range"
+                min="30"
+                max="90"
+                value={persona.proactiveThreshold ?? 65}
+                onChange={e => setPersona({...persona, proactiveThreshold: parseInt(e.target.value)})}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>高阈值(少打扰)</span>
+                <span>低阈值(常联系)</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  静默开始
+                </label>
+                <span className="text-sm text-slate-500 font-mono">{persona.quietHourStart ?? 23}:00</span>
+              </div>
+              <input
+                type="range"
+                min="20"
+                max="23"
+                value={persona.quietHourStart ?? 23}
+                onChange={e => setPersona({...persona, quietHourStart: parseInt(e.target.value)})}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>20:00起静默</span>
+                <span>23:00起静默</span>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+            <Activity className="w-3 h-3" />
+            控制AI主动发消息的频率、敏感度和静默时段。调高敏感度 = 更容易触发主动联系。
+          </p>
         </div>
 
         <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">

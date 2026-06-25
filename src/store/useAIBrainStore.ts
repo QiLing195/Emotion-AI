@@ -41,6 +41,9 @@ export interface Persona {
   systemPrompt: string;
   emotionState: EmotionState;
   proactiveScore?: number;
+  proactiveFrequency?: number;  // 1-5 每日主动消息上限 (默认3)
+  proactiveThreshold?: number;  // 30-90 主动联系敏感度 (默认65)
+  quietHourStart?: number;      // 20-23 静默时段起始 (默认23)
   affinityScore?: number; // 0-100
   affinityMode?: 'cautious' | 'balanced' | 'open';
   useLoverStages?: boolean; // 启用恋爱五阶段标签与行为调制（林晚专属）

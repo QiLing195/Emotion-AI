@@ -3062,14 +3062,28 @@ const LONELINESS_CURVE: { maxIdleMin: number; rate: number }[] = [
     { maxIdleMin: 120, rate: 0.03 },   // 30-120分钟：温和积累
     { maxIdleMin: Infinity, rate: 0.05 }, // 2小时以上：正常速率
 ];
-const CONTACT_BASE_THRESHOLD = 0.65;     // 基础触发阈值
+let CONTACT_BASE_THRESHOLD = 0.65;     // 基础触发阈值（可从 persona 覆盖）
+let CONTACT_DAILY_CAP = 3;             // 每日最大主动消息数（可从 persona 覆盖）
 const CONTACT_IGNORE_PENALTY = 0.05;     // 每次被忽略阈值增加
 const CONTACT_MAX_THRESHOLD = 0.85;      // 阈值上限
 const CONTACT_RELIEF = 0.15;             // 发送后孤独感降低
-const CONTACT_DAILY_CAP = 3;             // 每日最大主动消息数
-const QUIET_HOURS = { start: 23, end: 8 };        // 静默时段
+let QUIET_HOURS = { start: 23, end: 8 };  // 静默时段（start 可从 persona 覆盖）
 const QUIET_HOURS_RATE_MULTIPLIER = 0.2;           // 静默时段积累速率倍率
 const QUIET_HOURS_THRESHOLD_BOOST = 0.15;          // 静默时段触发需要更高阈值
+
+// ── v1.0 从 persona 覆盖自主性配置 ──
+function applyPersonaAutonomyConfig(persona: any): void {
+  if (!persona) return;
+  if (typeof persona.proactiveFrequency === 'number') {
+    CONTACT_DAILY_CAP = Math.max(1, Math.min(5, persona.proactiveFrequency));
+  }
+  if (typeof persona.proactiveThreshold === 'number') {
+    CONTACT_BASE_THRESHOLD = Math.max(0.3, Math.min(0.9, persona.proactiveThreshold / 100));
+  }
+  if (typeof persona.quietHourStart === 'number') {
+    QUIET_HOURS.start = Math.max(20, Math.min(23, persona.quietHourStart));
+  }
+}
 
 // ── v2.1: 自适应作息节律 — 持续追踪用户活跃模式，自主调整 ──
 // 不再用固定模板，而是追踪每小时的实际活跃度，EMA 平滑更新
@@ -4455,6 +4469,9 @@ app.post('/api/chat', async (req, res) => {
     try {
         const { message, persona, settings, recentMessages } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        // v1.0: 从 persona 覆盖自主性配置
+        applyPersonaAutonomyConfig(persona);
 
         // v2.0: 锚点事件检测 — 在整个管道之前检测命名/承诺/深度暴露等
         let anchorResult: ReturnType<typeof detectAnchorEvent> = null;
