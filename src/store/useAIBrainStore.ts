@@ -501,6 +501,13 @@ export const useAIBrainStore = create<AIBrainState>()(
       const newPersona = { ...next, systemPrompt: prompt };
       syncPersonaToFirestore(newPersona);
 
+      // v1.0 Event Ownership: 人格参数变更可审计
+      bus.emit('PersonaUpdated', {
+        changedKeys: Object.keys(updates),
+        prev: Object.fromEntries(Object.keys(updates).map(k => [k, (state.persona as any)[k]])),
+        next: Object.fromEntries(Object.keys(updates).map(k => [k, (newPersona as any)[k]])),
+      });
+
       return { persona: newPersona };
     }),
     updateEmotion: (event) => set((state) => {
@@ -723,20 +730,31 @@ export const useAIBrainStore = create<AIBrainState>()(
       return { persona: newPersona };
     }),
     updateProactiveScore: (delta) => set((state) => {
-      const newScore = Math.max(0, Math.min(100, (state.persona.proactiveScore || 50) + delta));
+      const oldScore = state.persona.proactiveScore || 50;
+      const newScore = Math.max(0, Math.min(100, oldScore + delta));
       const newPersona = { ...state.persona, proactiveScore: newScore };
       syncPersonaToFirestore(newPersona);
+
+      bus.emit('ProactiveScoreChanged', { prev: oldScore, next: newScore, delta });
+
       return { persona: newPersona };
     }),
     updateAffinityScore: (delta, mode) => set((state) => {
-      const newScore = Math.max(0, Math.min(100, (state.persona.affinityScore || 20) + delta));
+      const oldScore = state.persona.affinityScore || 20;
+      const newScore = Math.max(0, Math.min(100, oldScore + delta));
       const newMode = mode || state.persona.affinityMode;
       const newPersona = { ...state.persona, affinityScore: newScore, affinityMode: newMode };
       syncPersonaToFirestore(newPersona);
+
+      bus.emit('AffinityChanged', { prev: oldScore, next: newScore, delta, mode: newMode });
+
       return { persona: newPersona };
     }),
     updateCrisisState: (isCrisis) => set((state) => {
       const crisisState = isCrisis ? { isCrisis: true, triggeredAt: new Date().toISOString() } : { isCrisis: false, triggeredAt: '' };
+
+      bus.emit('CrisisStateChanged', { isCrisis, prevCrisis: state.persona.crisisState?.isCrisis || false });
+
       return { persona: { ...state.persona, crisisState } };
     }),
     advanceRelationshipStage: () => set((state) => {
@@ -761,6 +779,16 @@ export const useAIBrainStore = create<AIBrainState>()(
         newPersona.allowSensitive = modulation.allowSensitive;
       }
       syncPersonaToFirestore(newPersona);
+
+      // v1.0 Event Ownership: 关系阶段跃迁可审计
+      const newStage = getRelationshipStage(newAffinity, false);
+      bus.emit('RelationshipStageChanged', {
+        prevAffinity: currentAffinity,
+        nextAffinity: newAffinity,
+        newStage,
+        withModulation: newPersona.useLoverStages || false,
+      });
+
       return { persona: newPersona };
     }),
     calculateOfflineDecay: (lastActiveAt) => {

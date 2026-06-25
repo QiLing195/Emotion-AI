@@ -32,6 +32,8 @@ export interface EpisodicMemory {
   tags: string[];
   recallCount: number;
   lastRecalledAt: number | null;
+  /** 叙事片段的向量嵌入（用于语义检索，异步生成） */
+  embedding?: number[];
 }
 
 export interface EpisodicMemoryStore {
@@ -304,6 +306,7 @@ export function recallRelevantMemories(
   store: EpisodicMemoryStore,
   currentEmotion: { name: string; intensity: number },
   maxResults: number = 3,
+  queryEmbedding?: number[],
 ): EpisodicMemory[] {
   if (store.episodes.length === 0) return [];
 
@@ -322,6 +325,12 @@ export function recallRelevantMemories(
     const tagOverlap = ep.tags.filter(t => relatedTags.includes(t)).length;
     score *= (1 + tagOverlap * 0.3);
 
+    // ── 向量语义相似度（如果嵌入可用）──
+    let vectorScore = 0;
+    if (queryEmbedding && ep.embedding && ep.embedding.length > 0) {
+      vectorScore = cosineSimilarity(queryEmbedding, ep.embedding);
+    }
+
     // 时间衰减（最近 7 天的记忆更容易唤醒）
     const daysOld = (now - ep.timestamp) / (1000 * 60 * 60 * 24);
     const timeDecay = Math.pow(0.5, daysOld / 30);
@@ -337,7 +346,10 @@ export function recallRelevantMemories(
       score *= 0.3;
     }
 
-    return { episode: ep, score };
+    // 融合向量分：规则分 70% + 语义分 30%
+    const blended = score * 0.7 + vectorScore * 0.3;
+
+    return { episode: ep, score: blended };
   });
 
   return scored
@@ -345,6 +357,19 @@ export function recallRelevantMemories(
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults)
     .map(s => s.episode);
+}
+
+/** 余弦相似度（内联，避免跨模块依赖） */
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < vecA.length; i++) {
+    dot += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 function getRelatedTags(emotion: string): string[] {

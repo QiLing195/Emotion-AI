@@ -191,3 +191,54 @@ describe('generateIdentitySummary', () => {
     expect(summary).toContain('次互动');
   });
 });
+
+// ── v6.1: 向量嵌入增强召回 ──
+describe('recallRelevantMemories with embedding', () => {
+  it('语义匹配嵌入提升召回评分', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+
+    const es = makeEmotionState(0.3, 'joy');
+    es.taiji.valence = 0.7;
+    tryFormEpisode(store, es, '关于夏天的蝉鸣和西瓜', '');
+    // 手动注入嵌入向量
+    store.episodes[0].embedding = [0.1, 0.2, 0.3];
+
+    // 完全匹配的查询嵌入
+    const result = recallRelevantMemories(
+      store, { name: 'joy', intensity: 0.5 }, 3,
+      [0.1, 0.2, 0.3], // 高相似度
+    );
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('无嵌入时回退到纯规则评分', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+
+    const es = makeEmotionState(0.3, 'love');
+    es.taiji.valence = 0.7;
+    tryFormEpisode(store, es, '你温柔的笑了', '');
+
+    // 不传 queryEmbedding — 无嵌入时正常工作
+    const result = recallRelevantMemories(store, { name: 'love', intensity: 0.5 }, 3);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('维度不匹配时安全回退', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+
+    const es = makeEmotionState(0.3, 'joy');
+    es.taiji.valence = 0.7;
+    tryFormEpisode(store, es, '维度测试', '');
+    store.episodes[0].embedding = [0.1, 0.2, 0.3];
+
+    // 不同维度 — 应回退到规则分，不抛异常
+    const result = recallRelevantMemories(
+      store, { name: 'joy', intensity: 0.5 }, 3,
+      [0.1, 0.2], // 维度不匹配
+    );
+    expect(result.length).toBeGreaterThan(0); // 仍应返回结果（规则分）
+  });
+});

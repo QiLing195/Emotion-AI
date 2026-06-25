@@ -309,7 +309,14 @@ export class AIGirlfriendServer {
           const chatContext = recentMessages
             ? recentMessages.slice(-5).map((m: any) => m.content).join(' | ')
             : message;
-          tryFormEpisode(episodicStore, emoState, message, chatContext);
+          const newEpisode = tryFormEpisode(episodicStore, emoState, message, chatContext);
+          // 异步生成向量嵌入（不影响响应速度）
+          if (newEpisode && settings?.apiKey) {
+            const embedText = `${newEpisode.narrativeFragment} ${newEpisode.tags.join(' ')}`;
+            generateEmbeddings(settings, embedText).then(emb => {
+              if (emb?.length) newEpisode.embedding = emb;
+            }).catch(() => {});
+          }
           saveEpisodicStore();
         }
 

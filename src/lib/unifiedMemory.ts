@@ -106,7 +106,7 @@ export function recall(
   const items: MemoryItem[] = [];
 
   // ── 来源 1: 情景记忆 ──
-  const episodicItems = recallEpisodic(episodicStore, dominant, caps.episodic);
+  const episodicItems = recallEpisodic(episodicStore, dominant, caps.episodic, query.queryEmbedding);
   items.push(...episodicItems);
 
   // ── 来源 2: 语义记忆 ──
@@ -164,8 +164,9 @@ function recallEpisodic(
   store: EpisodicMemoryStore,
   dominant: { name: string; intensity: number },
   cap: number,
+  queryEmbedding?: number[],
 ): MemoryItem[] {
-  const episodes = recallRelevantMemories(store, dominant, cap);
+  const episodes = recallRelevantMemories(store, dominant, cap, queryEmbedding);
   return episodes.map(ep => ({
     id: ep.id,
     source: 'episodic' as const,

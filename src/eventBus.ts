@@ -50,7 +50,13 @@ export type EventName =
   // 🧠 思维图谱
   | 'ThoughtGenerated'
   // 💕 亲密加速器
-  | 'IntimacyAccelerated';
+  | 'IntimacyAccelerated'
+  // 🔗 关系演化
+  | 'AffinityChanged'
+  | 'RelationshipStageChanged'
+  | 'CrisisStateChanged'
+  | 'PersonaUpdated'
+  | 'ProactiveScoreChanged';
 
 // ── 事件元数据（协议定义） ──
 export interface EventMeta {
@@ -87,6 +93,11 @@ const EVENT_META: Record<EventName, EventMeta> = {
   StateLoaded:               { level: 'system',    source: 'system',    label: '状态加载' },
   ThoughtGenerated:          { level: 'cognitive', source: 'cognition', label: '思维生成' },
   IntimacyAccelerated:       { level: 'cognitive', source: 'emotion',   label: '亲密加速' },
+  AffinityChanged:           { level: 'cognitive', source: 'emotion',   label: '亲密度变化' },
+  RelationshipStageChanged:  { level: 'cognitive', source: 'emotion',   label: '关系阶段跃迁' },
+  CrisisStateChanged:        { level: 'cognitive', source: 'system',    label: '危机状态切换' },
+  PersonaUpdated:            { level: 'system',    source: 'system',    label: '人格参数更新' },
+  ProactiveScoreChanged:     { level: 'cognitive', source: 'autonomy',  label: '主动倾向变化' },
 };
 
 // ── 升级后的事件结构 ──
@@ -280,6 +291,9 @@ class EventBus {
       'StrategySelected', 'StrategyFeedback',
       'EmotionUpdated', 'ReversalTriggered', 'PhaseTransitioned',
       'StateSaved', 'StateLoaded',
+      'ThoughtGenerated', 'IntimacyAccelerated',
+      'AffinityChanged', 'RelationshipStageChanged', 'CrisisStateChanged',
+      'PersonaUpdated', 'ProactiveScoreChanged',
     ];
     for (const t of allTypes) {
       if (!(t in coverage)) coverage[t] = 0;
