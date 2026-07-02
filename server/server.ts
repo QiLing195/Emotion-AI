@@ -4,6 +4,8 @@ import bodyParser from 'body-parser';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import http from 'http';
+import fs from 'fs';
+import { spawn } from 'child_process';
 import { parseString } from 'xml2js';
 
 // Import services
@@ -104,6 +106,9 @@ export class AIGirlfriendServer {
   private aiEngine: DefaultAIEngine;
   private messageChannels: IMessageChannel[] = [];
   private iotProviders: IIoTProvider[] = [];
+  private _tick = 0;
+  private _lastVision: { text: string; emotion: string; ts: number } | null = null;
+  private _visionCooldown = 0;
 
   constructor() {
     this.app = express();
@@ -191,6 +196,10 @@ export class AIGirlfriendServer {
         const currentEmotionState = personaEmotionState
           || (this.aiEngine as any).emotionState
           || undefined;
+        // ponytail: 确保 reinforcement 存在，extractEmotionContext 需要
+        if (currentEmotionState && !currentEmotionState.reinforcement) {
+          currentEmotionState.reinforcement = { greedDrive: 0.5, fearAvoidance: 0.5 };
+        }
         const turnOutput = aiCoordinator.processTurn({
           userText: message,
           currentEmotionState,
@@ -320,6 +329,7 @@ export class AIGirlfriendServer {
           saveEpisodicStore();
         }
 
+        this._tick++;
         console.log('[DEBUG] strategy:', turnOutput.strategy, 'conflictPhase:', turnOutput.conflictState.phase);
         res.json({
           response: result.text,
@@ -327,6 +337,7 @@ export class AIGirlfriendServer {
           strategy: turnOutput.strategy,
           strategyReason: turnOutput.strategyDecision.reason,
           conflictPhase: turnOutput.conflictState.phase,
+          _affinity: { score: this.computeAffinityScore(), tick: this._tick },
         });
       } catch (error) {
         console.error('[Chat] Error:', error);
@@ -459,6 +470,116 @@ export class AIGirlfriendServer {
       res.json(narrativeToApiResponse(narrative));
     });
 
+    // ── State endpoint (frontend startup) ──
+    this.app.get('/state', (req, res) => {
+      const es = this.aiEngine.emotionState;
+      const t = es?.taiji;
+      const emotions = es?.emotions ?? {};
+      const dominant = Object.entries(emotions).sort((a, b) => b[1] - a[1])[0];
+      res.json({
+        valence: t?.valence ?? 0,
+        arousal: t?.arousal ?? 0,
+        expectation: t?.expectation ?? 0,
+        emotions,
+        affinityScore: this.computeAffinityScore(),
+        approachBias: es?.yinyang?.approachBias ?? 0,
+        avoidBias: es?.yinyang?.avoidBias ?? 0,
+        dominant: dominant?.[0] ?? 'neutral',
+        intensity: dominant?.[1] ?? 0,
+        apologyCredit: 1,
+        recentTraumaCount: 0,
+        tick: this._tick,
+        extremityDuration: 0,
+        lastExtremitySign: 0,
+        internalNarrative: '',
+      });
+    });
+
+    // ── AI config auto-detect (frontend startup) ──
+    this.app.get('/api/ai-config', (req, res) => {
+      const ai = this.readAISettings();
+      res.json({
+        success: true,
+        provider: ai?.provider || 'deepseek',
+        apiKey: ai?.apiKey || '',
+        model: ai?.model || 'deepseek-chat',
+        baseUrl: ai?.baseUrl || 'https://api.deepseek.com/v1',
+        temperature: ai?.temperature || 0.7,
+      });
+    });
+
+    // ── TTS endpoint ──
+    this.app.post('/api/tts', async (req, res) => {
+      const { text, voice = 'zh-CN-XiaoxiaoNeural' } = req.body;
+      if (!text || text.length > 500) {
+        res.status(400).json({ error: 'text required, max 500 chars' });
+        return;
+      }
+      const clean = text.replace(/[（(][^）)]*[）)]/g, '').trim();
+      if (!clean) { res.status(400).json({ error: 'empty after cleaning' }); return; }
+      try {
+        const child = spawn('edge-tts', [
+          '--voice', voice, '--text', clean, '--write-media', '-',
+        ], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const chunks: Buffer[] = [];
+        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+        let stderr = '';
+        child.stderr.on('data', (d: Buffer) => stderr += d.toString());
+        child.on('close', (code: number) => {
+          if (code !== 0) {
+            console.error('[TTS] edge-tts error:', stderr.slice(0, 200));
+            res.status(500).json({ error: 'TTS failed' });
+            return;
+          }
+          const audio = Buffer.concat(chunks);
+          res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': audio.length.toString() });
+          res.send(audio);
+        });
+        child.on('error', (err: Error) => {
+          console.error('[TTS] spawn error:', err.message);
+          res.status(500).json({ error: 'TTS spawn failed' });
+        });
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'TTS error' });
+      }
+    });
+
+    // ── Vision endpoint ──
+    this.app.post('/api/vision', async (req, res) => {
+      const { imageBase64, mimeType = 'image/jpeg', mode = 'full' } = req.body;
+      if (!imageBase64) { res.status(400).json({ error: 'image required' }); return; }
+      if (Date.now() - this._visionCooldown < 5000) {
+        res.json({ description: this._lastVision?.text || '', emotion: this._lastVision?.emotion || '', cached: true });
+        return;
+      }
+      this._visionCooldown = Date.now();
+      try {
+        const settings = this.readAISettings();
+        const { generateAIChatResponse } = await import('../src/lib/aiProvider.js');
+        const prompt = mode === 'emotion'
+          ? `分析画面中人物的表情和情绪状态。返回 JSON: {"expression":"表情","emotion":"情绪(开心/难过/专注/疲惫/平静/兴奋等)","confidence":0.0-1.0}。只返回JSON。`
+          : `用中文描述画面（20字以内）：人物在做什么、表情、状态。如果画面中有多个人或特别的环境特征，也提一下。`;
+        const result = await generateAIChatResponse(
+          { provider: (settings?.provider || 'deepseek') as 'gemini' | 'openai' | 'custom', apiKey: settings?.apiKey || '', model: settings?.model || 'deepseek-chat', baseUrl: settings?.baseUrl, temperature: 0.2 },
+          mode === 'emotion' ? '只返回 JSON，不要其他文字。' : '用一句话描述，不要评价。',
+          [{ role: 'user', content: prompt, imageUrl: `data:${mimeType};base64,${imageBase64}` }],
+        );
+        const raw = result?.text?.trim() || '';
+        let desc = raw, emotion = '';
+        if (mode === 'emotion') {
+          try {
+            const j = JSON.parse(raw.replace(/```json|```/g, ''));
+            emotion = j.emotion || j.expression || '未知';
+            desc = `${j.expression || ''}，${j.emotion || ''}`;
+          } catch { emotion = raw.slice(0, 20); desc = raw.slice(0, 40); }
+        }
+        this._lastVision = { text: desc, emotion, ts: Date.now() };
+        res.json({ description: desc, emotion });
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'vision failed' });
+      }
+    });
+
     // Static files for web interface (Vite build output)
     this.app.use(express.static(path.join(__dirname, '../dist')));
 
@@ -466,6 +587,37 @@ export class AIGirlfriendServer {
     this.app.get('*', (req, res) => {
       res.sendFile(path.join(__dirname, '../dist/index.html'));
     });
+  }
+
+  private computeAffinityScore(): number {
+    let score = 20;
+    const tick = this._tick;
+    score += Math.min(tick * 0.5, 40);
+    score += Math.min(episodicStore.episodes.length * 2, 20);
+    const valence = this.aiEngine.emotionState?.taiji?.valence ?? 0;
+    score += Math.min(Math.abs(valence) * 15, 15);
+    const valueCount = Object.values(valueSystem.values || {}).filter((v: any) => v.confidence > 0.5).length;
+    score += Math.min(valueCount * 3, 12);
+    return Math.round(Math.min(score, 95));
+  }
+
+  private readAISettings() {
+    try {
+      const dotenv = fs.readFileSync('.env', 'utf-8');
+      const geminiKey = dotenv.match(/^GEMINI_API_KEY="?(.+?)"?$/m)?.[1];
+      const openaiKey = dotenv.match(/^OPENAI_API_KEY="?(.+?)"?$/m)?.[1];
+      const deepseekKey = dotenv.match(/^DEEPSEEK_API_KEY="?(.+?)"?$/m)?.[1];
+      if (geminiKey && geminiKey !== 'your_gemini_api_key_here') {
+        return { provider: 'gemini', apiKey: geminiKey, model: 'gemini-3-flash-preview', temperature: 0.1 };
+      }
+      if (openaiKey && openaiKey !== 'your_openai_api_key_here') {
+        return { provider: 'openai', apiKey: openaiKey, model: 'gpt-4-turbo', temperature: 0.1 };
+      }
+      if (deepseekKey && deepseekKey !== 'your_deepseek_api_key_here') {
+        return { provider: 'deepseek', apiKey: deepseekKey, model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.1 };
+      }
+    } catch {}
+    return null;
   }
 
   private registerDefaultServices() {

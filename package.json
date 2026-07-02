@@ -4,8 +4,8 @@
   "version": "0.5.1",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "dev:modular": "tsx server/index.ts",
+    "dev": "tsx server/index.ts",
+    "dev:legacy": "tsx server.ts",
     "build": "vite build && tsc --project tsconfig.server.json",
     "start": "node dist/server.js",
     "preview": "vite preview",
