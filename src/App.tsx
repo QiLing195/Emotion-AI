@@ -1,15 +1,23 @@
 // ── 三栏布局 ──
 // 左：ModelPanel | 中：ChatView | 右：MediaPanel（摄像头+音频）
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useAIBrainStore } from './store/useAIBrainStore';
 import { db } from './firebase';
 import { doc, getDoc, setDoc, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { handleFirestoreError, OperationType, getQuotaExceeded } from './lib/firestore-error';
 import ModelPanel from './components/ModelPanel';
 import ChatView from './views/ChatView';
-import MediaPanel from './components/MediaPanel';
-import SettingsView from './views/SettingsView';
-import CognitiveOscilloscope from './components/overlays/CognitiveOscilloscope';
+const MediaPanel = lazy(() => import('./components/MediaPanel'));
+const SettingsView = lazy(() => import('./views/SettingsView'));
+const CognitiveOscilloscope = lazy(() => import('./components/overlays/CognitiveOscilloscope'));
+
+function MediaPanelFallback() {
+  return <div className="h-full bg-[#0d0d1a] border-l border-[#1e1e2e]" />;
+}
+
+function OverlayFallback() {
+  return <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm" />;
+}
 
 export default function App() {
   const persona = useAIBrainStore(s => s.persona);
@@ -67,6 +75,7 @@ export default function App() {
             },
             // 直接使用服务端计算的亲密度分数
             affinityScore: data.affinityScore ?? 20,
+            relationshipStageV2: data.relationshipStage,
           },
         });
       })
@@ -75,17 +84,18 @@ export default function App() {
 
   // ── 启动时自动拉取 API key ──
   useEffect(() => {
-    if (settings.apiKey) return;
+    if (settings.apiKey || settings.serverConfigured) return;
     fetch('/api/ai-config')
       .then(r => r.json())
       .then(data => {
-        if (data.success && data.apiKey) {
+        if (data.success && data.serverConfigured) {
           setSettings({
             provider: data.provider || 'deepseek',
-            apiKey: data.apiKey,
+            apiKey: '',
             model: data.model || 'deepseek-chat',
             baseUrl: data.baseUrl || 'https://api.deepseek.com/v1',
             temperature: data.temperature ?? 0.7,
+            serverConfigured: true,
           });
         }
       })
@@ -202,11 +212,13 @@ export default function App() {
           title="拖拽调整宽度"
         />
         <div style={{ width: `${mediaWidth}%`, minWidth: 220, maxWidth: '50%' }} className="shrink-0">
-          <MediaPanel
-            voiceOn={voiceOn}
-            onVoiceToggle={setVoiceOn}
-            onSpeechResult={(text) => setVoiceText(text)}
-          />
+          <Suspense fallback={<MediaPanelFallback />}>
+            <MediaPanel
+              voiceOn={voiceOn}
+              onVoiceToggle={setVoiceOn}
+              onSpeechResult={(text) => setVoiceText(text)}
+            />
+          </Suspense>
         </div>
       </div>
 
@@ -214,7 +226,9 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <SettingsView />
+            <Suspense fallback={<div className="h-64 bg-[#f2f2f7]" />}>
+              <SettingsView />
+            </Suspense>
             <div className="sticky bottom-0 bg-white border-t p-4 flex justify-end">
               <button
                 onClick={() => setShowSettings(false)}
@@ -229,7 +243,9 @@ export default function App() {
 
       {/* 认知示波器覆盖层 */}
       {showOscilloscope && (
-        <CognitiveOscilloscope onClose={() => setShowOscilloscope(false)} />
+        <Suspense fallback={<OverlayFallback />}>
+          <CognitiveOscilloscope onClose={() => setShowOscilloscope(false)} />
+        </Suspense>
       )}
     </div>
   );

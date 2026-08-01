@@ -6,11 +6,16 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const httpsKeyPath = env.VITE_HTTPS_KEY || '/tmp/vite-key.pem';
+  const httpsCertPath = env.VITE_HTTPS_CERT || '/tmp/vite-cert.pem';
+  const httpsConfig = fs.existsSync(httpsKeyPath) && fs.existsSync(httpsCertPath)
+    ? {
+        key: fs.readFileSync(httpsKeyPath),
+        cert: fs.readFileSync(httpsCertPath),
+      }
+    : undefined;
   return {
     plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -29,10 +34,7 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      https: {
-        key: fs.readFileSync('/tmp/vite-key.pem'),
-        cert: fs.readFileSync('/tmp/vite-cert.pem'),
-      },
+      https: httpsConfig,
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {

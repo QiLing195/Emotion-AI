@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useAIBrainStore, Provider, TTSSettings } from '../store/useAIBrainStore';
-import OpenAI from 'openai';
-import { GoogleGenAI } from '@google/genai';
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   openai: ['gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
@@ -90,28 +88,19 @@ export default function SettingsView() {
   };
 
   const handleTestConnection = async () => {
-    if (!settings.apiKey && settings.provider !== 'custom') {
+    if (!settings.apiKey && !settings.serverConfigured) {
       setShowTestResult('error');
       setTimeout(() => setShowTestResult(null), 3000);
       return;
     }
     try {
-      if (settings.provider === 'gemini') {
-        const ai = new GoogleGenAI({ apiKey: settings.apiKey || 'dummy' });
-        await ai.models.generateContent({ model: settings.model || 'gemini-3-flash-preview', contents: 'hi' });
-      } else {
-        const openai = new OpenAI({
-          apiKey: settings.apiKey || 'dummy',
-          baseURL: settings.baseUrl || undefined,
-          dangerouslyAllowBrowser: true,
-        });
-        await openai.chat.completions.create({
-          model: settings.model || 'gpt-4-turbo',
-          messages: [{ role: 'user', content: 'hi' }],
-          max_tokens: 5,
-        });
-      }
-      setShowTestResult('success');
+      const response = await fetch('/api/ai-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings }),
+      });
+      const data = await response.json().catch(() => ({ success: false }));
+      setShowTestResult(response.ok && data.success ? 'success' : 'error');
     } catch {
       setShowTestResult('error');
     }
