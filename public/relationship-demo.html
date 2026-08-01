@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>关系进阶 v2 Demo</title>
+    <style>
+      :root {
+        font-family: Inter, "Microsoft YaHei", sans-serif;
+        color: #20252b;
+        background: #f4f6f7;
+        letter-spacing: 0;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; }
+      header { background: #1f2933; color: #fff; padding: 22px 28px; border-bottom: 4px solid #d95d39; }
+      header h1 { margin: 0; font-size: 24px; font-weight: 700; }
+      header p { margin: 6px 0 0; color: #c9d1d9; font-size: 13px; }
+      main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+      .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 22px; }
+      select, button, input { height: 40px; border: 1px solid #aeb8c2; background: #fff; color: #20252b; padding: 0 12px; font-size: 14px; border-radius: 5px; }
+      select { min-width: 260px; }
+      button { border-color: #d95d39; background: #d95d39; color: #fff; cursor: pointer; font-weight: 600; }
+      button:hover { background: #bd4828; }
+      button:disabled { opacity: .55; cursor: wait; }
+      .stage-flow { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid #ccd3d9; background: #fff; margin-bottom: 22px; }
+      .stage { min-height: 72px; padding: 14px 10px; border-right: 1px solid #e2e6e9; text-align: center; color: #737d86; }
+      .stage:last-child { border-right: 0; }
+      .stage strong { display: block; font-size: 14px; color: inherit; }
+      .stage span { display: block; margin-top: 5px; font-size: 11px; }
+      .stage.active { background: #fff1eb; color: #9f3418; box-shadow: inset 0 -4px #d95d39; }
+      .stage.done { background: #edf6f0; color: #287a4b; }
+      .grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); gap: 20px; }
+      section { background: #fff; border: 1px solid #ccd3d9; border-radius: 6px; padding: 18px; }
+      h2 { margin: 0 0 16px; font-size: 16px; }
+      .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
+      .metric-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+      .track { height: 8px; background: #e8ecef; overflow: hidden; border-radius: 3px; }
+      .fill { height: 100%; background: #287a4b; transition: width .3s ease; }
+      .counts { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid #e1e5e8; margin-bottom: 16px; }
+      .count { padding: 12px; border-right: 1px solid #e1e5e8; border-bottom: 1px solid #e1e5e8; }
+      .count:nth-child(2n) { border-right: 0; }
+      .count:nth-last-child(-n+2) { border-bottom: 0; }
+      .count strong { display: block; font-size: 20px; }
+      .count span { color: #6d7680; font-size: 11px; }
+      .status { border-left: 4px solid #d95d39; background: #fff7f2; padding: 12px; font-size: 13px; margin-bottom: 14px; }
+      .status.open { border-color: #287a4b; background: #f0f8f3; }
+      ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+      .timeline { margin-top: 20px; }
+      .speech { margin-top: 20px; }
+      .speech-row { display: flex; gap: 10px; }
+      .speech-row input { flex: 1; min-width: 0; }
+      .speech-result { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #e1e5e8; }
+      .speech-result div { padding: 11px; border-right: 1px solid #e1e5e8; }
+      .speech-result div:last-child { border-right: 0; }
+      .speech-result strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+      .speech-result span { color: #6d7680; font-size: 11px; }
+      .transition { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid #e5e8eb; font-size: 13px; }
+      .arrow { color: #d95d39; font-weight: 700; }
+      .empty { color: #7b858e; font-size: 13px; }
+      #error { color: #a12e1a; font-size: 13px; margin-left: 6px; }
+      @media (max-width: 780px) {
+        main { padding: 14px; }
+        .stage-flow { grid-template-columns: repeat(3, 1fr); }
+        .stage:nth-child(3) { border-right: 0; }
+        .grid { grid-template-columns: 1fr; }
+        .metrics { grid-template-columns: 1fr; }
+        .speech-row { flex-direction: column; }
+        .speech-row input { width: 100%; }
+        .speech-result { grid-template-columns: repeat(2, 1fr); }
+        .speech-result div:nth-child(2) { border-right: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>关系进阶 v2 Demo</h1>
+      <p>多事件证据 · 双向表现 · 跨会话持续性 · 边界优先</p>
+    </header>
+    <main>
+      <div class="toolbar">
+        <select id="scenario" aria-label="测试场景"></select>
+        <button id="run" type="button">运行场景</button>
+        <span id="error" role="alert"></span>
+      </div>
+
+      <div class="stage-flow" id="stageFlow"></div>
+
+      <div class="grid">
+        <section>
+          <h2>关系维度</h2>
+          <div class="metrics" id="metrics"></div>
+          <div class="timeline">
+            <h2>阶段转换</h2>
+            <div id="timeline"></div>
+          </div>
+        </section>
+
+        <section>
+          <h2>证据概况</h2>
+          <div class="counts" id="counts"></div>
+          <div class="status" id="boundary"></div>
+          <h2>当前阻断与观察</h2>
+          <ul id="blockers"></ul>
+        </section>
+      </div>
+
+      <section class="speech">
+        <h2>关系语言分析</h2>
+        <div class="speech-row">
+          <input id="speechText" value="如果我喜欢你呢？" aria-label="关系表达文本" />
+          <button id="analyzeSpeech" type="button">分析表达</button>
+        </div>
+        <div class="speech-result" id="speechResult"></div>
+      </section>
+    </main>
+
+    <script>
+      const stages = [
+        ['stranger', '陌生人'], ['acquaintance', '初识'], ['friend', '朋友'],
+        ['crush', '暧昧'], ['lover', '恋人'], ['partner', '稳定伴侣'],
+      ];
+      const dimensionLabels = {
+        familiarity: '熟悉度', trust: '信任', reciprocity: '双向投入',
+        userRomanticInterest: '用户浪漫倾向', aiRomanticInterest: 'AI 浪漫倾向',
+        mutualRomanticConfidence: '双向浪漫置信度',
+        romanticInterest: '浪漫倾向', specialPreference: '特殊关注',
+        boundaryComfort: '边界舒适度', commitmentClarity: '关系明确度', repairCapacity: '修复能力',
+      };
+      const scenarioSelect = document.querySelector('#scenario');
+      const runButton = document.querySelector('#run');
+      const error = document.querySelector('#error');
+
+      function render(data) {
+        const report = data.report;
+        const activeIndex = stages.findIndex(([id]) => id === report.stage);
+        document.querySelector('#stageFlow').innerHTML = stages.map(([id, label], index) => `
+          <div class="stage ${index < activeIndex ? 'done' : index === activeIndex ? 'active' : ''}">
+            <strong>${label}</strong><span>${id}</span>
+          </div>`).join('');
+
+        document.querySelector('#metrics').innerHTML = Object.entries(report.dimensions).map(([key, value]) => `
+          <div>
+            <div class="metric-head"><span>${dimensionLabels[key]}</span><strong>${Math.round(value * 100)}</strong></div>
+            <div class="track"><div class="fill" style="width:${Math.round(value * 100)}%"></div></div>
+          </div>`).join('');
+
+        const counts = [
+          [report.effectiveEventCount, '独立证据'], [report.categoryCount, '事件类别'],
+          [report.sessionCount, '跨会话'], [report.userEvidenceCount + '/' + report.aiEvidenceCount, '用户 / AI'],
+        ];
+        document.querySelector('#counts').innerHTML = counts.map(([value, label]) => `
+          <div class="count"><strong>${value}</strong><span>${label}</span></div>`).join('');
+
+        const boundary = document.querySelector('#boundary');
+        boundary.className = `status ${data.state.boundaryStatus === 'open' ? 'open' : ''}`;
+        boundary.textContent = `边界状态：${data.state.boundaryStatus}`;
+
+        const blockers = report.blockers.length ? report.blockers : ['当前没有阶段阻断'];
+        document.querySelector('#blockers').innerHTML = blockers.map(item => `<li>${item}</li>`).join('');
+
+        document.querySelector('#timeline').innerHTML = data.state.transitions.length
+          ? data.state.transitions.map(item => `<div class="transition"><span>${item.from}</span><span class="arrow">→</span><strong>${item.to}</strong><span>${item.evidenceIds.length} 条证据</span></div>`).join('')
+          : '<div class="empty">尚未发生阶段转换</div>';
+      }
+
+      async function loadScenarios() {
+        const response = await fetch('/api/relationship-demo/scenarios');
+        const data = await response.json();
+        scenarioSelect.innerHTML = data.scenarios.map(item => `<option value="${item.id}">${item.id} · ${item.eventCount} 事件</option>`).join('');
+        await runScenario();
+      }
+
+      async function runScenario() {
+        runButton.disabled = true;
+        error.textContent = '';
+        try {
+          const response = await fetch('/api/relationship-demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scenario: scenarioSelect.value }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || '运行失败');
+          render(data);
+        } catch (cause) {
+          error.textContent = cause.message;
+        } finally {
+          runButton.disabled = false;
+        }
+      }
+
+      async function analyzeSpeech() {
+        const button = document.querySelector('#analyzeSpeech');
+        const text = document.querySelector('#speechText').value;
+        button.disabled = true;
+        try {
+          const response = await fetch('/api/relationship-speech-demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || '分析失败');
+          const item = data.analysis;
+          const values = [
+            [item.latentIntent, '隐含意图'],
+            [item.suggestedEventCategory || '不形成证据', '候选事件'],
+            [Math.round(item.confidence * 100) + '%', '置信度'],
+            [item.requiresClarification ? '需要追问' : '无需追问', '处理方式'],
+          ];
+          document.querySelector('#speechResult').innerHTML = values.map(([value, label]) => `
+            <div><strong>${value}</strong><span>${label}</span></div>`).join('');
+        } catch (cause) {
+          error.textContent = cause.message;
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      runButton.addEventListener('click', runScenario);
+      scenarioSelect.addEventListener('change', runScenario);
+      document.querySelector('#analyzeSpeech').addEventListener('click', analyzeSpeech);
+      loadScenarios().catch(cause => { error.textContent = cause.message; });
+      analyzeSpeech();
+    </script>
+  </body>
+</html>
