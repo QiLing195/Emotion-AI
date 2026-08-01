@@ -917,7 +917,10 @@ export class AIGirlfriendServer {
       process.on('SIGINT', gracefulShutdown);
       process.on('SIGTERM', gracefulShutdown);
 
-      const host = process.env.HOST || '127.0.0.1';
+      // ponytail: process.env.HOST is often set by build systems (e.g. Conda) to
+      // platform triples like "x86_64-conda-linux-gnu", not a network hostname.
+      // Use BIND_HOST to avoid collision.
+      const host = process.env.BIND_HOST || '127.0.0.1';
       this.server.listen(port, host, () => {
         console.log(`Server started on http://${host}:${port}`);
         console.log(`Health check: http://localhost:${port}/health`);
