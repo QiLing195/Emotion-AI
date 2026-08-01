@@ -12,6 +12,7 @@ import {
   INITIAL_EMOTION_STATE,
   setDeterministicMode,
   isDeterministicMode,
+  classifyAttachmentStyle,
 } from '../emotionEngine';
 import type { EmotionEvent, EmotionState } from '../emotionEngine';
 
@@ -255,5 +256,72 @@ describe('predictable error update', () => {
     const result = updateEmotionState(state, event);
     // 预期高但实际负 → 负向修正
     expect(result.taiji.valence).toBeLessThan(0.3);
+  });
+});
+
+// ── v1.1 classifyAttachmentStyle ──
+
+describe('classifyAttachmentStyle', () => {
+  it('低波动+低话题切换 → secure', () => {
+    const result = classifyAttachmentStyle(0.1, 0.1, 0.1, 0.1);
+    expect(result.style).toBe('secure');
+    expect(result.anxiety).toBeLessThan(0.35);
+    expect(result.avoidance).toBeLessThan(0.35);
+  });
+
+  it('高波动+高亲密寻求 → anxious', () => {
+    const result = classifyAttachmentStyle(0.8, 0.2, 0.8, 0.3);
+    expect(result.style).toBe('anxious');
+    expect(result.anxiety).toBeGreaterThan(result.avoidance);
+  });
+
+  it('高话题切换+低亲密 → avoidant', () => {
+    const result = classifyAttachmentStyle(0.2, 0.8, 0.1, 0.3);
+    expect(result.style).toBe('avoidant');
+    expect(result.avoidance).toBeGreaterThan(result.anxiety);
+  });
+
+  it('scores 在 [0, 1] 范围内', () => {
+    const result = classifyAttachmentStyle(1, 1, 1, 1);
+    expect(result.anxiety).toBeGreaterThanOrEqual(0);
+    expect(result.anxiety).toBeLessThanOrEqual(1);
+    expect(result.avoidance).toBeGreaterThanOrEqual(0);
+    expect(result.avoidance).toBeLessThanOrEqual(1);
+  });
+
+  it('全部为零 → secure', () => {
+    const result = classifyAttachmentStyle(0, 0, 0, 0);
+    expect(result.style).toBe('secure');
+  });
+});
+
+// ── v1.1 getDominantEmotion ambivalence ──
+
+describe('getDominantEmotion — 矛盾情绪', () => {
+  it('两个情绪接近时返回 ambivalenceScore > 0', () => {
+    const emotions = { joy: 0.51, anger: 0.50, sad: 0, fear: 0, love: 0, disgust: 0, lust: 0, calm: 0, greed: 0 };
+    const d = getDominantEmotion(emotions);
+    expect(d.ambivalenceScore).toBeGreaterThan(0.5);
+    expect(d.secondary).toBeDefined();
+  });
+
+  it('一个情绪明显主导时不返回 ambivalence', () => {
+    const emotions = { joy: 0.8, anger: 0.1, sad: 0, fear: 0, love: 0, disgust: 0, lust: 0, calm: 0, greed: 0 };
+    const d = getDominantEmotion(emotions);
+    expect(d.ambivalenceScore).toBeUndefined();
+    expect(d.secondary).toBeUndefined();
+  });
+
+  it('空 emotions 返回 neutral', () => {
+    const d = getDominantEmotion({});
+    expect(d.name).toBe('neutral');
+    expect(d.intensity).toBe(0);
+  });
+
+  it('次高情绪强度低于 0.2 时不标记矛盾', () => {
+    const emotions = { joy: 0.25, anger: 0.18, sad: 0, fear: 0, love: 0, disgust: 0, lust: 0, calm: 0, greed: 0 };
+    const d = getDominantEmotion(emotions);
+    // joy 和 anger 差距 ≤ 0.1 但 anger < 0.2，不应标记为矛盾
+    expect(d.ambivalenceScore).toBeUndefined();
   });
 });

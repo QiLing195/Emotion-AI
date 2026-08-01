@@ -77,6 +77,56 @@ describe('tryFormEpisode', () => {
     expect(store.episodes.length).toBe(3);
     expect(store.roundCounter).toBe(3);
   });
+
+  // v1.1 锚点事件自动检测
+  it('首次告白自动标记为 naming 锚点', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.2;
+    const es = makeEmotionState(0.4, 'love');
+    es.taiji.valence = 0.7; // 显著上升
+
+    const formed = tryFormEpisode(store, es, '我爱你', '');
+    expect(formed).not.toBeNull();
+    expect(formed!.selfPatternTriggered).toBe('naming');
+  });
+
+  it('深层自我暴露自动标记为 self_disclosure 锚点', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.2;
+    const es = makeEmotionState(0.3, 'sad');
+    es.taiji.valence = -0.1;
+
+    const formed = tryFormEpisode(store, es, '我其实一直很害怕失去你，从小就缺乏安全感，从来不敢跟任何人说这些', '');
+    expect(formed).not.toBeNull();
+    expect(formed!.selfPatternTriggered).toBe('self_disclosure');
+  });
+
+  it('第二次告白不再标记为 naming 锚点', () => {
+    const store = createEpisodicMemoryStore();
+    // 先插入一条已有 naming 记忆
+    store.episodes.push({
+      id: 'ep_old',
+      timestamp: Date.now() - 1000,
+      roundNumber: 1,
+      eventSummary: '我爱你',
+      emotionalImpact: { valenceBefore: 0, valenceAfter: 0.5, valenceDelta: 0.5, arousalPeak: 0.6, dominantEmotion: 'love' },
+      narrativeFragment: '',
+      recallWeight: 0.5,
+      tags: ['亲密'],
+      recallCount: 0,
+      lastRecalledAt: null,
+      selfPatternTriggered: 'naming',
+    });
+    store.prevValence = 0.3;
+    const es = makeEmotionState(0.5, 'love');
+    es.taiji.valence = 0.8;
+
+    const formed = tryFormEpisode(store, es, '我真的很喜欢你', '');
+    // 仍然形成记忆，但不再标记为 naming
+    if (formed) {
+      expect(formed.selfPatternTriggered).not.toBe('naming');
+    }
+  });
 });
 
 describe('recallRelevantMemories', () => {

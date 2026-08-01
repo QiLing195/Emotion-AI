@@ -89,6 +89,11 @@ export interface EvolutionState {
   playfulness: number;      // [0, 100] 幽默/调皮的倾向
   valuePriorities: Record<string, number>;  // 价值观优先级 e.g. { "connection": 0.8 }
   lastIdentityRefresh: number;  // 上次身份叙事刷新的 tick 数
+
+  /** v1.1 依恋风格 — 从用户行为模式缓慢淬炼 */
+  attachmentStyle?: 'secure' | 'anxious' | 'avoidant';
+  attachmentAnxietyScore?: number;    // [0, 1] 焦虑维度
+  attachmentAvoidanceScore?: number;  // [0, 1] 回避维度
 }
 
 export interface ReinforcementState {
@@ -255,6 +260,9 @@ const INITIAL_EVOLUTION: EvolutionState = {
   playfulness: 50,
   valuePriorities: {},
   lastIdentityRefresh: 0,
+  attachmentStyle: undefined,
+  attachmentAnxietyScore: 0,
+  attachmentAvoidanceScore: 0,
 };
 
 export const INITIAL_EMOTION_STATE: EmotionState = {
@@ -631,6 +639,43 @@ function processEvolution(
   if (evo.positiveInteractions > evo.negativeInteractions * 3 && evo.totalInteractions > 20) {
     evo.sensitivity = Math.max(0.1, evo.sensitivity - 0.005);
   }
+}
+
+/**
+ * v1.1 依恋风格分类 — 从用户行为信号中推断。
+ *
+ * 信号维度：
+ *   - valenceVolatility：效价 std dev（情绪反应性）
+ *   - topicSwitchRate：话题切换频率 [0, 1]
+ *   - intimacySeekingRate：亲密/依赖表达频率 [0, 1]
+ *   - messageFreqVolatility：消息频率波动系数
+ *
+ * 分类逻辑（参考 Bartholomew & Horowitz 四象限模型，兼顾简化）：
+ *   - 高焦虑+高回避 ≈ 恐惧型（保守归类为 anxious）
+ *   - 高焦虑+低回避 = anxious — 需要 reassurance
+ *   - 低焦虑+高回避 = avoidant — 需要 space/patience
+ *   - 低焦虑+低回避 = secure
+ */
+export function classifyAttachmentStyle(
+  valenceVolatility: number,
+  topicSwitchRate: number,
+  intimacySeekingRate: number,
+  messageFreqVolatility: number,
+): { style: 'secure' | 'anxious' | 'avoidant'; anxiety: number; avoidance: number } {
+  // 焦虑得分：高情绪波动 + 高亲密寻求
+  const anxiety = Math.min(1, valenceVolatility * 0.6 + intimacySeekingRate * 0.4);
+  // 回避得分：高话题切换 + 低亲密寻求 + 频率波动
+  const avoidance = Math.min(1, topicSwitchRate * 0.5 + (1 - intimacySeekingRate) * 0.3 + messageFreqVolatility * 0.2);
+
+  let style: 'secure' | 'anxious' | 'avoidant';
+  if (anxiety < 0.35 && avoidance < 0.35) {
+    style = 'secure';
+  } else if (anxiety >= avoidance) {
+    style = 'anxious';
+  } else {
+    style = 'avoidant';
+  }
+  return { style, anxiety, avoidance };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1010,14 +1055,37 @@ export function generateDecayAttribution(dominantBefore: string, dominantAfter: 
 // 16. 工具函数
 // ════════════════════════════════════════════════════════════
 
-export function getDominantEmotion(emotions: Record<string, number>): { name: string; intensity: number } {
-  let dominant = { name: 'neutral', intensity: 0 };
-  Object.keys(emotions).forEach(key => {
-    if (Math.abs(emotions[key]) > Math.abs(dominant.intensity)) {
-      dominant = { name: key, intensity: emotions[key] };
-    }
-  });
-  return dominant;
+export function getDominantEmotion(emotions: Record<string, number>): {
+  name: string;
+  intensity: number;
+  /** 次主导情绪（当前两个情绪强度接近时出现） */
+  secondary?: string;
+  secondaryIntensity?: number;
+  /** 情绪矛盾分数 [0, 1] — 主导与次主导越接近则越高 */
+  ambivalenceScore?: number;
+} {
+  const entries = Object.entries(emotions)
+    .filter(([, v]) => Math.abs(v) > 0)
+    .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a));
+
+  if (entries.length === 0) return { name: 'neutral', intensity: 0 };
+  if (entries.length === 1) return { name: entries[0][0], intensity: entries[0][1] };
+
+  const [first, second] = entries;
+  const gap = Math.abs(Math.abs(first[1]) - Math.abs(second[1]));
+  // ponytail: 阈值 0.1 — 两个情绪强度差在此范围内视为矛盾并存
+  const AMBIVALENCE_THRESHOLD = 0.1;
+
+  if (gap <= AMBIVALENCE_THRESHOLD && Math.abs(second[1]) > 0.2) {
+    return {
+      name: first[0],
+      intensity: first[1],
+      secondary: second[0],
+      secondaryIntensity: second[1],
+      ambivalenceScore: 1 - gap / AMBIVALENCE_THRESHOLD,
+    };
+  }
+  return { name: first[0], intensity: first[1] };
 }
 
 /**
@@ -1038,6 +1106,9 @@ export function extractEmotionContext(state: EmotionState): EmotionContext {
       fearAvoidance: state.reinforcement.fearAvoidance,
     },
     dominantState: dominant.name,
+    secondaryEmotion: dominant.secondary,
+    ambivalenceScore: dominant.ambivalenceScore,
+    confusion: state.metaEmotions.confusion,
   };
 }
 
@@ -1412,6 +1483,16 @@ export function buildEmotionContext(
     .slice(0, 3);
   if (active.length > 0) {
     blocks.push(`当前情绪: ${active.map(k => `${k}(${e.emotions[k].toFixed(2)})`).join(', ')}`);
+  }
+
+  // v1.1 矛盾情绪：当两种情绪并存时告知 LLM
+  if (dominant.secondary && dominant.ambivalenceScore && dominant.ambivalenceScore > 0.5) {
+    const ambivLabel = dominant.ambivalenceScore > 0.8 ? '内心很矛盾' : '心情有点复杂';
+    blocks.push(`${ambivLabel}：同时对你有${dominant.name}和${dominant.secondary}的感觉`);
+  }
+  // 趋避冲突（困惑）：当 confusion 高时告知 LLM 行为犹豫
+  if (e.metaEmotions.confusion > 0.4) {
+    blocks.push('内心感到困惑，不太确定该怎么回应');
   }
 
   // 复合情绪

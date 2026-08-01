@@ -16,6 +16,7 @@ import { rewardLearner } from '../lib/rewardLearner';
 import { emotionSmoother } from '../lib/emotionOptimizer';
 import { ValueSystem, createValueSystem, surfaceValues, getValueNarrative } from '../lib/valueDiscovery';
 import { IdentityNarrative, generateIdentityNarrative, shouldRefreshNarrative, narrativeToPromptSnippet } from '../lib/identityNarrative';
+import type { RelationshipStageV2 } from '../lib/relationshipProgressionV2';
 
 export type Provider = 'openai' | 'gemini' | 'custom' | 'anthropic' | 'deepseek' | 'siliconflow' | 'moonshot' | 'zhipu';
 
@@ -45,6 +46,7 @@ export interface Persona {
   proactiveThreshold?: number;  // 30-90 主动联系敏感度 (默认65)
   quietHourStart?: number;      // 20-23 静默时段起始 (默认23)
   affinityScore?: number; // 0-100
+  relationshipStageV2?: RelationshipStageV2;
   affinityMode?: 'cautious' | 'balanced' | 'open';
   useLoverStages?: boolean; // 启用恋爱五阶段标签与行为调制（林晚专属）
   positiveStreak?: number;  // 连续正向交互计数（用于亲密加速器）
@@ -77,6 +79,7 @@ export interface Settings {
   model: string;
   temperature: number;
   enableWebSearch?: boolean;
+  serverConfigured?: boolean;
   tts?: TTSSettings;
 }
 
@@ -860,6 +863,7 @@ export const useAIBrainStore = create<AIBrainState>()(
       model: 'deepseek-chat',
       temperature: 0.7,
       enableWebSearch: false,
+      serverConfigured: false,
     },
     setSettings: (updates) => set((state) => ({
       settings: { ...state.settings, ...updates }

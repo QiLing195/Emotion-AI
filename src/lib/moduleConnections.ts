@@ -31,6 +31,8 @@ export interface ModuleConnection {
   status: 'healthy' | 'degraded' | 'broken' | 'pending';
   /** 连续失败计数 */
   consecutiveFailures: number;
+  /** 最后一次失败时间戳（用于自动恢复） */
+  lastFailureTime?: number;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -242,6 +244,15 @@ export const MODULE_CONNECTIONS: ModuleConnection[] = [
     consecutiveFailures: 0,
   },
   {
+    id: 'W12',
+    from: 'aiCoordinator 行为信号',
+    to: 'evolution.attachmentStyle',
+    strength: 'weak',
+    description: 'v1.1 依恋风格分类：效价波动+话题切换+亲密寻求+频率波动 → secure/anxious/avoidant',
+    status: 'healthy',
+    consecutiveFailures: 0,
+  },
+  {
     id: 'P3',
     from: '思维图谱 — 认知失调',
     to: '情景记忆（内在冲突标记）',
@@ -334,10 +345,18 @@ export async function executeStrongConnection<T>(
   const conn = MODULE_CONNECTIONS.find(c => c.id === connId);
   if (!conn) throw new Error(`未找到连接: ${connId}`);
 
+  // 自动恢复：熔断 60s 后进入半开状态，允许重试
   if (conn.status === 'broken') {
-    console.warn(`[ModuleConnections] ${connId} 已熔断，直接使用 fallback`);
-    if (fallbackFn) return fallbackFn();
-    throw new Error(`连接 ${connId} 已熔断且无 fallback`);
+    const cooldownMs = 60_000;
+    if (conn.lastFailureTime && Date.now() - conn.lastFailureTime > cooldownMs) {
+      console.log(`[ModuleConnections] ${connId} 熔断冷却完成，进入半开状态`);
+      conn.status = 'degraded';
+      conn.consecutiveFailures = 1; // 半开：允许一次重试
+    } else {
+      console.warn(`[ModuleConnections] ${connId} 已熔断，直接使用 fallback`);
+      if (fallbackFn) return fallbackFn();
+      throw new Error(`连接 ${connId} 已熔断且无 fallback`);
+    }
   }
 
   const timeout = timeoutMs ?? conn.timeoutMs ?? 5000;
@@ -352,6 +371,7 @@ export async function executeStrongConnection<T>(
 
     // 成功：重置计数器
     conn.consecutiveFailures = 0;
+    conn.lastFailureTime = undefined;
     if (conn.status === 'degraded') {
       conn.status = 'healthy';
       console.log(`[ModuleConnections] ${connId} 已恢复健康`);
@@ -359,6 +379,7 @@ export async function executeStrongConnection<T>(
     return result;
   } catch (error) {
     conn.consecutiveFailures++;
+    conn.lastFailureTime = Date.now();
 
     // 熔断检查
     if (conn.circuitBreakerThreshold &&
@@ -367,8 +388,6 @@ export async function executeStrongConnection<T>(
       console.error(
         `[ModuleConnections] 🔴 ${connId} 连续失败 ${conn.consecutiveFailures} 次，已熔断`,
       );
-      // 熔断事件通过 console.error + connection health API 暴露，
-      // 不污染 EmotionUpdated 事件类型
     } else if (conn.consecutiveFailures >= 2) {
       conn.status = 'degraded';
     }

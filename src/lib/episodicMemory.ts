@@ -120,6 +120,41 @@ export function createEpisodicMemoryStore(): EpisodicMemoryStore {
   };
 }
 
+/**
+ * v1.1 自动检测锚点事件 — 从用户消息和情绪状态推断关系转折点。
+ * 返回值用作 tryFormEpisode 的 selfPatternTriggered 和 anchorWeightBonus。
+ */
+function detectAnchorEvent(
+  userMessage: string,
+  _emotionState: EmotionState,
+  store: EpisodicMemoryStore,
+): { type: string; weightBonus: number } | null {
+  // 首次表达爱意（ponytail: 中文不用 \b，直接匹配）
+  if (/(我爱你|我喜欢你|我好喜欢你|爱死你)/.test(userMessage)) {
+    const alreadyHadLove = store.episodes.some(ep => ep.selfPatternTriggered === 'naming');
+    if (!alreadyHadLove) {
+      return { type: 'naming', weightBonus: 0.3 };
+    }
+  }
+  // 承诺/誓言（ponytail: 需要具体承诺语境，避免"一直"等常见词误匹配）
+  if (/(永远在一起|一辈子|一直陪|绝对不|保证做到|答应你|说到做到|永远不会)/.test(userMessage) && userMessage.length > 10) {
+    return { type: 'promise_to', weightBonus: 0.25 };
+  }
+  // 深层自我暴露（长消息 + 情感表达）
+  if (userMessage.length > 30 && /(我曾经|我以前|我从小|我其实|我害怕|我担心|我梦想)/.test(userMessage)) {
+    return { type: 'self_disclosure', weightBonus: 0.2 };
+  }
+  // 关系里程碑：首次深度冲突
+  if (/(你根本不懂|你总是这样|我们是不是不合适|分手|算了吧)/.test(userMessage)) {
+    const alreadyHadConflict = store.episodes.some(ep => ep.selfPatternTriggered === 'milestone'
+      && ep.tags?.includes('冲突'));
+    if (!alreadyHadConflict) {
+      return { type: 'milestone', weightBonus: 0.25 };
+    }
+  }
+  return null;
+}
+
 export function tryFormEpisode(
   store: EpisodicMemoryStore,
   emotionState: EmotionState,
@@ -198,6 +233,15 @@ export function tryFormEpisode(
   }
 
   if (!shouldForm) return null;
+
+  // v1.1 自动检测锚点事件 — 无需调用方传入，从消息和情绪中推断
+  if (!selfPatternTriggered) {
+    const anchorDetected = detectAnchorEvent(userMessage, emotionState, store);
+    if (anchorDetected) {
+      selfPatternTriggered = anchorDetected.type;
+      anchorWeightBonus = anchorDetected.weightBonus;
+    }
+  }
 
   // 提取标签
   const tags = SIGNIFICANT_PATTERNS

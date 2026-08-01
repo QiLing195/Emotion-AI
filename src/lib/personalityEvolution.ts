@@ -86,13 +86,14 @@ export function driftPersonalityParams(
   const log: string[] = [];
   const dominant = getDominantEmotion(emotionState.emotions);
 
-  const applyDrift = (field: keyof EvolutionState, delta: number, reason: string) => {
+  // ponytail: 仅数值型人格字段参与漂移，字符串/对象字段排除
+  const applyDrift = (field: 'trust' | 'openness' | 'playfulness' | 'empathy' | 'sensitivity' | 'resilience', delta: number, reason: string) => {
     const clamped = Math.max(-config.maxChangePerRound, Math.min(config.maxChangePerRound, delta));
     if (Math.abs(clamped) < 0.005) return;
     const current = typeof evolution[field] === 'number' ? (evolution[field] as number) : 50;
     const newVal = clamp(current + clamped, 0, field === 'sensitivity' || field === 'resilience' ? 1 : 100);
     if (Math.abs(newVal - current) > 0.001) {
-      evolution[field] = newVal as any;
+      evolution[field] = newVal;
       changes[field] = newVal - current;
       log.push(`${field}: ${current.toFixed(1)} → ${newVal.toFixed(1)} (${reason})`);
     }
@@ -153,7 +154,7 @@ export function driftPersonalityParams(
 
   // ── 韧性漂移 ──
   if (dominant.name === 'joy' && dominant.intensity > 0.3 && emotionState.taiji.expectation > 0) {
-    applyDrift('resilience' as any, config.resilienceDriftRate * 0.5, '积极恢复');
+    applyDrift('resilience', config.resilienceDriftRate * 0.5, '积极恢复');
   }
 
   return { changes, log };

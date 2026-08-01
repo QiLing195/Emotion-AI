@@ -20,4 +20,10 @@ export interface EmotionContext {
   };
   /** 当前主导情绪名，e.g. "fear", "joy", "calm" */
   dominantState: string;
+  /** 次主导情绪（当两个情绪接近时，e.g. "anger"），用于表达矛盾感 */
+  secondaryEmotion?: string;
+  /** 情绪矛盾分数 [0, 1] — 主导与次主导越接近则越高 */
+  ambivalenceScore?: number;
+  /** 元情绪：困惑度 [0, 1] — 来自趋避冲突（sancai.A * sancai.B），默认 0 */
+  confusion?: number;
 }
