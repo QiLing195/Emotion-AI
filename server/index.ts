@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import AIGirlfriendServer from './server.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);

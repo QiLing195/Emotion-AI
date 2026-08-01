@@ -1,4 +1,4 @@
-import admin from 'firebase-admin';
+import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
@@ -18,20 +18,34 @@ export class FirebaseService {
   private initialize() {
     try {
       const configPath = path.join(__dirname, '..', '..', 'firebase-applet-config.json');
-      if (fs.existsSync(configPath)) {
-        const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        if (admin.apps.length === 0) {
-          admin.initializeApp({
-            projectId: firebaseConfig.projectId,
-          });
-        }
-        this.db = getFirestore();
-        console.log('Firebase Admin initialized successfully');
-      } else {
+      if (!fs.existsSync(configPath)) {
         console.warn('Firebase config file not found. Firebase features will be disabled.');
+        return;
       }
+
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+      // ponytail: 无凭证时跳过 Firestore，避免 gRPC 内部未捕获的 credential 重试崩溃
+      const hasCredentials = !!(
+        process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+        firebaseConfig.private_key ||
+        firebaseConfig.client_email
+      );
+      if (!hasCredentials) {
+        console.warn('Firebase credentials not found. Firestore persistence disabled.');
+        return;
+      }
+
+      if (getApps().length === 0) {
+        initializeApp({
+          projectId: firebaseConfig.projectId,
+        });
+      }
+      this.db = getFirestore();
+      console.log('Firebase Admin initialized successfully');
     } catch (e) {
       console.error('Failed to initialize Firebase Admin:', e);
+      this.db = null;
     }
   }
 

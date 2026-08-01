@@ -2,6 +2,10 @@ import { Application, Request, Response } from 'express';
 import crypto from 'crypto';
 import { DefaultAIEngine } from '../aiEngine.js';
 
+export function escapeXmlCdata(value: string): string {
+  return value.replaceAll(']]>', ']]]]><![CDATA[>');
+}
+
 export class WeChatOfficialAccountChannel {
   id = 'wechat_official';
   name = '微信公众号';
@@ -52,11 +56,11 @@ export class WeChatOfficialAccountChannel {
         // Format WeChat XML response
         const responseXml = `
 <xml>
-  <ToUserName><![CDATA[${fromUser}]]></ToUserName>
-  <FromUserName><![CDATA[${xml?.ToUserName?.[0]}]]></FromUserName>
+  <ToUserName><![CDATA[${escapeXmlCdata(fromUser)}]]></ToUserName>
+  <FromUserName><![CDATA[${escapeXmlCdata(xml?.ToUserName?.[0] || '')}]]></FromUserName>
   <CreateTime>${Math.floor(Date.now() / 1000)}</CreateTime>
   <MsgType><![CDATA[text]]></MsgType>
-  <Content><![CDATA[${aiResponse}]]></Content>
+  <Content><![CDATA[${escapeXmlCdata(aiResponse.text)}]]></Content>
 </xml>`;
 
         res.set('Content-Type', 'application/xml');

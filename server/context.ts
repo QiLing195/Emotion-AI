@@ -1,13 +1,11 @@
 // ponytail: ServerContext — bundles all shared mutable state
-// Extracted from server.ts global scope to enable incremental modularization.
+// 用于新 server/ 模块化架构的状态类型定义
 
 import type { CoreState, Layer2State, CuriosityState, Hypothesis, Experiment,
   TensionRegulatorState, PatternCase, WorldModelData, StrategyDirective, MemoryRecord } from './config.js';
 import type { EpisodicMemoryStore } from '../src/lib/episodicMemory.js';
 import type { ValueSystem } from '../src/lib/valueDiscovery.js';
 import type { MemoryGraph } from '../src/lib/memoryGraph.js';
-import type { PhaseState, TimeState, FriendState } from './stubs.js';
-
 // ── Types for state blocks ──
 
 export interface InternalState {
@@ -89,9 +87,9 @@ export interface ServerContext {
   _boundaryEscalated: boolean;
 
   // Phase / Time
-  phaseState: PhaseState;
-  timeState: TimeState;
-  friendState: FriendState;
+  phaseState: Record<string, any>;
+  timeState: Record<string, any>;
+  friendState: Record<string, any>;
 
   // Autonomy
   lastInteractionTime: number;

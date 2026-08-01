@@ -5,14 +5,14 @@
 //   - 调用顺序显式化、可追踪（S5 → S8 → 情感更新 → 策略选择 → 节奏决策）
 //   - 每步产出可独立用于调试/日志/认知追踪
 //
-// 使用方式（在 DefaultAIEngine 或 server.ts 中）：
+// 使用方式：
 //   import { aiCoordinator } from './aiCoordinator.js';
 //   const turn = await aiCoordinator.processTurn(userText, currentState, context);
 //   // turn.strategySnippet → 注入 System Prompt
 //   // turn.updatedEmotionState → 更新持久化状态
 //   // turn.rhythmDecision → 响应延迟/长度/模式
 
-import { extractEmotionContext } from '../../src/lib/emotionEngine.js';
+import { extractEmotionContext, classifyAttachmentStyle } from '../../src/lib/emotionEngine.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS } from '../../src/lib/dialogueStrategy.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
@@ -140,6 +140,14 @@ export class AICoordinator {
   private lastStrategy: StrategyType | null = null;
   /** Phase 2: 上一轮用户消息导致的 AI 效价变化量（本轮的反馈信号） */
   private lastTurnValenceDelta: number = 0;
+  /** Phase 2: 上轮用户情绪是否指向 AI — 用于反馈归因过滤 */
+  private lastUserDirectedAtAI: boolean = false;
+  /** v1.1 依恋风格：用户消息历史（用于话题切换率计算） */
+  private topicHistory: string[] = [];
+  /** v1.1 依恋风格：亲密表达次数 */
+  private intimacySeekingCount = 0;
+  /** v1.1 依恋风格：交互时间戳（用于频率波动计算） */
+  private interactionTimestamps: number[] = [];
   /** 🧠 思维图谱（跨轮共享，在情感引擎与策略引擎之间积累思维碎片） */
   private thoughtGraph = new ThoughtGraph();
   /** 🧩 记忆图谱（全局单例，统一四来源记忆 + BFS 激活扩散召回） */
@@ -168,11 +176,14 @@ export class AICoordinator {
     //   负变化 → 用户情绪恶化 → 上轮策略无效（penalty）
     if (this.lastStrategy && Math.abs(this.lastTurnValenceDelta) > 0.05) {
       const feedbackSignal = Math.tanh(this.lastTurnValenceDelta * 3); // [-1, 1]
-      if (Math.abs(feedbackSignal) > 0.1) {
-        rewardLearner.recordFeedback(feedbackSignal);
+      // 仅当用户情绪指向 AI 时给予全权重反馈；指向外部事件时衰减 70%
+      const attributionWeight = this.lastUserDirectedAtAI ? 1.0 : 0.3;
+      const weightedFeedback = feedbackSignal * attributionWeight;
+      if (Math.abs(weightedFeedback) > 0.1) {
+        rewardLearner.recordFeedback(weightedFeedback);
         bus.emit('StrategyFeedback', {
           strategy: this.lastStrategy,
-          feedback: Math.round(feedbackSignal * 1000) / 1000,
+          feedback: Math.round(weightedFeedback * 1000) / 1000,
           valenceDelta: Math.round(this.lastTurnValenceDelta * 1000) / 1000,
         });
       }
@@ -209,6 +220,16 @@ export class AICoordinator {
     contextAwareness.recordInteraction(currentValence, input.userText);
     const contextSnapshot = contextAwareness.getSnapshot(roundNumber, input.userText);
     const contextMs = Date.now() - t2;
+
+    // ── 阶段 2b: v1.1 依恋信号积累 ──
+    this.topicHistory.push(input.userText);
+    if (this.topicHistory.length > 20) this.topicHistory.shift();
+    this.interactionTimestamps.push(Date.now());
+    if (this.interactionTimestamps.length > 20) this.interactionTimestamps.shift();
+    const intimacyKeywords = ['想你', '陪我', '抱抱', '别走', '需要你', '不要离开', '爱', '喜欢'];
+    if (intimacyKeywords.some(kw => input.userText.includes(kw))) {
+      this.intimacySeekingCount++;
+    }
 
     // ── 阶段 3: 情感引擎更新（v1.0 applyEvent 统一路径）──
     const t3 = Date.now();
@@ -388,6 +409,22 @@ export class AICoordinator {
     }
     const memoryMs = Date.now() - t3_8;
 
+    // ── 阶段 3.9: v1.1 依恋风格计算（每 20 轮淬炼一次）──
+    if (roundNumber >= 20 && roundNumber % 20 === 0) {
+      const valenceVolatility = computeVolatility(this.valenceHistory);
+      const topicSwitchRate = computeTopicSwitchRate(this.topicHistory);
+      const intimacySeekingRate = Math.min(1, this.intimacySeekingCount / Math.max(1, this.topicHistory.length));
+      const freqVolatility = computeIntervalVolatility(this.interactionTimestamps);
+      const attachment = classifyAttachmentStyle(valenceVolatility, topicSwitchRate, intimacySeekingRate, freqVolatility);
+      // 慢速 EMA 淬炼到 evolution（不直接跳变）
+      const alpha = 0.15;
+      updatedEmotionState.evolution.attachmentAnxietyScore =
+        (updatedEmotionState.evolution.attachmentAnxietyScore ?? 0) * (1 - alpha) + attachment.anxiety * alpha;
+      updatedEmotionState.evolution.attachmentAvoidanceScore =
+        (updatedEmotionState.evolution.attachmentAvoidanceScore ?? 0) * (1 - alpha) + attachment.avoidance * alpha;
+      updatedEmotionState.evolution.attachmentStyle = attachment.style;
+    }
+
     // ── 阶段 4: 策略选择（S5 冲突 + S8 情境 + Sprint C 认知上下文 + Sprint E Insight + 🧠 Thought Graph + 🌑 Shadow + 🧩 Memory Graph 共同调制） ──
     const t4 = Date.now();
     const strategyCtx: StrategyContext = {
@@ -442,6 +479,7 @@ export class AICoordinator {
     this.lastStrategy = strategyDecision.strategy;
     this.lastTurnValenceDelta = updatedEmotionState.taiji.valence
       - input.currentEmotionState.taiji.valence;
+    this.lastUserDirectedAtAI = input.userAnalysis?.directedAtAI ?? false;
 
     // ── 阶段 4.5: 仲裁层（Arbitration）──
     // 跨模块交叉校验：防止冲突管理器/策略引擎/节奏控制器输出矛盾
@@ -556,6 +594,10 @@ export class AICoordinator {
     this.valenceHistory = [];
     this.lastStrategy = null;
     this.lastTurnValenceDelta = 0;
+    this.lastUserDirectedAtAI = false;
+    this.topicHistory = [];
+    this.intimacySeekingCount = 0;
+    this.interactionTimestamps = [];
     conflictManager.reset();
     contextAwareness.reset();
     rhythmController.reset();
@@ -577,6 +619,41 @@ export class AICoordinator {
       turnCount: this.turnCounter,
     };
   }
+}
+
+// ── v1.1 依恋风格辅助函数 ──
+
+/** 计算数值数组的标准化波动率 [0, 1] */
+function computeVolatility(values: number[]): number {
+  if (values.length < 3) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.min(1, Math.sqrt(variance) * 2);
+}
+
+/**
+ * 计算话题切换率 [0, 1]。
+ * ponytail: 简化为相邻消息长度变化率 > 50% 即视为话题切换。
+ */
+function computeTopicSwitchRate(messages: string[]): number {
+  if (messages.length < 2) return 0;
+  let switches = 0;
+  for (let i = 1; i < messages.length; i++) {
+    if (Math.abs(messages[i].length - messages[i - 1].length) / Math.max(1, messages[i - 1].length) > 0.5) {
+      switches++;
+    }
+  }
+  return switches / (messages.length - 1);
+}
+
+/** 计算交互间隔的波动率（log-scale） */
+function computeIntervalVolatility(timestamps: number[]): number {
+  if (timestamps.length < 3) return 0;
+  const intervals: number[] = [];
+  for (let i = 1; i < timestamps.length; i++) {
+    intervals.push(timestamps[i] - timestamps[i - 1]);
+  }
+  return computeVolatility(intervals.map(i => Math.log(i + 1)));
 }
 
 

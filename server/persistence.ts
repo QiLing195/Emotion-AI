@@ -19,6 +19,12 @@ import {
 import { importCuriosityState, exportCuriosityState } from '../src/curiosity/patterns.js';
 import { interestModel } from '../src/curiosity/state.js';
 import { memoryGraph } from '../src/lib/memoryGraph.js';
+import type { EmotionState } from '../src/lib/emotionEngine.js';
+import {
+  createRelationshipStateV2,
+  evaluateRelationshipEventsV2,
+  type RelationshipStateV2,
+} from '../src/lib/relationshipProgressionV2.js';
 
 // ── 文件路径 ──
 const EPISODIC_MEMORY_FILE = path.join(__dirname, '../memories/episodic_memory.json');
@@ -26,6 +32,8 @@ const VALUE_SYSTEM_FILE = path.join(__dirname, '../memories/value_system.json');
 const CURIOSITY_STATE_FILE = path.join(__dirname, '../memories/curiosity_state.json');
 const SEMANTIC_MEMORY_FILE = path.join(__dirname, '../memories/semantic_memory.json');
 const MEMORY_GRAPH_FILE = path.join(__dirname, '../memories/memory_graph.json');
+const EMOTION_STATE_FILE = path.join(__dirname, '../memories/emotion_state.json');
+const RELATIONSHIP_STATE_FILE = path.join(__dirname, '../memories/relationship_state_v2.json');
 
 // ── 运行时状态 ──
 export let episodicStore: EpisodicMemoryStore = createEpisodicMemoryStore();
@@ -105,12 +113,51 @@ export function loadMemoryGraph(): void {
   } catch (e) { console.log('[Persistence] 未找到记忆图谱文件，从头开始'); }
 }
 
-export function loadAll(): void {
+export function loadEmotionState(): EmotionState | null {
+  try {
+    if (!fs.existsSync(EMOTION_STATE_FILE)) return null;
+    const state = JSON.parse(fs.readFileSync(EMOTION_STATE_FILE, 'utf-8')) as EmotionState;
+    if (!state?.taiji || !state?.emotions || !state?.yinyang || !state?.evolution) return null;
+    return state;
+  } catch (error) {
+    console.error('[Persistence] Failed to load emotion state:', error);
+    return null;
+  }
+}
+
+export function loadRelationshipState(): RelationshipStateV2 {
+  try {
+    if (!fs.existsSync(RELATIONSHIP_STATE_FILE)) return createRelationshipStateV2();
+    const state = JSON.parse(fs.readFileSync(RELATIONSHIP_STATE_FILE, 'utf-8')) as RelationshipStateV2;
+    if (!state?.stage || !state?.dimensions || !Array.isArray(state.evidence) || !Array.isArray(state.transitions)) {
+      return createRelationshipStateV2();
+    }
+    state.sessionGains ??= {};
+    if (state.stage === 'stranger') {
+      const validEvidence = state.evidence.filter(event =>
+        !(event.actor === 'ai' && event.category === 'remembered_detail')
+      );
+      if (validEvidence.length !== state.evidence.length) {
+        return evaluateRelationshipEventsV2(
+          validEvidence,
+          createRelationshipStateV2(state.createdAt),
+        );
+      }
+    }
+    return state;
+  } catch (error) {
+    console.error('[Persistence] Failed to load relationship state:', error);
+    return createRelationshipStateV2();
+  }
+}
+
+export function loadAll(): EmotionState | null {
   loadEpisodicStore();
   loadValueSystem();
   loadSemanticMemory();
   loadCuriosityState();
   loadMemoryGraph();
+  return loadEmotionState();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -159,4 +206,48 @@ export function saveMemoryGraph(): void {
     fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
     fs.renameSync(tmp, MEMORY_GRAPH_FILE);
   } catch (e) { console.error('[Persistence] 保存记忆图谱失败:', e); }
+}
+
+export function saveEmotionState(state: EmotionState): void {
+  try {
+    const tmp = EMOTION_STATE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
+    fs.renameSync(tmp, EMOTION_STATE_FILE);
+  } catch (error) {
+    console.error('[Persistence] Failed to save emotion state:', error);
+  }
+}
+
+const asyncWriteQueues = new Map<string, Promise<void>>();
+
+function queueAtomicJsonWrite(file: string, value: unknown): Promise<void> {
+  const snapshot = JSON.stringify(value, null, 2);
+  const previous = asyncWriteQueues.get(file) ?? Promise.resolve();
+  const operation = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const tmp = `${file}.${process.pid}.tmp`;
+      await fs.promises.writeFile(tmp, snapshot, 'utf-8');
+      await fs.promises.rename(tmp, file);
+    })
+    .catch(error => {
+      console.error(`[Persistence] Failed to save ${path.basename(file)}:`, error);
+    });
+  asyncWriteQueues.set(file, operation);
+  void operation.finally(() => {
+    if (asyncWriteQueues.get(file) === operation) asyncWriteQueues.delete(file);
+  });
+  return operation;
+}
+
+export function saveEmotionStateAsync(state: EmotionState): Promise<void> {
+  return queueAtomicJsonWrite(EMOTION_STATE_FILE, state);
+}
+
+export function saveEpisodicStoreAsync(): Promise<void> {
+  return queueAtomicJsonWrite(EPISODIC_MEMORY_FILE, serializeEpisodicStore(episodicStore));
+}
+
+export function saveRelationshipStateAsync(state: RelationshipStateV2): Promise<void> {
+  return queueAtomicJsonWrite(RELATIONSHIP_STATE_FILE, state);
 }
