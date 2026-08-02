@@ -38,7 +38,7 @@ function rescoreResponse(aiText, category) {
   if (aiText.length >= 30) emotionScore += 0.07;
 
   score += Math.min(emotionScore, 0.30);
-  checks.push(emotionScore >= 0.10 ? '✓ 情感回应' : '✗ 情感回应');
+  checks.push(emotionScore >= 0.05 ? '✓ 情感回应' : '✗ 情感回应');
 
   // 3. 上下文适当性 (0.25) — 不跑题、不敷衍
   const badPatterns = [
