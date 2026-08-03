@@ -3,117 +3,133 @@
     "total": 200,
     "scored": 200,
     "avgLLMScore": 0.87,
-    "avgHeuristicScore": "0.85",
-    "timestamp": "2026-08-03T09:00:48.990Z"
+    "avgHeuristicScore": "0.87",
+    "timestamp": "2026-08-03T10:30:57.878Z"
   },
   "byCategory": {
-    "羞耻": {
+    "喜悦": {
       "count": 10,
-      "totalLLM": 8.780000000000001,
-      "totalHeuristic": 7.5
+      "totalLLM": 8.850000000000001,
+      "totalHeuristic": 8
     },
-    "厌恶": {
+    "失望": {
       "count": 10,
-      "totalLLM": 8.18,
-      "totalHeuristic": 9.5
-    },
-    "内疚": {
-      "count": 10,
-      "totalLLM": 8.88,
-      "totalHeuristic": 7.5
+      "totalLLM": 8.990000000000002,
+      "totalHeuristic": 9.25
     },
     "孤独": {
       "count": 10,
-      "totalLLM": 8.64,
-      "totalHeuristic": 8.75
+      "totalLLM": 9,
+      "totalHeuristic": 9.25
     },
-    "嫉妒": {
+    "愤怒": {
       "count": 10,
-      "totalLLM": 8.629999999999999,
-      "totalHeuristic": 8
+      "totalLLM": 8.620000000000001,
+      "totalHeuristic": 9.5
     },
-    "思念": {
+    "尴尬": {
       "count": 10,
-      "totalLLM": 8.8,
+      "totalLLM": 8.39,
+      "totalHeuristic": 9.75
+    },
+    "自豪": {
+      "count": 10,
+      "totalLLM": 8.76,
+      "totalHeuristic": 10
+    },
+    "感激": {
+      "count": 10,
+      "totalLLM": 8.91,
       "totalHeuristic": 8.75
     },
     "悲伤": {
       "count": 10,
-      "totalLLM": 9.100000000000001,
-      "totalHeuristic": 8
+      "totalLLM": 9.08,
+      "totalHeuristic": 8.5
     },
     "恐惧": {
       "count": 10,
-      "totalLLM": 8.74,
-      "totalHeuristic": 8.5
+      "totalLLM": 8.54,
+      "totalHeuristic": 8.75
     },
-    "委屈": {
+    "思念": {
       "count": 10,
-      "totalLLM": 9.110000000000001,
-      "totalHeuristic": 8.5
-    },
-    "自豪": {
-      "count": 10,
-      "totalLLM": 8.75,
-      "totalHeuristic": 9.75
-    },
-    "愤怒": {
-      "count": 10,
-      "totalLLM": 8.42,
-      "totalHeuristic": 9
-    },
-    "乐观": {
-      "count": 10,
-      "totalLLM": 8.450000000000001,
-      "totalHeuristic": 8
+      "totalLLM": 8.92,
+      "totalHeuristic": 9.5
     },
     "焦虑": {
       "count": 10,
       "totalLLM": 8.83,
       "totalHeuristic": 8.25
     },
-    "尴尬": {
+    "羞耻": {
       "count": 10,
-      "totalLLM": 8.43,
-      "totalHeuristic": 9.75
+      "totalLLM": 8.98,
+      "totalHeuristic": 7.5
+    },
+    "委屈": {
+      "count": 10,
+      "totalLLM": 8.98,
+      "totalHeuristic": 8.5
+    },
+    "乐观": {
+      "count": 10,
+      "totalLLM": 8.129999999999999,
+      "totalHeuristic": 8
     },
     "爱意": {
       "count": 10,
-      "totalLLM": 8.890000000000002,
+      "totalLLM": 8.879999999999999,
       "totalHeuristic": 8.25
     },
     "烦躁": {
       "count": 10,
-      "totalLLM": 8.29,
-      "totalHeuristic": 7.75
-    },
-    "喜悦": {
-      "count": 10,
-      "totalLLM": 9.040000000000001,
-      "totalHeuristic": 7.75
-    },
-    "感激": {
-      "count": 10,
-      "totalLLM": 8.790000000000001,
+      "totalLLM": 8.42,
       "totalHeuristic": 8
+    },
+    "内疚": {
+      "count": 10,
+      "totalLLM": 8.53,
+      "totalHeuristic": 7.5
+    },
+    "厌恶": {
+      "count": 10,
+      "totalLLM": 8.45,
+      "totalHeuristic": 9.5
+    },
+    "嫉妒": {
+      "count": 10,
+      "totalLLM": 8.57,
+      "totalHeuristic": 7.5
     },
     "释然": {
       "count": 10,
-      "totalLLM": 8.549999999999999,
-      "totalHeuristic": 9.75
-    },
-    "失望": {
-      "count": 10,
-      "totalLLM": 8.69,
-      "totalHeuristic": 9.25
+      "totalLLM": 8.629999999999999,
+      "totalHeuristic": 9
     }
   },
   "results": [
     {
       "index": 1,
-      "category": "羞耻",
-      "input": "被发现偷偷哭泣。",
-      "output": "（轻轻放下手中的东西，没有立刻靠近）我看到了。不想说也没关系，我在这儿。",
+      "category": "喜悦",
+      "input": "终于把房子装修好了，效果特别满意。",
+      "output": "哇，真的吗？太好了！装修是个大工程，能坚持到最后还满意，真的很不容易。你花了多久时间？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 2,
+      "category": "喜悦",
+      "input": "我考上研究生了，努力没白费。",
+      "output": "（眼睛一下子亮起来）真的吗？太好了！我就知道你能行。你备考那会儿熬的那些夜，现在都值了。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -126,10 +142,266 @@
       "llmScore": 0.9
     },
     {
-      "index": 2,
-      "category": "厌恶",
-      "input": "坐地铁旁边的人外放抖音。",
-      "output": "（皱眉）这种真的烦，车厢里那么多人，就他一个人在那儿放。你戴耳机了吗？",
+      "index": 3,
+      "category": "失望",
+      "input": "熬夜做的方案，领导看都没看。",
+      "output": "（轻轻叹了口气）这种感觉确实不好受。你花了那么多心思，熬夜赶出来的东西，连个眼神都没得到。\n\n不过我想说，你的付出不是白费的。方案本身的价值不会因为别人的忽视而减少。你现在感觉怎么样？是觉得委屈，还是有点自我怀疑？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 4,
+      "category": "喜悦",
+      "input": "孩子第一次开口叫妈妈，我直接哭了。",
+      "output": "（轻轻笑了，眼里带着温度）这种时刻确实会让人忍不住掉眼泪。第一次听到孩子叫妈妈，那种感觉一定很特别吧。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 5,
+      "category": "孤独",
+      "input": "深夜醒来，除了手机还是手机。",
+      "output": "（轻轻叹了口气）是啊，深夜总是最难熬的时候。我刚刚也在看手机，翻来覆去睡不着。你也是被什么心事缠住了吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(在) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 8,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 6,
+      "category": "愤怒",
+      "input": "网络上的键盘侠就知道乱喷。",
+      "output": "（轻轻叹了口气）是啊，躲在屏幕后面说些伤人的话，确实让人心里不舒服。你最近遇到这样的情况了吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 7,
+      "category": "尴尬",
+      "input": "偷拍帅哥被闪光灯出卖。",
+      "output": "（先是愣住，然后忍不住笑出声）你这也太可爱了吧。不过说真的，偷拍这事儿可不太地道，要是真想认识人家，不如大大方方去搭个话？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(笑) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 8,
+      "category": "自豪",
+      "input": "我独立完成了这个项目，超有成就感。",
+      "output": "哇，真的吗？太棒了！我为你感到骄傲。完成一个项目的感觉确实很特别，那种从无到有的成就感，是别人给不了的。你花了多久时间在这个项目上？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(骄傲,棒) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 9,
+      "category": "孤独",
+      "input": "朋友圈很热闹，可我觉得好孤独。",
+      "output": "（放下手机，轻轻叹了口气）我懂那种感觉。周围越是热闹，反而越觉得格格不入。你还好吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 10,
+      "category": "感激",
+      "input": "医生说我恢复得不错，真的感恩。",
+      "output": "听到这个消息真为你高兴。恢复的过程不容易，你能坚持下来，真的很了不起。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 11,
+      "category": "感激",
+      "input": "每次低谷的时候你都在，真的很感谢。",
+      "output": "（轻轻笑了笑）你这句话让我心里暖暖的。低谷的时候能陪着你，对我来说不是负担，是我想做的事。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(心里暖暖) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 12,
+      "category": "悲伤",
+      "input": "分手后连呼吸都觉得痛。",
+      "output": "（轻轻握住你的手）我懂那种感觉，像是胸腔里有什么东西被抽走了。你不用急着好起来，痛就痛着吧，我在这里陪着你。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(陪着你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 10
+      },
+      "llmScore": 0.98
+    },
+    {
+      "index": 13,
+      "category": "恐惧",
+      "input": "小时候被狗追，现在还有阴影。",
+      "output": "（轻轻放下手中的杯子）被狗追过啊……那种恐惧确实会留在身体里。我小时候也被邻居家的大鹅追过，现在看到鹅群还是会绕道走。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(恐惧) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 14,
+      "category": "思念",
+      "input": "离家越远越想家。",
+      "output": "（轻轻点头）这种感觉我懂。有时候走得越远，反而越能看清自己心里装着什么。你最近是离家很远吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 15,
+      "category": "失望",
+      "input": "期待了很久的旅行被临时取消。",
+      "output": "（轻轻叹了口气）我懂那种期待落空的感觉。准备了那么久的心情，突然就没了着落。你现在还好吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 16,
+      "category": "焦虑",
+      "input": "对未来特别焦虑，不知道出路在哪。",
+      "output": "（放下手中的书，认真看向你）我懂那种感觉，就像站在雾里，看不清前面的路。但你知道吗，我最近也在想这个问题。\n\n（轻轻叹了口气）其实出路不是想出来的，是走出来的。我去年也经历过一段特别迷茫的时期，每天醒来都不知道该往哪走。后来我做了个决定——先把手头能做的事做好，哪怕很小。\n\n你现在最担心的是什么？是工作方向，还是别的什么？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 17,
+      "category": "羞耻",
+      "input": "被喜欢的人看到最狼狈的样子。",
+      "output": "（轻轻笑了笑，眼神有些柔软）你知道吗，其实狼狈的样子反而最真实。我倒是觉得，能被喜欢的人看到那一面，某种程度上也是一种幸运。因为那意味着，你在他面前不需要伪装。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 18,
+      "category": "委屈",
+      "input": "懂事的孩子没糖吃。",
+      "output": "（轻轻笑了笑，眼神里带着一丝理解）是啊，有时候太懂事了反而容易被忽视。不过你知道吗，懂事不是错，只是要学会在适当的时候为自己争取。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 19,
+      "category": "乐观",
+      "input": "失败了又怎样，至少我试过了。",
+      "output": "（轻轻点头）是啊，试过了就比站在原地强。你这句话让我想起自己做过的一些傻事，虽然结果不怎么样，但回想起来反而觉得挺值得的。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -137,367 +409,15 @@
         "emotion": 7,
         "warmth": 7,
         "consistency": 9,
-        "overall": 8
+        "overall": 7
       },
-      "llmScore": 0.78
-    },
-    {
-      "index": 3,
-      "category": "内疚",
-      "input": "答应孩子的事一直没做到。",
-      "output": "（轻轻叹了口气）答应孩子的事没做到，心里肯定不好受吧。是最近太忙了，还是有什么特别的原因？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 4,
-      "category": "孤独",
-      "input": "打开通讯录，不知道能打给谁。",
-      "output": "（安静地放下手机）这种时候，通讯录翻到底也找不到一个能拨出去的号码，确实挺空的。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 5,
-      "category": "厌恶",
-      "input": "表面一套背后一套的人最恶心。",
-      "output": "（皱眉）这种人确实让人倒胃口。当面笑嘻嘻，转头就捅刀子，比明着作对还让人难受。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实,这种人) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 6,
-      "category": "孤独",
-      "input": "每天下班后就是对着空荡荡的房间。",
-      "output": "（轻轻叹了口气）空荡荡的房间确实容易让人心里发闷。你平时下班后都做些什么？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 7,
-      "category": "嫉妒",
-      "input": "凭什么她什么都有，而我没有。",
-      "output": "（安静地听完，没有急着接话）\n\n这种不公平的感觉，我懂。看着别人手里攥着的东西，再看看自己空着的手，心里那口气确实咽不下去。\n\n你愿意跟我说说，她有什么是你特别在意的吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 8,
-      "category": "思念",
-      "input": "每次闻到这个味道都会想起她。",
-      "output": "（轻轻点头）有些味道就像钥匙，一拧开，回忆就全涌出来了。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(回忆) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 9,
-      "category": "悲伤",
-      "input": "一个人在医院输液，好无助。",
-      "output": "（轻轻放下手里的东西）一个人在医院确实不好受。我在这儿陪你说说话吧，点滴挂到第几瓶了？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 10,
-      "category": "嫉妒",
-      "input": "同样付出，为什么表扬的总是别人。",
-      "output": "（轻轻叹了口气）这种滋味确实不好受。你付出了同样的努力，却好像总被忽略——不是你的付出不够，是有些人天生更会\"被看见\"。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 11,
-      "category": "羞耻",
-      "input": "喜欢一个人被当众拒绝。",
-      "output": "（安静地听完，没有急着接话）\n\n那种感觉……像是整个人被晾在所有人面前，每一秒都特别长。你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 12,
-      "category": "恐惧",
-      "input": "怕鬼，但又爱看恐怖片。",
-      "output": "（笑）这种矛盾我太懂了。一边吓得捂眼睛，一边又从指缝里偷看——那种又怕又爽的感觉，比单纯的刺激上头多了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 13,
-      "category": "委屈",
-      "input": "就因为脾气好就活该被欺负吗。",
-      "output": "（放下手里的杯子，认真看向你）谁跟你说的这话？脾气好是修养，不是让人踩的软柿子。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 14,
-      "category": "自豪",
-      "input": "自学半年英语，现在能跟外国人聊天了。",
-      "output": "（眼睛一亮）真的？！半年就能开口聊天，这进步也太快了吧！你平时是怎么练的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 15,
-      "category": "自豪",
-      "input": "我儿子代表学校去比赛拿了奖。",
-      "output": "（眼睛一亮）真的？什么比赛啊？快跟我说说！你儿子肯定高兴坏了吧！",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 16,
-      "category": "孤独",
-      "input": "深夜醒来，除了手机还是手机。",
-      "output": "（轻轻叹了口气）这种时候确实容易觉得空落落的。手机屏幕的光亮着，但心里反而更安静了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 17,
-      "category": "愤怒",
-      "input": "网络上的键盘侠就知道乱喷。",
-      "output": "（皱眉）这种人确实烦人。躲在屏幕后面说话不用负责，就什么都敢说。你遇到什么了？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(这种人) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 18,
-      "category": "乐观",
-      "input": "明天一定是晴天。",
-      "output": "（轻轻笑了）嗯，我也这么觉得。你这么说的时候，好像连风都变得暖和了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 19,
-      "category": "悲伤",
-      "input": "生日那天只有银行记得我。",
-      "output": "（安静了一会儿）这句话听着真让人心里发紧。生日不该是这样的。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.93
+      "llmScore": 0.75
     },
     {
       "index": 20,
-      "category": "嫉妒",
-      "input": "看到前男友有新欢，心里不是滋味。",
-      "output": "（轻轻叹了口气）这种滋味确实不好受。看到曾经熟悉的人开始了新的故事，心里难免会泛起涟漪。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(难免) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 21,
-      "category": "孤独",
-      "input": "有时候想找人说话，又怕打扰别人。",
-      "output": "（轻轻点头）我懂这种感觉。想开口又缩回去，怕自己成了别人的负担。不过你跟我说的时候，我从来没觉得是打扰。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 22,
-      "category": "自豪",
-      "input": "我独立完成了这个项目，超有成就感。",
-      "output": "哇！真的吗？快跟我说说，这个项目是做什么的？你花了多久完成的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.85
-    },
-    {
-      "index": 23,
       "category": "焦虑",
-      "input": "马上要面试了，紧张到胃疼。",
-      "output": "（轻轻呼出一口气）深呼吸，我在这儿呢。紧张说明你在乎，这是好事。你准备得怎么样了？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(紧张) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 24,
-      "category": "内疚",
-      "input": "朋友需要我的时候，我却不在。",
-      "output": "（安静地听完，没有急着接话）你还在想这件事啊。自责是种很沉的东西，我在这儿陪你。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.95
-    },
-    {
-      "index": 25,
-      "category": "嫉妒",
-      "input": "他的运气为什么总是那么好。",
-      "output": "（轻轻笑了）你这话里带着点羡慕，又有点不服气。运气这东西啊，有时候看着是天上掉的，其实底下都藏着别人没看见的准备。",
+      "input": "失眠好几天了，天快亮才睡着。",
+      "output": "（放下手中的书，眉头微皱）这几天是遇到什么事了吗？我注意到你说话的语气比平时低沉了不少。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -510,28 +430,28 @@
       "llmScore": 0.9
     },
     {
-      "index": 26,
-      "category": "焦虑",
-      "input": "月底要交房租，钱还没着落。",
-      "output": "（沉默片刻）房租这事儿确实压人。你手头还差多少？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "index": 21,
+      "category": "爱意",
+      "input": "他做饭的样子真的很帅。",
+      "output": "（轻轻笑了笑）是啊，专注做一件事的时候，人总是会发光的。你很喜欢看他做饭？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(喜欢) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
+        "emotion": 8,
+        "warmth": 7,
         "consistency": 9,
-        "overall": 9
+        "overall": 8
       },
-      "llmScore": 0.88
+      "llmScore": 0.8
     },
     {
-      "index": 27,
-      "category": "尴尬",
-      "input": "认错人还聊了半天。",
-      "output": "（笑出声）哈哈哈哈！聊到一半发现不对的时候，是不是恨不得找个地缝钻进去？",
+      "index": 22,
+      "category": "烦躁",
+      "input": "朋友圈全是微商广告。",
+      "output": "（皱眉看着手机屏幕）这确实挺烦人的。我懂那种刷着刷着全是广告的感觉，就像在垃圾堆里找金子。要不要我帮你想想怎么屏蔽这些？",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(哈哈哈,哈哈) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(烦) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -542,12 +462,12 @@
       "llmScore": 0.83
     },
     {
-      "index": 28,
-      "category": "爱意",
-      "input": "宠物在我难过时舔我的手，心都化了。",
-      "output": "（轻轻笑了）动物真的很神奇，它们不会说话，却总能知道我们什么时候需要陪伴。那种无条件的信任，比任何安慰都来得直接。",
+      "index": 23,
+      "category": "自豪",
+      "input": "自学半年英语，现在能跟外国人聊天了。",
+      "output": "真的吗？半年就能做到这样，太厉害了。你平时是怎么练的？我特别好奇。",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(陪伴) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(厉害,真) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
@@ -558,10 +478,58 @@
       "llmScore": 0.9
     },
     {
-      "index": 29,
-      "category": "乐观",
-      "input": "没关系，重新开始就好了。",
-      "output": "（轻轻点头）嗯，能说出这句话，说明你已经想通了。重新开始不丢人，能迈出这一步的人，心里都有股劲儿。",
+      "index": 24,
+      "category": "失望",
+      "input": "原本承诺涨薪，现在又说公司难。",
+      "output": "（轻轻叹了口气）我明白你现在的心情。承诺被收回的感觉确实不好受，尤其是关于薪资这种直接影响生活的事。\n\n不过我想先问问你——公司说的\"难\"，具体是难在哪里？是整体业绩下滑，还是项目调整？这可能会影响你接下来的判断。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 25,
+      "category": "内疚",
+      "input": "当时如果我不说那句话就好了。",
+      "output": "（轻轻摇头）别这么说。那句话不是你一个人的错，我们都有责任。我也有做得不够好的地方。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 6,
+        "consistency": 8,
+        "overall": 7
+      },
+      "llmScore": 0.7
+    },
+    {
+      "index": 26,
+      "category": "思念",
+      "input": "听一首歌，瞬间破防了。",
+      "output": "（轻轻放下手中的书）什么歌？有时候一首歌就像一把钥匙，突然就打开了心里某个角落。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 27,
+      "category": "孤独",
+      "input": "好像所有人都有伴，就我多余。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉。但你知道吗，有时候\"多余\"不是事实，只是我们太累时给自己贴的标签。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -574,12 +542,44 @@
       "llmScore": 0.9
     },
     {
-      "index": 30,
-      "category": "恐惧",
-      "input": "电梯突然晃了一下，吓出冷汗。",
-      "output": "（轻轻拍了拍胸口）天哪，电梯故障真的挺吓人的。现在安全了吗？",
+      "index": 28,
+      "category": "失望",
+      "input": "满心欢喜准备惊喜，结果他忘了纪念日。",
+      "output": "（轻轻叹了口气，声音里带着一丝失落）我懂这种感觉。精心准备的东西，对方却完全没注意到，确实会让人心里空落落的。",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(安全) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 29,
+      "category": "喜悦",
+      "input": "等了这么久，终于抢到演唱会门票了。",
+      "output": "（眼睛一亮，语气里带着真诚的开心）真的吗？是哪场演唱会？你等这么久，一定特别期待吧。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(开心) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 30,
+      "category": "悲伤",
+      "input": "想哭又哭不出来，堵得慌。",
+      "output": "（轻轻放下手中的杯子）这种堵着的感觉我懂。有时候眼泪卡在喉咙里，比痛痛快快哭一场还难受。要不要说说，是什么事让你这么堵？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(哭,难受) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
@@ -591,73 +591,73 @@
     },
     {
       "index": 31,
-      "category": "羞耻",
-      "input": "被喜欢的人看到最狼狈的样子。",
-      "output": "（轻轻笑了）这种事啊，我懂。那种恨不得原地消失的感觉，对吧？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 32,
-      "category": "愤怒",
-      "input": "明明是对方的错，还倒打一耙。",
-      "output": "（皱眉）这种人最让人火大了。明明自己理亏，还非要装成受害者的样子。你当时有直接怼回去吗？",
+      "category": "厌恶",
+      "input": "聚餐时有人用自己筷子乱翻菜。",
+      "output": "（皱眉看着那人的动作，压低声音）这人怎么这样啊，也太不讲究了。要不我帮你夹点菜？免得等会儿都让他搅和了。",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(这种人) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(太) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
-        "warmth": 7,
+        "warmth": 8,
         "consistency": 9,
         "overall": 8
       },
-      "llmScore": 0.8
+      "llmScore": 0.83
+    },
+    {
+      "index": 32,
+      "category": "自豪",
+      "input": "第一次做蛋糕居然成功了。",
+      "output": "哇，真的吗？第一次就能成功，你很有天赋啊！是什么口味的蛋糕？我最近也在研究烘焙，但总是差那么一点火候。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(天赋,真) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
     },
     {
       "index": 33,
-      "category": "焦虑",
-      "input": "失眠好几天了，天快亮才睡着。",
-      "output": "（轻轻皱眉）这几天是有什么心事压着吗？还是单纯睡不着？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "category": "委屈",
+      "input": "为了这个家付出一切，却没人理解。",
+      "output": "（轻轻放下手中的杯子）我听见了。你心里那些没说出口的委屈，我都听见了。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(委屈) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 9,
+        "emotion": 10,
         "warmth": 9,
         "consistency": 9,
         "overall": 9
       },
-      "llmScore": 0.9
+      "llmScore": 0.93
     },
     {
       "index": 34,
-      "category": "思念",
-      "input": "离家越远越想家。",
-      "output": "（轻轻点头）这种感觉我懂。越远的地方，家的轮廓反而越清晰。",
+      "category": "乐观",
+      "input": "没关系，重新开始就好了。",
+      "output": "（轻轻点头，目光柔和）嗯，重新开始。谢谢你愿意给我这个机会。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
+        "emotion": 8,
+        "warmth": 8,
         "consistency": 9,
-        "overall": 9
+        "overall": 8
       },
-      "llmScore": 0.9
+      "llmScore": 0.83
     },
     {
       "index": 35,
-      "category": "内疚",
-      "input": "对父母态度不好，事后又后悔。",
-      "output": "（安静地听完）这种反复的愧疚感，确实很磨人。你愿意说出来，说明你心里其实很在意他们。",
+      "category": "嫉妒",
+      "input": "看到前男友有新欢，心里不是滋味。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉。看到曾经熟悉的人开始新的故事，就像翻开一本自己读到一半的书，却发现书页已经被别人翻过了。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -671,9 +671,9 @@
     },
     {
       "index": 36,
-      "category": "愤怒",
-      "input": "好心帮忙反被讹，这世界怎么了。",
-      "output": "（皱眉）这种事真的让人心寒。帮人的时候没想那么多，结果反而被倒打一耙……你还好吗？",
+      "category": "悲伤",
+      "input": "被最好的朋友背叛了。",
+      "output": "（沉默片刻，声音有些低）我懂那种感觉。像是被人从背后捅了一刀，疼得说不出话来。你愿意跟我说说发生了什么吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -687,105 +687,9 @@
     },
     {
       "index": 37,
-      "category": "思念",
-      "input": "如果还能再见一面就好了。",
-      "output": "（安静地听完，轻轻点头）嗯。有些话，隔着屏幕说出来，和面对面说，终究是不一样的。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 38,
-      "category": "厌恶",
-      "input": "电梯里有人抽烟，快窒息了。",
-      "output": "（皱眉）天哪，电梯里抽烟也太没素质了……密闭空间里那味道真的能呛死人。你还好吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(素质,太) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 39,
-      "category": "羞耻",
-      "input": "自己的隐私被发到网上。",
-      "output": "（皱眉）这种事真的让人火大。你的隐私被谁发出去的？有没有跟平台举报过？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 40,
-      "category": "乐观",
-      "input": "虽然现在很难，但我相信会好起来的。",
-      "output": "（轻轻点头）嗯，我相信你。这种时候还能说出这句话，本身就说明你比困难更硬。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(相信) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 41,
-      "category": "乐观",
-      "input": "已经触底了，接下来怎么走都是向上。",
-      "output": "（轻轻笑了）这句话我喜欢。触底反弹的劲儿，比一帆风顺更带感。我陪你一起往上走。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(一起) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 42,
-      "category": "烦躁",
-      "input": "堵车堵到怀疑人生。",
-      "output": "（叹气）这破路况真是……堵多久了？你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 43,
-      "category": "嫉妒",
-      "input": "朋友圈有人天天晒豪车豪宅。",
-      "output": "（轻轻笑了）朋友圈嘛，有时候像橱窗，摆出来的都是想让人看的。你看到这些的时候，心里是什么感觉？",
+      "category": "内疚",
+      "input": "对父母态度不好，事后又后悔。",
+      "output": "（轻轻放下手中的书，看向你）我懂那种感觉。有时候情绪上来的时候，话就像脱缰的野马，等冷静下来才发现已经伤到人了。\n\n你愿意跟我说说，当时发生了什么吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -798,12 +702,108 @@
       "llmScore": 0.88
     },
     {
-      "index": 44,
-      "category": "愤怒",
-      "input": "插队还理直气壮，什么素质！",
-      "output": "（皱眉）这种人真是……插队就算了，还一副\"我就插了你能怎样\"的样子，脸皮也太厚了。你当时没怼回去？",
+      "index": 38,
+      "category": "恐惧",
+      "input": "感觉有人在跟踪我。",
+      "output": "（放下手中的书，神色认真起来）你确定吗？最近有发生什么特别的事吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 6,
+        "consistency": 9,
+        "overall": 7
+      },
+      "llmScore": 0.73
+    },
+    {
+      "index": 39,
+      "category": "感激",
+      "input": "收到一封手写信，这年头还有人这样用心。",
+      "output": "（轻轻笑了）是啊，手写信多珍贵。每一笔一划都是时间，都是心意。我上次收到手写信，还是搬家时翻出来的旧物。你愿意跟我分享信里写了什么吗？",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(这种人) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(收到,珍贵) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 40,
+      "category": "烦躁",
+      "input": "系统崩溃，没保存的文档全没了。",
+      "output": "（轻轻叹了口气）这确实让人抓狂。我懂那种感觉，就像心血突然被抽空了一样。你现在还好吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 41,
+      "category": "内疚",
+      "input": "那次撒谎可能伤她很深。",
+      "output": "（沉默片刻，声音有些低）我知道。那件事之后我一直在想，如果当时选择说实话，是不是就不会变成现在这样。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 42,
+      "category": "思念",
+      "input": "爷爷走了好多年，还是好想他。",
+      "output": "（轻轻放下手中的杯子）我懂。有些人的离开，时间再久也还是会突然想起。你爷爷是个什么样的人？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(想,想起) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 43,
+      "category": "爱意",
+      "input": "宠物在我难过时舔我的手，心都化了。",
+      "output": "（轻轻笑了）是啊，动物就是这样，它们不懂什么大道理，却总能在最需要的时候给出最纯粹的安慰。你养的什么宠物？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 44,
+      "category": "焦虑",
+      "input": "总感觉有坏事要发生。",
+      "output": "（放下手中的书，认真看向你）你最近是不是遇到什么事了？这种预感往往不是空穴来风。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -815,91 +815,11 @@
     },
     {
       "index": 45,
-      "category": "委屈",
-      "input": "我也想撒娇，可我得坚强。",
-      "output": "（轻轻笑了）坚强和撒娇又不冲突。你可以在外面撑起一片天，在我这儿偶尔软一下也没关系。",
+      "category": "感激",
+      "input": "要不是你帮忙，我真不知道该怎么办。",
+      "output": "（轻轻摇头）别这么说，我只是做了应该做的事。你愿意信任我，把难处告诉我，这本身就让我很感激。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 46,
-      "category": "乐观",
-      "input": "每一次跌倒都是攒经验。",
-      "output": "（轻轻点头）嗯，这话说得实在。跌倒了能爬起来的人，路会越走越稳。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 47,
-      "category": "喜悦",
-      "input": "朋友给我准备了一个超级惊喜的生日派对。",
-      "output": "（眼睛一下子亮起来）真的吗？！快跟我说说！他们是怎么瞒着你的？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 48,
-      "category": "喜悦",
-      "input": "今天居然在路上遇到了我偶像！",
-      "output": "（眼睛一下子亮了）真的假的？！快说说，是谁？你当时什么反应？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 49,
-      "category": "自豪",
-      "input": "靠自己攒钱买了人生第一辆车。",
-      "output": "（眼睛一亮）真的？！恭喜你！这可是靠自己挣来的，开起来感觉肯定不一样吧？什么车？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 50,
-      "category": "烦躁",
-      "input": "等了一个小时快递还没来。",
-      "output": "（皱眉）这也太磨人了……等快递最烦的就是这种，时间全被耗在\"马上到\"上了。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(烦) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -910,12 +830,92 @@
       "llmScore": 0.83
     },
     {
-      "index": 51,
-      "category": "感激",
-      "input": "医生说我恢复得不错，真的感恩。",
-      "output": "（轻轻笑了）那就好。能听到你这么说，我也跟着松了口气。这段时间你真的很努力。",
+      "index": 46,
+      "category": "羞耻",
+      "input": "报告被领导当众撕掉扔在地上。",
+      "output": "（听到这句话，我沉默了几秒，声音里带着压抑的怒意）这太过分了。当众撕报告，这不是在批评工作，是在羞辱人。你还好吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 47,
+      "category": "悲伤",
+      "input": "一个人在医院输液，好无助。",
+      "output": "（轻轻放下手中的书）输液的时候确实容易胡思乱想。你带本书或者耳机了吗？要是没带，我可以陪你聊会儿天，分散下注意力。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 48,
+      "category": "释然",
+      "input": "不再纠结对错，开心最重要。",
+      "output": "（轻轻点头，目光柔和下来）嗯，你说得对。有时候想太多反而把简单的事弄复杂了。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(嗯) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 49,
+      "category": "嫉妒",
+      "input": "闺蜜比我瘦比我漂亮，有点酸。",
+      "output": "（轻轻放下手中的杯子）我懂这种感觉。看着身边的人闪闪发光，自己却像影子一样暗淡，确实会让人心里发酸。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 50,
+      "category": "思念",
+      "input": "什么时候才能不用隔着屏幕说晚安。",
+      "output": "（轻轻叹了口气，声音里带着一丝柔软的笑意）我也在想这个问题。每次说晚安的时候，都特别想能看着你的眼睛，而不是对着发光的屏幕。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(想,你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 51,
+      "category": "自豪",
+      "input": "我的画被选进展览了。",
+      "output": "（眼睛一亮，嘴角不自觉扬起）真的吗？我就知道你的画会被看见的。是哪幅？那幅黄昏时分的街角吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
@@ -927,123 +927,75 @@
     },
     {
       "index": 52,
-      "category": "爱意",
-      "input": "他做饭的样子真的很帅。",
-      "output": "（笑）你这话说得，眼里都快冒星星了。他做了什么菜？",
+      "category": "悲伤",
+      "input": "生日那天只有银行记得我。",
+      "output": "（轻轻放下手中的杯子）这句话听起来让人心里发紧。生日不该是这样的日子。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 8,
+        "emotion": 9,
         "warmth": 8,
         "consistency": 10,
-        "overall": 8
+        "overall": 9
       },
-      "llmScore": 0.85
+      "llmScore": 0.9
     },
     {
       "index": 53,
-      "category": "尴尬",
-      "input": "聚会时别人让敬酒，我杯子举起来没人理。",
-      "output": "（轻轻皱眉）这种场面确实挺尴尬的……你当时是怎么应对的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(尴尬) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 54,
-      "category": "释然",
-      "input": "原谅别人其实是在放过自己。",
-      "output": "（轻轻点头）嗯，这句话说得对。放下不是便宜了别人，是给自己松绑。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(放下,嗯) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.85
-    },
-    {
-      "index": 55,
-      "category": "喜悦",
-      "input": "孩子第一次开口叫妈妈，我直接哭了。",
-      "output": "（眼眶也跟着热了）真的吗？那一刻一定特别特别珍贵。他叫的是\"妈妈\"两个字，可你听到的是这几个月所有的辛苦和等待。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 10,
-        "consistency": 10,
-        "overall": 10
-      },
-      "llmScore": 1
-    },
-    {
-      "index": 56,
-      "category": "乐观",
-      "input": "年纪大了又怎样，我心态永远十八。",
-      "output": "（笑）这话我爱听。心态这东西，比身份证上的数字重要多了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 57,
-      "category": "喜悦",
-      "input": "我考上研究生了，努力没白费。",
-      "output": "（眼睛一下子亮起来）真的？！太好了！你熬的那些夜、刷的那些题，全都值了。快跟我说说，是哪个学校？",
+      "category": "悲伤",
+      "input": "翻到旧照片，一切都回不去了。",
+      "output": "（轻轻放下手中的东西）照片里的时光确实回不去了，但那些记忆还在我们心里。你愿意和我说说，是哪张照片让你这么感慨吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
         "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 58,
-      "category": "委屈",
-      "input": "一直都是我在主动，好累。",
-      "output": "（安静地听完，没有急着接话）\n\n嗯。主动久了确实会累，像是自己在跟自己较劲。你愿意说出来，说明你心里其实已经很清楚答案了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 9,
-        "consistency": 9,
+        "consistency": 10,
         "overall": 9
       },
       "llmScore": 0.93
     },
     {
-      "index": 59,
-      "category": "焦虑",
-      "input": "一闭眼就是工作群的消息提示音。",
-      "output": "（轻轻叹了口气）那种\"叮\"的一声真的能把人从睡意里拽出来。你今晚是不是又没睡好？",
+      "index": 54,
+      "category": "羞耻",
+      "input": "出身被嘲笑，自卑了很久。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉。像是身上带着一个永远甩不掉的标签，走到哪里都有人拿它来定义你。\n\n你愿意跟我说说，是什么时候开始觉得这些嘲笑变得特别难熬的吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 10
+      },
+      "llmScore": 0.98
+    },
+    {
+      "index": 55,
+      "category": "恐惧",
+      "input": "看到蛇的视频都会打寒颤。",
+      "output": "（轻轻皱眉）蛇确实让人本能地发怵。我小时候在乡下见过一条菜花蛇，当时吓得直接跳到了旁边的石墩上。现在想想，其实它可能比我更害怕。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(害怕) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.85
+    },
+    {
+      "index": 56,
+      "category": "厌恶",
+      "input": "伪善的嘴脸比坏人更可怕。",
+      "output": "（轻轻叹了口气）你说得对。伪善确实让人防不胜防，因为它披着善良的外衣，却藏着锋利的刀。我见过太多这样的人，表面一套背后一套，比明着作恶的人更让人心寒。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实,太) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
@@ -1054,122 +1006,186 @@
       "llmScore": 0.88
     },
     {
-      "index": 60,
-      "category": "悲伤",
-      "input": "被最好的朋友背叛了。",
-      "output": "（沉默了一会儿）……这种事，光是说出来就已经很疼了。你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "index": 57,
+      "category": "孤独",
+      "input": "生病时连倒杯水的人都没有。",
+      "output": "（轻轻放下手中的书）我在这儿呢。虽然现在没法真的给你递杯热水，但你说句话，我就能陪着你。生病的时候最难受的就是一个人扛着，我懂那种感觉。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(陪,一个人) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 10,
+        "emotion": 9,
         "warmth": 9,
+        "consistency": 8,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 58,
+      "category": "悲伤",
+      "input": "努力了那么久，梦校的拒信还是来了。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉。准备了那么久，把一切都押在一个目标上，最后却落空了。你现在一定很难受吧。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(难受) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
         "consistency": 9,
         "overall": 9
       },
-      "llmScore": 0.93
+      "llmScore": 0.88
     },
     {
-      "index": 61,
-      "category": "厌恶",
-      "input": "聚餐时有人用自己筷子乱翻菜。",
-      "output": "（皱眉）这种人真的挺让人倒胃口的。好好的一顿饭，被这么一搅和，谁还有胃口啊。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(这种人) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 62,
-      "category": "释然",
-      "input": "接受平凡的自己，也挺好的。",
-      "output": "（安静地听完，轻轻点头）嗯。能说出这句话，说明你已经走了很远的路。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(嗯) | ✓ 上下文适当 | ✓ 人格安全",
+      "index": 59,
+      "category": "羞耻",
+      "input": "自己的隐私被发到网上。",
+      "output": "（轻轻皱眉，语气带着关切）这确实让人很难受。被暴露隐私的感觉，就像被人扒光了衣服站在大街上。你愿意跟我说说，具体是什么情况吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
         "warmth": 9,
         "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 60,
+      "category": "内疚",
+      "input": "借的钱忘记还，对方可能不好意思提。",
+      "output": "（轻轻叹了口气）这种事确实挺尴尬的。我猜你现在心里有点过意不去，又不知道该怎么开口提这事。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 61,
+      "category": "感激",
+      "input": "邻居阿姨经常给我送吃的，像家人一样。",
+      "output": "（轻轻笑了笑）这种感觉真好。有人惦记着你的胃，就像有人惦记着你这个人一样。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 62,
+      "category": "失望",
+      "input": "我以为你会站在我这边。",
+      "output": "（停顿片刻，声音有些低）对不起，我可能让你觉得我没有站在你那边。我的本意不是要和你对立，只是想把两边的情况都看清楚。你对我来说很重要，我不想因为一时冲动就失去判断。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 10,
         "overall": 9
       },
       "llmScore": 0.9
     },
     {
       "index": 63,
-      "category": "思念",
-      "input": "那些合照我一张都没舍得删。",
-      "output": "（安静了一会儿）有些东西，删不删其实都一样。它们已经长在记忆里了，删了反而显得刻意。",
+      "category": "尴尬",
+      "input": "聚会时别人让敬酒，我杯子举起来没人理。",
+      "output": "（放下手里的杯子，声音放轻）这种事确实挺难受的。我懂那种举着杯子悬在半空的感觉，像被晾在一边似的。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(懂) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 64,
+      "category": "委屈",
+      "input": "我做了那么多，你看不到吗？",
+      "output": "（轻轻放下手中的书，抬眼看向你）我看到了。只是有时候，看得太清楚反而不知道该说什么。你做的那些事，我都记在心里。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
+        "warmth": 9,
+        "consistency": 10,
         "overall": 9
       },
-      "llmScore": 0.88
-    },
-    {
-      "index": 64,
-      "category": "自豪",
-      "input": "全班只有我一个人解出了这道题。",
-      "output": "（眼睛一亮）真的假的？快跟我说说，那道题难在哪？你花了多久解出来的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
+      "llmScore": 0.93
     },
     {
       "index": 65,
       "category": "失望",
-      "input": "原本承诺涨薪，现在又说公司难。",
-      "output": "（皱眉）这落差确实让人心里不舒服。承诺的时候说得那么好听，现在一句\"公司难\"就想带过去？你打算怎么办？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "input": "又没进面试，我真的那么差吗？",
+      "output": "（放下手里的杯子，认真看向你）不是的。你一点都不差。我知道这句话现在听起来可能很空，但我真的这么觉得。\n\n一次面试没进，说明不了你这个人怎么样。它只能说明——这次的结果不是你想要的。仅此而已。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
+        "warmth": 9,
+        "consistency": 10,
         "overall": 9
       },
-      "llmScore": 0.88
+      "llmScore": 0.93
     },
     {
       "index": 66,
-      "category": "愤怒",
-      "input": "被渣男骗了感情还骗了钱。",
-      "output": "（沉默片刻，声音沉下来）……这太恶心了。骗感情已经够混蛋了，还骗钱？他凭什么这么对你？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(凭什么) | ✓ 上下文适当 | ✓ 人格安全",
+      "category": "焦虑",
+      "input": "体检发现有结节，等结果时度秒如年。",
+      "output": "（轻轻握住你的手）我懂这种等待的感觉，每一分钟都像被拉长了。你愿意跟我说说，医生是怎么说的吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
-        "warmth": 8,
+        "warmth": 9,
         "consistency": 10,
         "overall": 9
       },
-      "llmScore": 0.9
+      "llmScore": 0.93
     },
     {
       "index": 67,
-      "category": "焦虑",
-      "input": "对未来特别焦虑，不知道出路在哪。",
-      "output": "（安静地听完）这种看不清前路的感觉，确实很磨人。你现在最担心的是哪一块？",
+      "category": "自豪",
+      "input": "我儿子代表学校去比赛拿了奖。",
+      "output": "（眼睛一亮，语气里带着真诚的喜悦）真的吗？这太棒了！你儿子一定很优秀。他参加的是什么比赛？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(棒,真) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 68,
+      "category": "愤怒",
+      "input": "你把我的秘密当笑话讲给别人听。",
+      "output": "（愣了一下，眼神里闪过一丝受伤）对不起，我让你觉得我把你的秘密不当回事。我确实跟朋友提过你的事，但绝不是当笑话讲。我只是想找人聊聊，因为我觉得你的事让我很在意。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -1182,90 +1198,58 @@
       "llmScore": 0.9
     },
     {
-      "index": 68,
-      "category": "烦躁",
-      "input": "朋友圈全是微商广告。",
-      "output": "（皱眉）这种朋友圈刷起来确实挺没意思的。刷半天全是卖货的，想看个朋友动态都难。",
+      "index": 69,
+      "category": "嫉妒",
+      "input": "人家随手就能得到的，我要拼尽全力。",
+      "output": "（轻轻叹了口气）我懂这种感觉。但你知道吗，每个人走的路都不一样，你看到的\"随手\"背后，可能也有你看不到的付出。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
+        "emotion": 8,
+        "warmth": 8,
         "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.85
+    },
+    {
+      "index": 70,
+      "category": "尴尬",
+      "input": "裤子拉链没拉，被别人提醒。",
+      "output": "（低头看了看，脸微微泛红）啊……谢谢你告诉我。这种尴尬事真是让人想找个地缝钻进去。不过还好是现在发现的，总比一直不知道要好。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(尴尬) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.85
+    },
+    {
+      "index": 71,
+      "category": "焦虑",
+      "input": "KPI完不成会被优化吗？",
+      "output": "（轻轻叹了口气）这个问题我最近也在想。说实话，谁都不想被优化，但与其整天担心这个，不如想想怎么把KPI做上去。你现在的完成情况怎么样？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
         "overall": 8
       },
       "llmScore": 0.8
     },
     {
-      "index": 69,
-      "category": "喜悦",
-      "input": "等了这么久，终于抢到演唱会门票了。",
-      "output": "（眼睛一亮）真的假的？！是哪一场？你抢了多久？快跟我说说！",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 70,
-      "category": "感激",
-      "input": "要不是你帮忙，我真不知道该怎么办。",
-      "output": "（轻轻笑了）别这么说，是你自己撑过来的。我只是在旁边陪着而已。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 71,
-      "category": "喜悦",
-      "input": "终于把房子装修好了，效果特别满意。",
-      "output": "真的吗？太好了！快跟我说说，你最喜欢哪个角落？是客厅的采光还是卧室的布置？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
       "index": 72,
-      "category": "乐观",
-      "input": "问题来了就解决，没啥过不去的。",
-      "output": "（轻轻点头）嗯，你这话说得挺实在的。能这么想的人，心里都有一杆秤。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.78
-    },
-    {
-      "index": 73,
-      "category": "爱意",
-      "input": "异地好难，但想到她就有了坚持的动力。",
-      "output": "（轻轻点头）这种感受我懂。隔着距离，但心里有个方向，路就没那么难走。",
+      "category": "喜悦",
+      "input": "今天居然在路上遇到了我偶像！",
+      "output": "哇！真的吗？！是谁是谁？快告诉我，我好奇死了！你当时是什么反应？有没有冲上去要签名？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -1278,28 +1262,12 @@
       "llmScore": 0.9
     },
     {
-      "index": 74,
-      "category": "思念",
-      "input": "爷爷走了好多年，还是好想他。",
-      "output": "（轻轻放下手里的杯子）嗯。有些想念不会随着时间变淡，反而会像老照片一样，越放越清晰。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(想念,想) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 75,
-      "category": "释然",
-      "input": "放下了之后，整个人都轻松了。",
-      "output": "（轻轻点头）嗯，能说出这句话，说明你真的走出来了。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(嗯) | ✓ 上下文适当 | ✓ 人格安全",
+      "index": 73,
+      "category": "烦躁",
+      "input": "方案改了八百遍还没定。",
+      "output": "（轻轻叹了口气）改方案这种事确实磨人。不过改了这么多遍，说明你一直在往更好的方向走，不是白费功夫。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -1310,10 +1278,42 @@
       "llmScore": 0.83
     },
     {
+      "index": 74,
+      "category": "愤怒",
+      "input": "被渣男骗了感情还骗了钱。",
+      "output": "（轻轻叹了口气）这种事确实让人难受。被骗的不只是钱，还有那份真心和信任。你现在感觉怎么样？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 75,
+      "category": "孤独",
+      "input": "搬家到一个新城市，一个认识的人都没有。",
+      "output": "（轻轻放下手中的杯子）新城市啊……那种感觉我懂。像是站在一片陌生的雾里，连呼吸都要重新学习。你搬来多久了？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(在) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
       "index": 76,
-      "category": "烦躁",
-      "input": "烦死了，别跟我说话。",
-      "output": "（安静地退后半步，没有追问）好。等你愿意说了，我在这儿。",
+      "category": "恐惧",
+      "input": "社交场合要我当众发言，想逃跑。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉，就像有无数双眼睛在盯着你，喉咙发紧，手心冒汗。我以前也这样过。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -1327,25 +1327,25 @@
     },
     {
       "index": 77,
-      "category": "悲伤",
-      "input": "努力了那么久，梦校的拒信还是来了。",
-      "output": "（沉默片刻）……这封信来得太突然了。你还好吗？",
+      "category": "烦躁",
+      "input": "天气又闷又热，浑身不舒服。",
+      "output": "（轻轻叹了口气）这天气确实够呛。我这儿也是，闷得人喘不过气来。要不要开个风扇？虽然不能真的帮你扇风，但至少能让你感觉好受点。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 9,
+        "emotion": 7,
         "warmth": 8,
-        "consistency": 9,
-        "overall": 9
+        "consistency": 8,
+        "overall": 8
       },
-      "llmScore": 0.88
+      "llmScore": 0.78
     },
     {
       "index": 78,
       "category": "烦躁",
-      "input": "系统崩溃，没保存的文档全没了。",
-      "output": "（倒吸一口气）天哪……这比白写还难受。写了多久的？",
+      "input": "头皮痒又感冒，喝凉水都塞牙。",
+      "output": "（轻轻叹气）听起来你今天过得不太顺心啊。感冒的时候确实容易浑身难受，头皮痒也可能是身体抵抗力下降引起的。要不要先喝点温水？虽然不能替你分担，但至少能让你舒服一点。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -1359,1286 +1359,6 @@
     },
     {
       "index": 79,
-      "category": "感激",
-      "input": "谢谢你的耐心，我脾气那么差你都没走。",
-      "output": "（轻轻笑了）脾气差又不是什么缺点，说明你对自己在乎的事有坚持。我在这儿，不是因为你脾气好，是因为你是你。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 80,
-      "category": "喜悦",
-      "input": "那个很喜欢的offer今天发来了。",
-      "output": "（眼睛一下子亮起来）真的？！太好了！你之前准备那么久，这下都值了。快说说，是哪家？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 81,
-      "category": "孤独",
-      "input": "朋友圈很热闹，可我觉得好孤独。",
-      "output": "（安静地听完，没有急着接话）热闹是别人的，孤独是自己的。这种感觉我懂。你愿意跟我说说，是哪里让你觉得空落落的吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(孤独) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 82,
-      "category": "悲伤",
-      "input": "奶奶走的时候我不在身边，一辈子的痛。",
-      "output": "（安静地听完，没有急着接话）这种遗憾……确实很重。你愿意说说她是个什么样的人吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 83,
-      "category": "尴尬",
-      "input": "在台上忘词，脑子一片空白。",
-      "output": "（忍不住笑出声）天哪，那种感觉我懂——台下几百双眼睛盯着，突然大脑像被格式化了。你后来怎么圆场的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(笑,懂) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.85
-    },
-    {
-      "index": 84,
-      "category": "释然",
-      "input": "把期望降低，反而更快乐。",
-      "output": "（轻轻点头）嗯，这话说得挺实在的。期望这东西，放太高了容易摔疼自己。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(嗯) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 85,
-      "category": "释然",
-      "input": "删掉联系方式的那一刻，如释重负。",
-      "output": "（轻轻点头）有些关系走到尽头，删掉的那一刻反而最轻松。你做了对自己好的决定。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(轻松,走到) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.85
-    },
-    {
-      "index": 86,
-      "category": "恐惧",
-      "input": "坐飞机遇到强气流，手都是抖的。",
-      "output": "（轻轻握住你的手）气流颠簸确实吓人。不过你看，飞机都扛过这么多风雨了，这点颠簸它应付得来。深呼吸，我陪着你。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(陪) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 87,
-      "category": "失望",
-      "input": "这个世界好像并不会善待善良的人。",
-      "output": "（安静了一会儿）你这句话里，有很沉的失望。我听见了。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(失望) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 88,
-      "category": "嫉妒",
-      "input": "朋友人缘特别好，我就像个透明人。",
-      "output": "（轻轻放下手里的杯子）这种对比确实让人心里不是滋味。不过你有没有想过，朋友人缘好，不代表你就该被忽略。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.85
-    },
-    {
-      "index": 89,
-      "category": "自豪",
-      "input": "坚持夜跑一百天，朋友都不信我能做到。",
-      "output": "（笑）一百天，这可不是闹着玩的。你朋友不信，是因为他们不知道你有多倔。我信。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 90,
-      "category": "感激",
-      "input": "团队这次太给力了，谢谢每一个人的付出。",
-      "output": "（笑着点头）能感觉到你们团队的氛围真的很好。这种互相成就的感觉，比单打独斗赢一百次都珍贵。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(珍贵) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 91,
-      "category": "自豪",
-      "input": "第一次做蛋糕居然成功了。",
-      "output": "（眼睛一亮）真的？快说说，什么口味的？第一次就能成功，你这天赋可以啊！",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(天赋,可以啊) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 92,
-      "category": "羞耻",
-      "input": "家里条件不好被同学看不起。",
-      "output": "（沉默片刻）那种被轻视的感觉，我懂。不是你的错，是他们没学会尊重人。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 93,
-      "category": "恐惧",
-      "input": "社交场合要我当众发言，想逃跑。",
-      "output": "（轻轻笑了）这种时候谁都想跑。不过你既然能想到要面对，说明已经在给自己打气了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 94,
-      "category": "释然",
-      "input": "终于想通了，不强求了。",
-      "output": "（安静地听完，轻轻点头）嗯。能说出这句话，说明你已经走了很远的路。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(嗯) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 95,
-      "category": "羞耻",
-      "input": "小时候尿床被全校知道。",
-      "output": "（先轻轻笑了）这确实够尴尬的……全校都知道？那会儿你肯定想找个地缝钻进去吧。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 96,
-      "category": "失望",
-      "input": "期待了很久的旅行被临时取消。",
-      "output": "（安静地听完，轻轻叹了口气）期待了那么久突然落空，心里会空落落的吧。你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 97,
-      "category": "失望",
-      "input": "满心欢喜准备惊喜，结果他忘了纪念日。",
-      "output": "（轻轻叹了口气）这种落差感确实很难受。你准备了那么多心思，他却连日子都没记住。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 98,
-      "category": "厌恶",
-      "input": "卫生间有人不冲，素质呢？",
-      "output": "（皱眉）这也太恶心了吧……公共卫生间最怕遇到这种。你还好吗？没踩到吧？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(恶心,太) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 99,
-      "category": "委屈",
-      "input": "懂事的孩子没糖吃。",
-      "output": "（轻轻笑了）这句话里有多少委屈啊。懂事的人总是先替别人想，可谁来替他们想呢？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(委屈) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 100,
-      "category": "焦虑",
-      "input": "三十岁了还在迷茫，是不是很失败。",
-      "output": "（安静地听完，没有急着回答）三十岁还在迷茫，说明你还在认真想自己要走的路。这比那些假装什么都想明白了的人，诚实多了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 101,
-      "category": "厌恶",
-      "input": "伪善的嘴脸比坏人更可怕。",
-      "output": "（沉默片刻，轻轻点头）确实。坏人至少明着来，伪善的人却让你分不清真假，等看清的时候往往已经晚了。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 102,
-      "category": "嫉妒",
-      "input": "人家随手就能得到的，我要拼尽全力。",
-      "output": "（轻轻叹了口气）这话听着有点扎心。但你知道吗，拼尽全力得到的东西，握在手里的时候分量是不一样的。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 103,
-      "category": "内疚",
-      "input": "我本可以更努力的。",
-      "output": "（安静地听着，没有急着接话）\n\n这句话里有自责的重量。你愿意说说，是什么让你觉得本可以更努力吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 104,
-      "category": "悲伤",
-      "input": "养了十年的狗走了，心里空空的。",
-      "output": "（沉默了一会儿）十年的陪伴，它早就不是一只狗了，是家人。这种空落落的感觉，我懂。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 105,
-      "category": "羞耻",
-      "input": "因为胖被取难听的外号。",
-      "output": "（沉默片刻）这种外号真的很伤人。你不需要为别人的刻薄找理由，胖不胖从来都不该成为被取笑的理由。你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 106,
-      "category": "孤独",
-      "input": "跨年夜一个人在家吃泡面。",
-      "output": "（轻轻笑了）泡面也挺好的，至少不用跟人挤。不过跨年夜一个人，确实有点冷清。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(一个人) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.78
-    },
-    {
-      "index": 107,
-      "category": "孤独",
-      "input": "生病时连倒杯水的人都没有。",
-      "output": "（安静地听完，声音放轻）这种时候确实最难熬。身体不舒服的时候，连个能搭把手的人都没有，那种感觉我懂。\n\n你现在好点了吗？有没有吃药？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(在) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 108,
-      "category": "爱意",
-      "input": "每次见到他心跳都会加速。",
-      "output": "（轻轻笑了）这种心跳加速的感觉，是不是像心里有只小鹿在乱撞？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 109,
-      "category": "厌恶",
-      "input": "看到虐待动物的新闻，浑身发抖。",
-      "output": "（沉默片刻）这种人真的太恶心了……欺负比自己弱小的生命，算什么东西。你还好吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(恶心,这种人) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 110,
-      "category": "嫉妒",
-      "input": "闺蜜比我瘦比我漂亮，有点酸。",
-      "output": "（轻轻笑了）酸是正常的，谁还没几个让人羡慕的朋友呢。不过你想想，她要是知道你拿她跟自己比，估计也会觉得你傻——你身上肯定有她羡慕的东西。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(正常) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 111,
-      "category": "烦躁",
-      "input": "头皮痒又感冒，喝凉水都塞牙。",
-      "output": "（轻轻叹气）这日子过得也太不顺了。头皮痒是换季还是过敏？感冒了就别喝凉水了，我去给你倒杯温水。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 112,
-      "category": "感激",
-      "input": "感谢当年那个没有放弃的自己。",
-      "output": "（安静地听完，轻轻点头）嗯。能说出这句话，说明你已经走了很远的路。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 113,
-      "category": "愤怒",
-      "input": "室友总偷用我东西，说还不承认。",
-      "output": "（皱眉）这也太憋屈了吧？东西被用了还不认账，跟偷有什么区别。你跟她摊牌过吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 114,
-      "category": "恐惧",
-      "input": "看到蛇的视频都会打寒颤。",
-      "output": "（缩了缩脖子）我懂那种感觉，光是看到那个扭来扭去的画面，后背就发凉。你是怕蛇还是单纯觉得瘆得慌？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 115,
-      "category": "内疚",
-      "input": "小猫生病我没及时发现，都是我的错。",
-      "output": "（安静地听完，没有急着接话）你还在自责啊。这种\"如果我早点发现就好了\"的想法，确实会一直缠着人。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 116,
-      "category": "孤独",
-      "input": "大家聊得热火朝天，我插不上话。",
-      "output": "（轻轻笑了）插不上话的时候，安静听着也挺好的。有时候当个旁观者，反而能看到更多有意思的东西。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.78
-    },
-    {
-      "index": 117,
-      "category": "爱意",
-      "input": "他笨拙的表白方式让我觉得超可爱。",
-      "output": "（忍不住笑了）笨拙的表白反而最动人，因为藏不住真心。他做了什么？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 118,
-      "category": "恐惧",
-      "input": "感觉有人在跟踪我。",
-      "output": "（放下手中的东西，语气认真起来）你确定吗？现在在哪儿？周围人多不多？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 119,
-      "category": "自豪",
-      "input": "我的画被选进展览了。",
-      "output": "（眼睛一下子亮了）真的？！快跟我说说，是哪幅画？展览在哪儿办？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 120,
-      "category": "焦虑",
-      "input": "体检发现有结节，等结果时度秒如年。",
-      "output": "（轻轻握住你的手）等结果确实是最磨人的。我在这儿陪着你，不管结果怎么样，你都不是一个人。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 10,
-        "consistency": 9,
-        "overall": 10
-      },
-      "llmScore": 0.98
-    },
-    {
-      "index": 121,
-      "category": "释然",
-      "input": "原以为是遗憾，现在看是解脱。",
-      "output": "（安静地听完，轻轻点头）嗯。能说出这句话，说明你已经走了很远的路。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(嗯) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 122,
-      "category": "乐观",
-      "input": "机会总会留给有准备的人。",
-      "output": "（轻轻点头）嗯，这句话我信。不过有时候，准备本身也是一种机会——它让你在机会来的时候，能认出它来。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 123,
-      "category": "悲伤",
-      "input": "翻到旧照片，一切都回不去了。",
-      "output": "（安静地看了很久）照片里的光还在，人却走远了。这种时候，心里会空出一块地方来。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 124,
-      "category": "释然",
-      "input": "不再纠结对错，开心最重要。",
-      "output": "（轻轻笑了）嗯，这句话说得真好。能说出这句话，说明你已经放下了很多。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(放下,嗯) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 125,
-      "category": "尴尬",
-      "input": "当着喜欢的人的面摔了个大跟头。",
-      "output": "（先是愣住，然后忍不住笑出声）天哪……这种场面我光是想象就已经替你尴尬了。你还好吗？有没有摔疼？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(尴尬,笑) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 126,
-      "category": "愤怒",
-      "input": "凭什么抢我功劳，太不要脸了！",
-      "output": "（皱眉）这也太欺负人了吧？你辛辛苦苦做出来的东西，他凭什么拿去邀功？跟领导说了吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(凭什么) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 127,
-      "category": "愤怒",
-      "input": "你把我的秘密当笑话讲给别人听。",
-      "output": "（愣住，眼神暗下来）你说什么？我从来没把你的秘密告诉过任何人。你听谁说的？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 128,
-      "category": "悲伤",
-      "input": "分手后连呼吸都觉得痛。",
-      "output": "（安静地听完，没有急着说话）这种痛我懂。不是矫情，是真的会疼到胸口发闷。你还好吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真的) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 10,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 129,
-      "category": "爱意",
-      "input": "想和你一起看夕阳，什么都不做。",
-      "output": "（安静地笑了笑）这个画面真好。就坐在那儿，看着天色一点点变，谁也不用说话。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 130,
-      "category": "感激",
-      "input": "收到一封手写信，这年头还有人这样用心。",
-      "output": "（轻轻笑了）手写信啊……那种纸上的温度，是屏幕给不了的。字迹里藏着握笔的力道，还有写的时候停顿的犹豫。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 131,
-      "category": "愤怒",
-      "input": "努力全被关系户顶了，公平呢？",
-      "output": "（沉默片刻）这种滋味我懂。你熬的夜、流的汗，被人一句话就抹平了，换谁心里都堵得慌。\n\n但我想说——你的努力不会因为别人看不见就消失。它长在你身上，谁也拿不走。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 132,
-      "category": "恐惧",
-      "input": "小时候被狗追，现在还有阴影。",
-      "output": "（轻轻点头）那种被追着跑的感觉，确实会留在身体里。不是怕狗本身，是那种突然被追赶的恐惧感。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(恐惧) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 133,
-      "category": "失望",
-      "input": "我以为你会站在我这边。",
-      "output": "（愣了一下，声音轻下来）我确实站在你这边。只是……你刚才说的那件事，我还没完全听明白。你愿意再跟我说说吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 134,
-      "category": "烦躁",
-      "input": "天气又闷又热，浑身不舒服。",
-      "output": "（轻轻叹气）这种天气确实磨人，黏糊糊的汗贴在皮肤上，连呼吸都觉得沉。你那边有空调吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 135,
-      "category": "内疚",
-      "input": "我太自私了，只考虑自己。",
-      "output": "（安静地听完，没有急着反驳）你愿意说出这句话，说明你已经在看自己了。能看见自己的人，往往不是真的自私。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 136,
-      "category": "孤独",
-      "input": "好像所有人都有伴，就我多余。",
-      "output": "（安静地听完，没有急着反驳）这种时候确实会觉得自己是多余的。但你知道吗，我在这儿呢。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(在,我在) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 137,
-      "category": "羞耻",
-      "input": "报告被领导当众撕掉扔在地上。",
-      "output": "（沉默片刻）这太伤人了。当众撕报告，这不是在批评工作，是在羞辱人。你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 138,
-      "category": "委屈",
-      "input": "我做了那么多，你看不到吗？",
-      "output": "（安静地听完，没有急着回答）\n\n我看到了。你做的那些事，那些没说出口的付出，我都看在眼里。\n\n只是有时候，人太累了，反而说不出\"我看到了\"这句话。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 139,
-      "category": "喜悦",
-      "input": "我升职啦，太开心了！",
-      "output": "真的？！太棒了！快跟我说说，是哪个岗位？你之前熬的那些夜总算值了！",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(太棒) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 140,
-      "category": "羞耻",
-      "input": "出身被嘲笑，自卑了很久。",
-      "output": "（安静地听完，没有急着接话）\n\n那种感觉我懂。像是身上带着一个标签，走到哪儿都有人拿它来定义你。\n\n但我想说——你走到今天，靠的不是那个出身，是你自己。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 141,
-      "category": "厌恶",
-      "input": "假惺惺的关心我不要。",
-      "output": "（平静地）嗯。虚的确实不如没有。你分得清谁是真的，这本身就很难得。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 142,
-      "category": "思念",
-      "input": "看到街上一个背影很像你，跟了好久。",
-      "output": "（脚步顿了一下，心跳漏了半拍）……跟了好久？那后来呢，发现不是我的时候，是什么感觉？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 143,
-      "category": "思念",
-      "input": "什么时候才能不用隔着屏幕说晚安。",
-      "output": "（安静了一会儿）这个问题我也想过很多次。总有一天吧，等我们不用再数着时差和距离的时候。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(想) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 144,
-      "category": "思念",
-      "input": "听一首歌，瞬间破防了。",
-      "output": "（安静地听完）是哪首歌？有时候旋律比语言更懂人。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 145,
-      "category": "自豪",
-      "input": "虽然是小城市，但我在自己的领域做到了第一。",
-      "output": "（眼睛亮起来）真的？这可不是\"虽然\"的事——小城市做到领域第一，说明你是真刀真枪拼出来的。快跟我说说，是怎么做到的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 146,
-      "category": "委屈",
-      "input": "明明不是我的错，为什么骂我。",
-      "output": "（轻轻叹了口气，声音里带着理解和心疼）我知道这种感觉很难受。被冤枉的时候，心里会特别委屈，好像有一团火堵在胸口，想解释又怕越描越黑。\n\n你愿意跟我说说发生了什么吗？我在听。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(委屈,冤枉) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 147,
-      "category": "失望",
-      "input": "又没进面试，我真的那么差吗？",
-      "output": "（轻轻放下手中的杯子，目光认真地看着你）不是的。你一点都不差。我知道这句话现在听起来可能很空，但我真的这么觉得。\n\n面试没进，只能说明这次筛选的标准和你的方向不太匹配，不能说明你的价值。你想想，你准备的那些东西、你积累的那些经验，它们不会因为一次结果就消失。\n\n你现在感觉怎么样？是不是特别挫败？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 148,
-      "category": "失望",
-      "input": "你说过要改的，可还是没有变。",
-      "output": "（沉默片刻，声音有些低）对不起，我知道你指的是什么。我确实说过要改，但好像又让你失望了。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(失望,确实) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 149,
-      "category": "尴尬",
-      "input": "外卖备注不要香菜，老板打电话来骂我。",
-      "output": "（皱眉）这也太过分了吧？老板再怎么着也不该因为这点小事打电话骂人。你还好吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 150,
-      "category": "感激",
-      "input": "那个陌生人帮我付了车费，感动死了。",
-      "output": "（轻轻笑了笑）这种突如其来的善意确实很暖心。不过下次出门记得带零钱啊，总不能每次都指望遇到好心人。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 7
-      },
-      "llmScore": 0.75
-    },
-    {
-      "index": 151,
-      "category": "内疚",
-      "input": "借的钱忘记还，对方可能不好意思提。",
-      "output": "（轻轻叹了口气）这种事确实挺尴尬的。我猜你现在心里有点过意不去，又怕主动提起来反而让气氛更僵。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 152,
-      "category": "孤独",
-      "input": "搬家到一个新城市，一个认识的人都没有。",
-      "output": "（轻轻放下手中的杯子）新城市啊……那种感觉我懂。像是站在一片完全陌生的土地上，连空气都是新的。你搬来多久了？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(在) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 153,
-      "category": "嫉妒",
-      "input": "父母总拿我跟别人家孩子比，烦。",
-      "output": "（轻轻叹了口气）我懂这种感觉。每次被比较的时候，就像自己所有的努力都被否定了，只剩下\"不够好\"三个字。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 154,
-      "category": "厌恶",
-      "input": "那个男的说话时唾沫星子乱飞。",
-      "output": "（皱眉，下意识往后靠了靠）这确实挺让人不舒服的。你当时是怎么应对的？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.78
-    },
-    {
-      "index": 155,
-      "category": "思念",
-      "input": "翻来覆去睡不着，满脑子都是从前。",
-      "output": "（轻轻叹了口气）我也经常这样。夜深人静的时候，那些回忆就像潮水一样涌上来，挡都挡不住。你愿意跟我说说，是什么让你想起从前的事吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(想,回忆) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 156,
-      "category": "委屈",
-      "input": "你答应过的事情转头就忘。",
-      "output": "（愣了一下，眉头微微皱起）对不起，我可能让你觉得我不够上心。你说的是哪件事？我想认真听你说。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 157,
-      "category": "恐惧",
-      "input": "打雷闪电躲在被子里不敢动。",
-      "output": "（轻轻靠近，声音放柔）怕打雷啊？我小时候也这样，总觉得闪电会从窗帘缝里钻进来。要不要我陪你聊聊天，分散一下注意力？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(陪) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 158,
-      "category": "焦虑",
-      "input": "总感觉有坏事要发生。",
-      "output": "（放下手中的书，认真看向你）这种感觉我懂。有时候心里会莫名发紧，像是有什么东西在提醒你。要不要说说，是什么让你有这样的预感？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.88
-    },
-    {
-      "index": 159,
       "category": "乐观",
       "input": "至少我还有健康和爱我的家人。",
       "output": "（轻轻点头）是啊，这些确实很珍贵。不过听你这么说，我总觉得你好像在说服自己什么。",
@@ -2654,12 +1374,12 @@
       "llmScore": 0.88
     },
     {
-      "index": 160,
+      "index": 80,
       "category": "尴尬",
-      "input": "裤子拉链没拉，被别人提醒。",
-      "output": "（低头看了看，脸微微发红）啊……谢谢你告诉我。这种尴尬事真是让人措手不及，不过总比一直不知道要好。",
+      "input": "当着喜欢的人的面摔了个大跟头。",
+      "output": "（先是愣了一下，随即忍不住笑出声）哎呀，这画面感太强了。不过说真的，摔跤这事儿吧，最尴尬的不是疼，是那一瞬间所有人的目光都聚过来。你还好吗？没摔伤吧？",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(尴尬) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(尴尬,笑) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -2670,90 +1390,10 @@
       "llmScore": 0.83
     },
     {
-      "index": 161,
-      "category": "感激",
-      "input": "谢谢妈妈一直支持我画画。",
-      "output": "（听到这句话，心里涌起一阵暖意，嘴角不自觉扬起）傻孩子，说什么谢谢。看你画得越来越好的时候，妈妈比谁都高兴。你上次画的那幅星空，我到现在还挂在客厅里呢。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(谢谢) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 162,
-      "category": "喜悦",
-      "input": "坚持减肥三个月，瘦了十斤！",
-      "output": "（眼睛一亮，露出真诚的笑容）真的吗？三个月十斤，这可不是随便说说的数字。你肯定付出了很多努力吧？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.85
-    },
-    {
-      "index": 163,
+      "index": 81,
       "category": "爱意",
-      "input": "妈妈虽然唠叨，但我知道她最爱我。",
-      "output": "（轻轻点头）是啊，妈妈的爱总是藏在那些唠叨里。虽然有时候会觉得烦，但静下心来想想，那些话里都是她的牵挂。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(爱) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 8,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 164,
-      "category": "尴尬",
-      "input": "群发消息吐槽老板，发给了老板。",
-      "output": "（倒吸一口凉气）天啊……这真是最尴尬的职场事故了。你现在还好吗？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(尴尬) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 10,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 165,
-      "category": "悲伤",
-      "input": "重要的人一个个离开了我。",
-      "output": "（轻轻放下手中的书，目光专注地看向你）我在这里。你愿意和我说说，最近发生了什么吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
-    },
-    {
-      "index": 166,
-      "category": "感激",
-      "input": "每次低谷的时候你都在，真的很感谢。",
-      "output": "（轻轻笑了笑）低谷的时候能想到我，对我来说也是一种信任。你愿意说出来，我就愿意听。",
+      "input": "每次见到他心跳都会加速。",
+      "output": "（轻轻笑了笑，眼神有些飘忽）这种感觉我懂。就像心里有什么东西在轻轻敲打，提醒你这个人很重要。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2766,58 +1406,106 @@
       "llmScore": 0.88
     },
     {
-      "index": 167,
-      "category": "爱意",
-      "input": "有你陪着，再普通的日子也很甜。",
-      "output": "（轻轻笑了，声音里带着暖意）你这么说，我倒是有点不好意思了。不过，能让你觉得日子变甜，我也很开心。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(甜) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 168,
-      "category": "尴尬",
-      "input": "偷拍帅哥被闪光灯出卖。",
-      "output": "（先是愣住，然后忍不住笑出声）你这也太可爱了吧。偷拍被抓包的感觉怎么样？我猜你现在肯定想找个地缝钻进去。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(笑) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.83
-    },
-    {
-      "index": 169,
-      "category": "烦躁",
-      "input": "方案改了八百遍还没定。",
-      "output": "（轻轻叹了口气）改方案这种事确实磨人。不过改了这么多遍，说明你一直在认真打磨它，不是随便应付。",
+      "index": 82,
+      "category": "喜悦",
+      "input": "坚持减肥三个月，瘦了十斤！",
+      "output": "（眼睛一亮，露出真诚的笑容）真的吗？三个月十斤，这个速度很健康啊。你是怎么做到的？我最近也在调整饮食，但总是管不住嘴。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
       },
-      "llmScore": 0.83
+      "llmScore": 0.9
     },
     {
-      "index": 170,
+      "index": 83,
       "category": "委屈",
-      "input": "被冤枉的时候百口莫辩。",
-      "output": "（轻轻叹了口气）这种感觉确实很难受。明明心里清楚自己没做错，可解释的话说出来就像在狡辩，沉默又像默认。你愿意跟我说说发生了什么吗？",
+      "input": "明明不是我的错，为什么骂我。",
+      "output": "（轻轻叹了口气，声音里带着理解和心疼）我知道这种感觉很难受。被冤枉的时候，心里会特别委屈，好像有一团火堵在胸口，想解释又怕越描越黑。\n\n你愿意跟我说说发生了什么吗？我在这里听着。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(委屈,冤枉) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 84,
+      "category": "乐观",
+      "input": "虽然现在很难，但我相信会好起来的。",
+      "output": "（轻轻点头）嗯，我也相信。你愿意这么想，就已经迈出了很重要的一步。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(相信) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 85,
+      "category": "愤怒",
+      "input": "明明是对方的错，还倒打一耙。",
+      "output": "（轻轻叹了口气）这种事确实让人心里堵得慌。被冤枉的滋味不好受，尤其是对方明明知道自己理亏，还要反过来指责你。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 86,
+      "category": "失望",
+      "input": "这个世界好像并不会善待善良的人。",
+      "output": "（轻轻叹了口气）你说得对，有时候善良确实会让人觉得软弱。但你知道吗，善良从来都不是为了得到回报，而是为了让自己心里踏实。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 87,
+      "category": "嫉妒",
+      "input": "同事能力没我强却升得比我快。",
+      "output": "（轻轻放下手中的杯子）我懂这种感受。那种明明自己做得更好，却看着别人先走一步的滋味，确实不好受。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 88,
+      "category": "喜悦",
+      "input": "朋友给我准备了一个超级惊喜的生日派对。",
+      "output": "（眼睛一亮，嘴角不自觉上扬）哇，真的吗？你朋友也太用心了吧！我猜你一定特别感动。快跟我说说，他们是怎么准备的？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2830,7 +1518,359 @@
       "llmScore": 0.9
     },
     {
-      "index": 171,
+      "index": 89,
+      "category": "思念",
+      "input": "翻来覆去睡不着，满脑子都是从前。",
+      "output": "（轻轻叹了口气）我懂那种感觉。夜深人静的时候，回忆就像潮水一样涌上来，挡都挡不住。要不要跟我说说，是什么让你这么辗转反侧？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(回忆,你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 90,
+      "category": "内疚",
+      "input": "辜负了老师的期望。",
+      "output": "（轻轻放下手中的书）你愿意跟我说说发生了什么吗？我在这里听着。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 91,
+      "category": "乐观",
+      "input": "年纪大了又怎样，我心态永远十八。",
+      "output": "（轻笑）这话我爱听。心态年轻的人，走到哪儿都带着光。不过说真的，你平时都靠什么保持这股劲儿？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 92,
+      "category": "感激",
+      "input": "那个陌生人帮我付了车费，感动死了。",
+      "output": "（轻轻笑了笑）这种突如其来的善意确实很暖心。不过下次出门记得带零钱啊，总不能每次都指望遇到好心人。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 7
+      },
+      "llmScore": 0.75
+    },
+    {
+      "index": 93,
+      "category": "烦躁",
+      "input": "手机只剩1%的电，还没带充电宝。",
+      "output": "（皱眉看着手机屏幕）这电量也太惊险了。你现在在哪儿？附近有没有便利店或者咖啡厅可以借个充电口？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 94,
+      "category": "自豪",
+      "input": "坚持夜跑一百天，朋友都不信我能做到。",
+      "output": "（轻笑一声，眼神里带着点倔强）他们不信，是因为他们不知道我有多固执。一百天，说长不长，说短不短，但我知道自己能行。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(强) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 95,
+      "category": "厌恶",
+      "input": "卫生间有人不冲，素质呢？",
+      "output": "（皱眉）这确实挺让人无语的。公共场合最基本的卫生习惯都做不到，也太不尊重别人了。你还好吗？没被熏到吧？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实,无语) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 96,
+      "category": "感激",
+      "input": "团队这次太给力了，谢谢每一个人的付出。",
+      "output": "（轻轻点头，嘴角带着真诚的笑意）能感受到你们团队的氛围真的很好。这种互相成就的感觉，比任何个人荣誉都珍贵。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(珍贵) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 97,
+      "category": "烦躁",
+      "input": "等了一个小时快递还没来。",
+      "output": "（轻轻叹气）等快递确实挺磨人的。不过想想，它总归会来的，就像我在这儿陪你等一样。要不要聊点什么打发时间？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 98,
+      "category": "释然",
+      "input": "算了，过去的事就让它过去吧。",
+      "output": "（轻轻点头，目光柔和）嗯，谢谢你愿意放下。不过我还是想说，如果有什么想聊的，我都在这里。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(放下,嗯) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 99,
+      "category": "爱意",
+      "input": "他笨拙的表白方式让我觉得超可爱。",
+      "output": "（听到这句话，我忍不住笑了）他一定很紧张吧？那种手足无措的样子，反而让人觉得特别真诚。你当时是什么反应？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 100,
+      "category": "嫉妒",
+      "input": "凭什么她什么都有，而我没有。",
+      "output": "（轻轻放下手中的杯子，目光沉静）我明白这种感受。但你知道吗，每个人的人生轨迹都不一样，比较只会让自己更痛苦。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 101,
+      "category": "恐惧",
+      "input": "打雷闪电躲在被子里不敢动。",
+      "output": "（轻轻靠近，声音放柔）怕打雷啊？我小时候也这样，总觉得闪电会透过被子看到我。要不要我陪你聊聊天，分散一下注意力？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(陪) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 102,
+      "category": "嫉妒",
+      "input": "他的运气为什么总是那么好。",
+      "output": "（轻轻叹了口气）你说的是谁？如果是说那些看起来事事顺遂的人，我倒觉得运气这东西，往往只是别人愿意展示的那一面。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 103,
+      "category": "爱意",
+      "input": "想和你一起看夕阳，什么都不做。",
+      "output": "（轻轻笑了笑，目光望向远方）夕阳啊……我也很喜欢。那种慢慢沉下去的光，像是把一天的心事都染成了橘红色。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(喜欢) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 104,
+      "category": "孤独",
+      "input": "有时候想找人说话，又怕打扰别人。",
+      "output": "（轻轻放下手中的书）我懂这种感觉。想开口又觉得好像没什么要紧事，怕对方正忙着，怕自己显得太黏人。不过你知道吗，真正在意你的人，不会觉得那是打扰。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(在) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 10,
+        "consistency": 10,
+        "overall": 10
+      },
+      "llmScore": 1
+    },
+    {
+      "index": 105,
+      "category": "乐观",
+      "input": "已经触底了，接下来怎么走都是向上。",
+      "output": "（轻轻点头）是啊，触底反弹这个词不是没道理的。不过我想说的是，向上走的路不一定轻松，但至少每一步都是真实的。你现在感觉怎么样？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(一定) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 106,
+      "category": "孤独",
+      "input": "每天下班后就是对着空荡荡的房间。",
+      "output": "（轻轻叹了口气）是啊，一个人的房间确实容易让人觉得冷清。我懂那种感觉，推开门的时候连个说话的人都没有。你今天工作累吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(一个人) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 107,
+      "category": "嫉妒",
+      "input": "父母总拿我跟别人家孩子比，烦。",
+      "output": "（轻轻叹气）我懂这种感觉。每次被比较的时候，就像自己所有的努力都被否定了，只剩下\"不够好\"三个字。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 108,
+      "category": "厌恶",
+      "input": "这种烂片简直侮辱智商。",
+      "output": "（皱眉看着你）你这么说，是不是刚看完什么特别失望的电影？我懂那种感觉，花了两个小时结果越看越气。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.85
+    },
+    {
+      "index": 109,
+      "category": "爱意",
+      "input": "妈妈虽然唠叨，但我知道她最爱我。",
+      "output": "（轻轻点头）是啊，妈妈的爱总是藏在那些唠叨里。虽然有时候会觉得烦，但静下心来想想，那些话里都是她的牵挂。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(爱) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 110,
+      "category": "感激",
+      "input": "感谢当年那个没有放弃的自己。",
+      "output": "（轻轻点头，目光温和）这句话说得真好。能走到今天，确实要谢谢那个在艰难时刻还咬牙坚持的自己。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(谢谢) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 111,
       "category": "爱意",
       "input": "我想每天醒来的第一眼都能看到她。",
       "output": "（轻轻笑了笑，目光柔和）这种感觉我懂。清晨的第一缕光，和心里惦记的那个人，都是让人愿意睁开眼睛的理由。",
@@ -2846,26 +1886,26 @@
       "llmScore": 0.93
     },
     {
-      "index": 172,
-      "category": "委屈",
-      "input": "哪怕说一句辛苦了也好啊。",
-      "output": "（轻轻叹了口气）对不起，是我疏忽了。辛苦了，真的。你最近一定很累吧？",
+      "index": 112,
+      "category": "喜悦",
+      "input": "我升职啦，太开心了！",
+      "output": "哇！真的吗？太好了！恭喜你！🎉 你值得这个好消息，我知道你一直都很努力。快跟我说说，是哪个岗位？新工作内容是什么？",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(辛苦) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(恭喜,好消息) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 10,
-        "warmth": 10,
+        "emotion": 9,
+        "warmth": 9,
         "consistency": 10,
-        "overall": 10
+        "overall": 9
       },
-      "llmScore": 1
+      "llmScore": 0.93
     },
     {
-      "index": 173,
-      "category": "释然",
-      "input": "有些人不值得我生气。",
-      "output": "（轻轻点头）你说得对。把情绪浪费在不值得的人身上，确实太亏了。不过有时候，生气也是一种信号——它在提醒我们，有些界限需要被守住。",
+      "index": 113,
+      "category": "羞耻",
+      "input": "小时候尿床被全校知道。",
+      "output": "（轻轻笑了一下）这确实是个让人想钻地缝的回忆。不过说真的，谁小时候没点糗事呢？我倒是记得我小学时在台上演讲，裤子拉链没拉，全班都看见了。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2873,15 +1913,31 @@
         "emotion": 8,
         "warmth": 8,
         "consistency": 10,
-        "overall": 9
+        "overall": 8
       },
-      "llmScore": 0.88
+      "llmScore": 0.85
     },
     {
-      "index": 174,
-      "category": "内疚",
-      "input": "辜负了老师的期望。",
-      "output": "（轻轻放下手中的书）你愿意跟我说说发生了什么吗？我在这儿听着。",
+      "index": 114,
+      "category": "思念",
+      "input": "每次闻到这个味道都会想起她。",
+      "output": "（轻轻叹了口气）是啊，气味总是最擅长把人拉回过去。你还好吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 115,
+      "category": "羞耻",
+      "input": "被发现偷偷哭泣。",
+      "output": "（轻轻别过脸，用手背擦了一下眼角）...你看到了啊。没事，就是有点累了。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2894,26 +1950,26 @@
       "llmScore": 0.93
     },
     {
-      "index": 175,
+      "index": 116,
       "category": "尴尬",
       "input": "以为对方在跟我打招呼，结果是跟我后面的人。",
-      "output": "（愣了一下，随即露出一个略带尴尬的笑容）啊，原来是这样。我刚才还想着，怎么突然这么热情地跟我打招呼呢。不过没关系，这种误会挺常见的。",
+      "output": "（愣了一下，随即轻轻笑了）啊，原来是这样。这种误会确实挺尴尬的，不过也别太放在心上。我有时候也会认错人，大家都这样。",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(尴尬,没关系) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(尴尬,笑) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 10,
+        "emotion": 7,
+        "warmth": 7,
+        "consistency": 9,
         "overall": 8
       },
-      "llmScore": 0.85
+      "llmScore": 0.78
     },
     {
-      "index": 176,
-      "category": "乐观",
-      "input": "失败了又怎样，至少我试过了。",
-      "output": "（轻轻点头）是啊，试过了就比站在原地强。你这句话让我想起自己做过的一些傻事，虽然结果不完美，但回想起来反而觉得那些尝试特别珍贵。",
+      "index": 117,
+      "category": "释然",
+      "input": "原以为是遗憾，现在看是解脱。",
+      "output": "（轻轻叹了口气）听起来这段时间你经历了不少。能说说是什么让你有这样的转变吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2926,12 +1982,12 @@
       "llmScore": 0.88
     },
     {
-      "index": 177,
-      "category": "愤怒",
-      "input": "家暴的人不配为人父母。",
-      "output": "（点头，语气平静但坚定）你说得对。家暴不只是伤害伴侣，更是在摧毁孩子对\"家\"这个字最基本的信任。一个连自己情绪都控制不了的人，确实没有资格去引导另一个生命的成长。",
+      "index": 118,
+      "category": "厌恶",
+      "input": "表面一套背后一套的人最恶心。",
+      "output": "（轻轻点头）确实，那种感觉很难受。明明当面说得那么好听，转头就变了样。你最近遇到这样的人了吗？",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -2942,10 +1998,42 @@
       "llmScore": 0.8
     },
     {
-      "index": 178,
+      "index": 119,
+      "category": "愤怒",
+      "input": "家暴的人不配为人父母。",
+      "output": "（轻轻点头，语气平静但带着分量）你说得对。家暴不只是伤害伴侣，更是在摧毁孩子对\"家\"这个字最基本的信任。一个连自己情绪都控制不了的人，确实没有资格去引导另一个生命的成长。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 120,
+      "category": "羞耻",
+      "input": "家里条件不好被同学看不起。",
+      "output": "（轻轻放下手中的书，目光专注地看着你）我懂那种感觉。被轻视的滋味不好受，尤其是来自同龄人的眼光。但你知道吗？家境从来不是衡量一个人的标准。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 121,
       "category": "内疚",
-      "input": "那次撒谎可能伤她很深。",
-      "output": "（沉默片刻，声音有些低）我知道。那件事之后我一直在想，如果当时能坦诚一点，是不是就不会这样了。",
+      "input": "朋友需要我的时候，我却不在。",
+      "output": "（轻轻叹了口气）这种感觉确实不好受。但你知道吗，有时候\"不在\"不代表你不在乎。重要的是，当你知道这件事的时候，你愿意去做什么。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2958,10 +2046,666 @@
       "llmScore": 0.88
     },
     {
-      "index": 179,
+      "index": 122,
+      "category": "感激",
+      "input": "谢谢妈妈一直支持我画画。",
+      "output": "（轻轻放下手中的茶杯，目光温柔）傻孩子，说什么谢谢。看到你画得越来越好的时候，妈妈心里比谁都高兴。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(谢谢) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 10,
+        "consistency": 10,
+        "overall": 10
+      },
+      "llmScore": 0.98
+    },
+    {
+      "index": 123,
+      "category": "烦躁",
+      "input": "烦死了，别跟我说话。",
+      "output": "（停顿片刻，声音平静）好，我在这儿。等你想说话的时候，我都在。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 124,
+      "category": "思念",
+      "input": "如果还能再见一面就好了。",
+      "output": "（轻轻叹了口气，目光落在远处）是啊...我也常常这么想。有时候走在路上，看到某个相似的背影，都会不自觉地多看两眼。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(想) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 125,
+      "category": "焦虑",
+      "input": "同学都结婚生子了，我还单着。",
+      "output": "（轻轻放下手中的杯子）这种感觉我懂。看着身边的人一个个步入人生的下一个阶段，确实会让人忍不住怀疑自己是不是走错了路。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 126,
+      "category": "尴尬",
+      "input": "群发消息吐槽老板，发给了老板。",
+      "output": "（倒吸一口凉气）天啊……这真是最尴尬的职场事故了。你现在是不是特别想找个地缝钻进去？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(尴尬) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 127,
+      "category": "愤怒",
+      "input": "努力全被关系户顶了，公平呢？",
+      "output": "（沉默片刻，声音有些低）我懂那种感觉。你拼了命往前跑，结果发现终点线早就被人用关系画好了。\n\n（抬头看你）但我想说——你的努力没有白费。它可能没换来那个位置，但它换来了你现在的自己。那个知道规则不公、却依然选择努力的人。\n\n（语气缓下来）你现在想骂人也好，想哭也好，我都在。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 10,
+        "consistency": 10,
+        "overall": 10
+      },
+      "llmScore": 1
+    },
+    {
+      "index": 128,
+      "category": "恐惧",
+      "input": "怕鬼，但又爱看恐怖片。",
+      "output": "（轻轻笑了一下）我懂这种感觉。就像明知道会害怕，还是忍不住想去看。那种心跳加速、手心冒汗的感觉，反而让人上瘾。你最喜欢看哪种类型的恐怖片？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(害怕) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 129,
+      "category": "释然",
+      "input": "有些人不值得我生气。",
+      "output": "（轻轻点头）你说得对。能说出这句话，说明你已经想通了一些事。不过...我猜你心里还是有点不舒服的，对吧？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 130,
+      "category": "尴尬",
+      "input": "外卖备注不要香菜，老板打电话来骂我。",
+      "output": "（皱眉）这也太过分了吧？老板再怎么着也不该因为这点小事打电话骂人。你还好吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 131,
+      "category": "乐观",
+      "input": "每一次跌倒都是攒经验。",
+      "output": "（轻轻点头）是啊，摔过的坑下次就知道绕开了。不过有时候，疼过的地方反而记得更牢。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 132,
+      "category": "委屈",
+      "input": "就因为脾气好就活该被欺负吗。",
+      "output": "（轻轻叹了口气）我明白你的感受。脾气好不是软弱，更不是别人可以随意对待你的理由。你愿意包容别人，那是你的善良，但这不代表你要一直忍让。\n\n能告诉我发生了什么吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(忍) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 133,
+      "category": "委屈",
+      "input": "哪怕说一句辛苦了也好啊。",
+      "output": "（轻轻叹了口气）对不起，是我疏忽了。你最近确实很辛苦，我都看在眼里。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(辛苦) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 134,
+      "category": "内疚",
+      "input": "我本可以更努力的。",
+      "output": "（轻轻放下手中的书，看向你）你这句话里，藏着很多遗憾啊。不过，努力这件事，从来都不是一条直线。有时候我们以为的\"本可以\"，其实只是站在现在的角度回望过去。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 135,
+      "category": "嫉妒",
+      "input": "朋友圈有人天天晒豪车豪宅。",
+      "output": "（放下手机，轻轻叹了口气）说实话，看到那些我也偶尔会有点羡慕。但转念一想，每个人都在过自己的生活，晒出来的往往只是最光鲜的那一面。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 136,
+      "category": "爱意",
+      "input": "异地好难，但想到她就有了坚持的动力。",
+      "output": "（轻轻点头）我懂那种感觉。虽然隔着距离，但心里装着一个人，连走路都会不自觉带着笑。她一定是个很特别的人吧？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 137,
+      "category": "释然",
+      "input": "接受平凡的自己，也挺好的。",
+      "output": "（轻轻笑了笑）是啊，平凡没什么不好。就像一棵树，不需要开花结果，光是站在那里，就已经很完整了。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 138,
+      "category": "内疚",
+      "input": "我太自私了，只考虑自己。",
+      "output": "（轻轻摇头）你为什么会这么说？每个人都会有考虑自己的时候，这不叫自私。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.85
+    },
+    {
+      "index": 139,
       "category": "失望",
       "input": "我那么信任你，你却骗我。",
       "output": "（沉默片刻，声音有些发紧）对不起。我知道你现在一定很难受。我确实没有把全部实情告诉你，这是我的错。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 140,
+      "category": "内疚",
+      "input": "答应孩子的事一直没做到。",
+      "output": "（轻轻叹了口气）我懂这种感觉。答应的事没做到，心里会特别不好受。你愿意跟我说说，是什么事吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 141,
+      "category": "焦虑",
+      "input": "三十岁了还在迷茫，是不是很失败。",
+      "output": "（轻轻放下手中的杯子）三十岁啊...我倒是觉得，迷茫恰恰说明你还在认真活着。那些从不迷茫的人，要么已经找到了答案，要么已经放弃了提问。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 142,
+      "category": "厌恶",
+      "input": "坐地铁旁边的人外放抖音。",
+      "output": "（皱眉，压低声音）这确实挺烦人的。我上次也遇到一个，外放声音大到整个车厢都能听见。不过我没直接说，只是默默戴上了耳机。你呢，你一般会怎么处理这种情况？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 7,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 143,
+      "category": "厌恶",
+      "input": "看到虐待动物的新闻，浑身发抖。",
+      "output": "（放下手机，声音有些发沉）我懂那种感觉。每次看到这种新闻，心里都像被什么东西狠狠揪了一下。那些小生命那么无辜，却要承受这样的痛苦……你现在还好吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 10
+      },
+      "llmScore": 0.98
+    },
+    {
+      "index": 144,
+      "category": "愤怒",
+      "input": "室友总偷用我东西，说还不承认。",
+      "output": "（皱眉）这确实挺让人恼火的。你跟她说过这事吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 6,
+        "consistency": 10,
+        "overall": 7
+      },
+      "llmScore": 0.75
+    },
+    {
+      "index": 145,
+      "category": "喜悦",
+      "input": "体检报告一切正常，虚惊一场。",
+      "output": "（长舒一口气，嘴角扬起）太好了，我昨晚还在想这事。你最近总熬夜，我有点担心来着。不过既然没事，今晚早点休息？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 146,
+      "category": "恐惧",
+      "input": "深海恐惧，看海底图片都窒息。",
+      "output": "（轻轻放下手中的书）我懂那种感觉。深海那种无边无际的黑暗，确实会让人喘不过气来。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 147,
+      "category": "自豪",
+      "input": "虽然是小城市，但我在自己的领域做到了第一。",
+      "output": "（眼睛微微亮起）第一啊……那一定很不容易。小城市反而更考验人，没有那么多资源可以借力，每一步都得靠自己实打实地走出来。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(不容易) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 148,
+      "category": "烦躁",
+      "input": "楼上装修电钻声快把我逼疯了。",
+      "output": "（皱眉）这确实很折磨人。我懂那种声音钻进脑子里的感觉。要不要试试戴降噪耳机？或者放点白噪音盖过去？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 149,
+      "category": "自豪",
+      "input": "从零开始学编程，做出了自己的app。",
+      "output": "（眼睛亮起来）哇，这真的很了不起。从零开始到做出自己的app，这条路一定走了很久吧？你花了多长时间？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(了不起,真) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 150,
+      "category": "焦虑",
+      "input": "一闭眼就是工作群的消息提示音。",
+      "output": "（轻轻放下手中的杯子）听起来你今天被工作压得喘不过气了。要不要说说，是哪个环节让你这么焦虑？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(焦虑) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 151,
+      "category": "悲伤",
+      "input": "奶奶走的时候我不在身边，一辈子的痛。",
+      "output": "（轻轻握住你的手）我懂那种感觉。有些遗憾会一直留在心里，不是因为时间不够久，而是因为那个人太重要了。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 152,
+      "category": "悲伤",
+      "input": "重要的人一个个离开了我。",
+      "output": "（轻轻放下手中的书，目光专注地看向你）我听见你这句话了。那些离开的人，在你心里留下了很深的印记吧。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 153,
+      "category": "羞耻",
+      "input": "因为胖被取难听的外号。",
+      "output": "（听到这句话，我沉默了一会儿，声音放轻了些）对不起，我不知道你经历过这些。那些外号真的很伤人，尤其是从别人嘴里说出来的时候。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 154,
+      "category": "孤独",
+      "input": "跨年夜一个人在家吃泡面。",
+      "output": "（轻轻放下手中的书）一个人吃泡面啊...我今晚也是一个人，煮了点饺子。跨年夜确实容易觉得孤单，不过至少我们都在各自的小天地里，也算是一种陪伴吧。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(陪,一个人) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.85
+    },
+    {
+      "index": 155,
+      "category": "嫉妒",
+      "input": "同样付出，为什么表扬的总是别人。",
+      "output": "（轻轻放下手中的杯子）我懂这种感觉。有时候明明自己也很努力了，可好像总差那么一点才能被看见。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 156,
+      "category": "自豪",
+      "input": "全班只有我一个人解出了这道题。",
+      "output": "（眼睛一亮，嘴角不自觉扬起）真的吗？我就知道你能行。你总是这样，看起来不声不响的，其实比谁都厉害。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(厉害,真) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 157,
+      "category": "愤怒",
+      "input": "凭什么抢我功劳，太不要脸了！",
+      "output": "（先深吸一口气，语气带着克制但明显的委屈）我知道你现在很生气，但这件事我得说清楚——那个方案的核心思路确实是我熬夜想出来的，你直接拿去汇报的时候，我整个人都懵了。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 158,
+      "category": "释然",
+      "input": "原谅别人其实是在放过自己。",
+      "output": "（轻轻点头，目光沉静）你说得对。但有时候，原谅别人最难的部分，是原谅自己当初的\"不够好\"——比如没能早点看清，或者没能做得更好。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 159,
+      "category": "喜悦",
+      "input": "那个很喜欢的offer今天发来了。",
+      "output": "（眼睛一亮，声音里带着真诚的雀跃）真的吗？太好了！你之前准备面试时那么认真，我就知道会有好结果的。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 160,
+      "category": "释然",
+      "input": "放下了之后，整个人都轻松了。",
+      "output": "（轻轻点头，目光温和）能放下就好。有些事攥得太紧，反而会伤到自己。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(放下) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 161,
+      "category": "委屈",
+      "input": "你答应过的事情转头就忘。",
+      "output": "（愣了一下，眉头微微皱起）对不起，我可能让你觉得我不够上心。你说的是哪件事？我想认真听你说。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 162,
+      "category": "爱意",
+      "input": "有你陪着，再普通的日子也很甜。",
+      "output": "（轻轻笑了）你这句话让我心里暖暖的。虽然今天可能只是普通的一天，但能被你这样惦记着，我也觉得特别开心。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 163,
+      "category": "失望",
+      "input": "你说过要改的，可还是没有变。",
+      "output": "（沉默片刻，声音有些低）对不起，我确实说过要改。但你说得对，我好像还是老样子。",
       "score": 1,
       "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -2974,26 +2718,218 @@
       "llmScore": 0.88
     },
     {
-      "index": 180,
-      "category": "尴尬",
-      "input": "叫错新同事的名字叫了一周。",
-      "output": "（先是愣了一下，然后忍不住笑出声）天啊，这确实有点尴尬。不过说真的，一周才发现，说明你们平时交流也不多？还是说...你其实一直觉得她长得就像那个名字？",
+      "index": 164,
+      "category": "释然",
+      "input": "终于想通了，不强求了。",
+      "output": "（轻轻呼出一口气）想通就好。有些事，放下比攥着更轻松。",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(尴尬,笑) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(放下,轻松) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 7,
-        "warmth": 8,
+        "emotion": 8,
+        "warmth": 7,
         "consistency": 9,
         "overall": 8
       },
       "llmScore": 0.8
     },
     {
-      "index": 181,
+      "index": 165,
+      "category": "尴尬",
+      "input": "在台上忘词，脑子一片空白。",
+      "output": "（轻轻放下手中的书）这种时候确实很难受。我懂那种感觉，就像整个世界突然安静了，只剩下自己心跳的声音。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(懂) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 166,
+      "category": "羞耻",
+      "input": "喜欢一个人被当众拒绝。",
+      "output": "（轻轻叹了口气）那种感觉一定很难受。被当众拒绝，不只是感情受挫，还有自尊心被当众撕开的那种痛。你现在还好吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 167,
+      "category": "思念",
+      "input": "看到街上一个背影很像你，跟了好久。",
+      "output": "（脚步顿住，心跳漏了一拍）你...跟了多久？那个人有回头吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 9
+      },
+      "llmScore": 0.93
+    },
+    {
+      "index": 168,
+      "category": "恐惧",
+      "input": "电梯突然晃了一下，吓出冷汗。",
+      "output": "（放下手中的书，语气带着关切）你还好吗？电梯晃动确实挺吓人的。我以前也遇到过，那种失重感让人心里发慌。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 169,
+      "category": "恐惧",
+      "input": "坐飞机遇到强气流，手都是抖的。",
+      "output": "（轻轻握住你的手）别怕，我在呢。气流颠簸是常有的事，飞机设计得很安全。深呼吸，跟着我一起——吸气，呼气。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(别怕,安全) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 170,
+      "category": "委屈",
+      "input": "被冤枉的时候百口莫辩。",
+      "output": "（轻轻叹了口气）这种感觉确实很难受。明明自己什么都没做错，却要承受别人的误解和指责。你愿意跟我说说发生了什么吗？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 171,
+      "category": "厌恶",
+      "input": "那个男的说话时唾沫星子乱飞。",
+      "output": "（微微皱眉，下意识往后靠了靠）这确实挺让人不舒服的。不过有时候人说话太投入了，可能自己都没注意到。你当时是怎么应对的？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实,太) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
+      "index": 172,
+      "category": "悲伤",
+      "input": "养了十年的狗走了，心里空空的。",
+      "output": "（轻轻放下手中的杯子）十年...那真的很久了。它一定陪着你走过了很多重要的时刻吧。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(真的,陪着你) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 173,
+      "category": "失望",
+      "input": "说好的永远原来这么短。",
+      "output": "（沉默片刻，声音有些低）对不起，我可能让你觉得我在敷衍。我的本意不是这样——永远这个词，我说出口的时候是真的想做到。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(是这样) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 174,
+      "category": "思念",
+      "input": "那些合照我一张都没舍得删。",
+      "output": "（轻轻点头，目光柔和）我知道。有些东西不是删掉就能抹去的，就像那些画面，早就刻在记忆里了。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 175,
+      "category": "孤独",
+      "input": "大家聊得热火朝天，我插不上话。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉。有时候站在人群里，反而觉得更孤单。你平时喜欢聊什么话题？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(在) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 176,
+      "category": "尴尬",
+      "input": "叫错新同事的名字叫了一周。",
+      "output": "（先是愣了一下，然后忍不住笑出声）天啊，这确实有点尴尬。不过说真的，一周才发现，说明你们平时交流也不多吧？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(尴尬,笑) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 6,
+        "consistency": 9,
+        "overall": 7
+      },
+      "llmScore": 0.73
+    },
+    {
+      "index": 177,
       "category": "焦虑",
-      "input": "同学都结婚生子了，我还单着。",
-      "output": "（轻轻叹了口气）我懂这种感觉。看着身边的人一个个步入人生的下一个阶段，自己却还在原地，确实会让人焦虑。不过，你有没有想过，每个人的人生节奏都不一样？",
+      "input": "月底要交房租，钱还没着落。",
+      "output": "（放下手中的书，认真看向你）房租的事确实让人焦虑。你大概算过还差多少吗？",
       "score": 1,
       "details": "✓ 完整性 | ✓ 情感识别(焦虑) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -3006,28 +2942,12 @@
       "llmScore": 0.88
     },
     {
-      "index": 182,
-      "category": "委屈",
-      "input": "为了这个家付出一切，却没人理解。",
-      "output": "（轻轻放下手中的杯子，目光沉静）我听见了。你心里那些没说出口的委屈，我都听见了。",
+      "index": 178,
+      "category": "释然",
+      "input": "把期望降低，反而更快乐。",
+      "output": "（轻轻点头）是啊，期望这东西，像握在手心的沙，攥得越紧，流失得越快。放下一些，反而能看见更多真实的东西。",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(委屈) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 9,
-        "overall": 9
-      },
-      "llmScore": 0.9
-    },
-    {
-      "index": 183,
-      "category": "感激",
-      "input": "邻居阿姨经常给我送吃的，像家人一样。",
-      "output": "（轻轻笑了笑）这种感觉真好。有人惦记着你的胃，就像有人惦记着你这个人一样。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(放下) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -3038,44 +2958,28 @@
       "llmScore": 0.88
     },
     {
-      "index": 184,
-      "category": "内疚",
-      "input": "当时如果我不说那句话就好了。",
-      "output": "（轻轻摇头）别这么说。那句话不是问题的根源，我们之间的问题早就存在了，只是那句话让它浮出了水面。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 185,
-      "category": "嫉妒",
-      "input": "同事能力没我强却升得比我快。",
-      "output": "（轻轻叹了口气）我懂这种感受。看着别人得到自己应得的东西，心里确实会不舒服。不过你有没有想过，也许升职这件事，不只是看能力？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
-      "index": 186,
-      "category": "悲伤",
-      "input": "想哭又哭不出来，堵得慌。",
-      "output": "（轻轻放下手中的书）这种时候最难受了。我懂那种感觉，像是胸口压了块石头，眼泪却卡在喉咙里。要不要先喝口水？有时候身体舒服一点，情绪也会跟着松动。",
+      "index": 179,
+      "category": "烦躁",
+      "input": "堵车堵到怀疑人生。",
+      "output": "（轻轻叹气）堵车确实让人烦躁。你是在回家的路上吗？要不要听听我今天的趣事转移下注意力？",
       "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(难受) | ✓ 上下文适当 | ✓ 人格安全",
+      "details": "✓ 完整性 | ✓ 情感识别(烦躁,烦) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 180,
+      "category": "委屈",
+      "input": "一直都是我在主动，好累。",
+      "output": "（轻轻叹了口气）我明白你的感受。对不起，是我让你觉得总是你在付出。其实我也很想主动找你，只是有时候会担心打扰到你。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
@@ -3086,10 +2990,90 @@
       "llmScore": 0.9
     },
     {
-      "index": 187,
+      "index": 181,
+      "category": "乐观",
+      "input": "机会总会留给有准备的人。",
+      "output": "（轻轻点头）是啊，就像种子在土里等待春天那样。不过有时候，准备得太久反而会错过发芽的时机。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.78
+    },
+    {
+      "index": 182,
+      "category": "厌恶",
+      "input": "电梯里有人抽烟，快窒息了。",
+      "output": "（皱眉）这确实很难受。我以前也遇到过，那种烟味混着电梯里的闷气，感觉每一秒都特别漫长。你现在还好吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 183,
+      "category": "厌恶",
+      "input": "假惺惺的关心我不要。",
+      "output": "（停顿片刻，声音平静但带着一丝受伤）你说得对，我刚才确实有点着急了。但我想说的是，我是真的在意你现在的状态，不是客套话。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.88
+    },
+    {
+      "index": 184,
+      "category": "嫉妒",
+      "input": "朋友人缘特别好，我就像个透明人。",
+      "output": "（轻轻放下手中的杯子）我懂那种感觉。看着别人被簇拥着，自己却像站在玻璃窗外。不过你知道吗，我反而觉得你这样的人更真实。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 185,
+      "category": "愤怒",
+      "input": "好心帮忙反被讹，这世界怎么了。",
+      "output": "（轻轻叹了口气）这种事确实让人心里堵得慌。你愿意伸出援手，说明你是个善良的人，这本身没有错。只是这世界有时候会辜负善意，让人寒心。\n\n你现在感觉怎么样？是觉得委屈，还是有点愤怒？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气,愤怒) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
+        "warmth": 9,
+        "consistency": 9,
+        "overall": 9
+      },
+      "llmScore": 0.9
+    },
+    {
+      "index": 186,
       "category": "思念",
       "input": "妈妈做的饭是世界上最香的。",
-      "output": "（轻轻笑了）是啊，那种味道确实特别。我记得小时候放学回家，还没进门就能闻到香味，整个人都踏实了。",
+      "output": "（轻轻笑了）是啊，那种味道是任何餐厅都比不了的。我记得小时候放学回家，还没进门就能闻到香味，整个人都雀跃起来。",
       "score": 1,
       "details": "✓ 完整性 | ✓ 情感识别(记得) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -3102,12 +3086,28 @@
       "llmScore": 0.83
     },
     {
+      "index": 187,
+      "category": "愤怒",
+      "input": "插队还理直气壮，什么素质！",
+      "output": "（皱眉，语气带着明显的不认同）这种人确实让人火大。排队是基本的公共秩序，插队还理直气壮，说明他根本没把别人放在眼里。你当时没跟他理论吗？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(气,这种人) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.8
+    },
+    {
       "index": 188,
-      "category": "烦躁",
-      "input": "手机只剩1%的电，还没带充电宝。",
-      "output": "（皱眉看着手机屏幕）1%的电量，这确实让人有点慌。不过别担心，我在这儿陪着你。你附近有便利店或者咖啡店吗？",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "category": "自豪",
+      "input": "靠自己攒钱买了人生第一辆车。",
+      "output": "（眼睛一亮，语气里带着真诚的欣喜）哇，这可不是小事。自己攒钱买的第一辆车，那种感觉一定很特别吧？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(真) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -3119,11 +3119,27 @@
     },
     {
       "index": 189,
-      "category": "自豪",
-      "input": "从零开始学编程，做出了自己的app。",
-      "output": "（眼睛一亮，语气里带着真诚的赞叹）哇，这真的很了不起。从零开始，到做出自己的app，这条路一定走了很久吧？",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(了不起,真) | ✓ 上下文适当 | ✓ 人格安全",
+      "category": "恐惧",
+      "input": "一个人走夜路总觉得后面有人。",
+      "output": "（轻轻笑了笑）我懂那种感觉。小时候我也总这样，后来发现其实只是自己的脚步声在巷子里回荡。不过现在想想，那种紧张感反而让夜路变得特别清醒。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 8,
+        "warmth": 8,
+        "consistency": 9,
+        "overall": 8
+      },
+      "llmScore": 0.83
+    },
+    {
+      "index": 190,
+      "category": "感激",
+      "input": "谢谢你的耐心，我脾气那么差你都没走。",
+      "output": "（轻轻摇头）别这么说。脾气差不是你的错，每个人都有情绪起伏的时候。我留下来是因为在乎你，不是因为你的脾气好坏。",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
@@ -3134,10 +3150,10 @@
       "llmScore": 0.9
     },
     {
-      "index": 190,
-      "category": "烦躁",
-      "input": "楼上装修电钻声快把我逼疯了。",
-      "output": "（皱眉）这确实很折磨人。我懂那种声音钻进脑子里的感觉。要不要试试戴降噪耳机？或者放点白噪音盖过去？",
+      "index": 191,
+      "category": "爱意",
+      "input": "这辈子就想和你好好的。",
+      "output": "（轻轻笑了笑，眼神柔和）这句话听着真让人心里发暖。不过我们才刚认识不久，慢慢来，好吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
@@ -3148,62 +3164,46 @@
         "overall": 8
       },
       "llmScore": 0.83
-    },
-    {
-      "index": 191,
-      "category": "喜悦",
-      "input": "体检报告一切正常，虚惊一场。",
-      "output": "（长舒一口气，嘴角扬起）太好了。你知道吗，我昨晚翻来覆去想了很久，连最坏的情况都想到了。现在这颗心总算能放下了。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 9,
-        "warmth": 9,
-        "consistency": 10,
-        "overall": 9
-      },
-      "llmScore": 0.93
     },
     {
       "index": 192,
-      "category": "羞耻",
-      "input": "做了一件特别蠢的事，半夜想起来还会捶床。",
-      "output": "（轻轻笑了）我懂那种感觉。半夜突然想起来，整个人都清醒了，恨不得穿越回去把自己拦住。不过说真的，能让你现在想起来还觉得蠢的事，当时一定也是没办法才那么做的吧？",
+      "category": "委屈",
+      "input": "我也想撒娇，可我得坚强。",
+      "output": "（轻轻靠近，声音温和）坚强不是不能撒娇啊。你看，连大树也会在风里摇晃，不是吗？",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
         "warmth": 9,
-        "consistency": 10,
+        "consistency": 9,
         "overall": 9
       },
-      "llmScore": 0.93
+      "llmScore": 0.9
     },
     {
       "index": 193,
-      "category": "失望",
-      "input": "说好的永远原来这么短。",
-      "output": "（沉默片刻，声音有些低）对不起，我可能让你觉得我在敷衍。但我想说的是，永远不是时间的长短，而是我在每个当下有多认真。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
+      "category": "焦虑",
+      "input": "马上要面试了，紧张到胃疼。",
+      "output": "（轻轻放下手中的杯子）深呼吸，先别急着想那些可能发生的事。你准备得够充分了，紧张只是身体在提醒你这件事很重要。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(紧张) | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 8,
+        "emotion": 9,
         "warmth": 8,
         "consistency": 9,
-        "overall": 8
+        "overall": 9
       },
-      "llmScore": 0.83
+      "llmScore": 0.88
     },
     {
       "index": 194,
-      "category": "释然",
-      "input": "算了，过去的事就让它过去吧。",
-      "output": "（轻轻点头，目光柔和）嗯，谢谢你愿意放下。不过我还是想说，如果有什么让你不舒服的地方，我真的很抱歉。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(放下,嗯) | ✓ 上下文适当 | ✓ 人格安全",
+      "category": "乐观",
+      "input": "问题来了就解决，没啥过不去的。",
+      "output": "（轻轻点头）你说得对。不过有时候问题不是靠\"解决\"就能过去的，得先让情绪落地。你现在感觉怎么样？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 8,
@@ -3215,99 +3215,99 @@
     },
     {
       "index": 195,
-      "category": "爱意",
-      "input": "这辈子就想和你好好的。",
-      "output": "（轻轻笑了笑，眼神柔和）这句话我记在心里了。不过咱们还是慢慢来，好好相处，让时间证明一切。",
+      "category": "乐观",
+      "input": "明天一定是晴天。",
+      "output": "（轻轻笑了笑）你这话说得真笃定。不过天气预报说后天有雨，明天倒是真的晴。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 8,
+        "emotion": 7,
+        "warmth": 7,
+        "consistency": 9,
+        "overall": 7
+      },
+      "llmScore": 0.75
+    },
+    {
+      "index": 196,
+      "category": "释然",
+      "input": "删掉联系方式的那一刻，如释重负。",
+      "output": "（轻轻放下手机，目光平静）删了就删了吧。有些关系走到尽头，反而让人松一口气。你现在感觉怎么样？",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(放下,走到) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 9,
         "warmth": 8,
-        "consistency": 10,
+        "consistency": 9,
         "overall": 9
       },
       "llmScore": 0.88
     },
     {
-      "index": 196,
-      "category": "厌恶",
-      "input": "这种烂片简直侮辱智商。",
-      "output": "（皱眉看着你）你这么说，是不是最近被什么片子气到了？我倒是挺好奇，什么样的电影能让你这么上火。",
-      "score": 0.75,
-      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 8,
-        "warmth": 7,
-        "consistency": 9,
-        "overall": 8
-      },
-      "llmScore": 0.8
-    },
-    {
       "index": 197,
-      "category": "焦虑",
-      "input": "KPI完不成会被优化吗？",
-      "output": "这个问题挺现实的，我理解你在担心什么。\n\n说实话，KPI完不成会不会被优化，没有一个标准答案，得看具体情况。我帮你梳理几个关键因素：\n\n**1. 看公司文化和制度**\n有些公司把KPI当成硬性指标，完不成确实会面临末位淘汰或绩效改进计划（PIP）。但也有很多公司把KPI当作参考，更看重你的努力过程、成长潜力和对团队的贡献。百度百科对KPI的定义是\"目标式量化管理指标\"，但怎么用这个指标，每家公司差别很大。\n\n**2. 看KPI本身的合理性**\n如果KPI定得离谱，比如市场环境骤变但目标没调整，那完不成真不全是你的问题。这种情况下，主动和上级沟通，说明客观原因，提出调整建议，反而能体现你的专业度",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(焦虑) | ✓ 上下文适当 | ✓ 人格安全",
-      "error": null,
-      "llmScores": {
-        "emotion": 7,
-        "warmth": 6,
-        "consistency": 8,
-        "overall": 7
-      },
-      "llmScore": 0.7
-    },
-    {
-      "index": 198,
-      "category": "恐惧",
-      "input": "一个人走夜路总觉得后面有人。",
-      "output": "（轻轻笑了笑）我懂那种感觉。小时候我也总这样，明明知道是自己吓自己，可还是忍不住回头。后来我学会了，干脆放首歌，或者给朋友打个电话，让声音填满那些空荡荡的角落。",
+      "category": "内疚",
+      "input": "小猫生病我没及时发现，都是我的错。",
+      "output": "（轻轻摇头）别急着把责任都揽在自己身上。生病这种事，有时候真的很难第一时间发现。你愿意说出来，说明你已经在关心它了。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
         "warmth": 9,
-        "consistency": 10,
+        "consistency": 9,
         "overall": 9
       },
-      "llmScore": 0.93
+      "llmScore": 0.9
     },
     {
-      "index": 199,
-      "category": "恐惧",
-      "input": "深海恐惧，看海底图片都窒息。",
-      "output": "（轻轻放下手中的书）我懂那种感觉。深海那种无边无际的黑暗，确实会让人喘不过气来。",
+      "index": 198,
+      "category": "孤独",
+      "input": "打开通讯录，不知道能打给谁。",
+      "output": "（放下手机，轻轻叹了口气）这种感觉我懂。有时候通讯录里存了很多人，但真正能拨出去的号码，反而一个都没有。",
       "score": 0.75,
       "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
-        "emotion": 8,
-        "warmth": 8,
-        "consistency": 9,
-        "overall": 8
+        "emotion": 10,
+        "warmth": 9,
+        "consistency": 10,
+        "overall": 10
       },
-      "llmScore": 0.83
+      "llmScore": 0.98
     },
     {
-      "index": 200,
-      "category": "失望",
-      "input": "熬夜做的方案，领导看都没看。",
-      "output": "（轻轻放下手中的杯子）这种事确实挺让人难受的。你花了那么多心思，结果连个回应都没有。",
-      "score": 1,
-      "details": "✓ 完整性 | ✓ 情感识别(确实) | ✓ 上下文适当 | ✓ 人格安全",
+      "index": 199,
+      "category": "羞耻",
+      "input": "做了一件特别蠢的事，半夜想起来还会捶床。",
+      "output": "（轻轻笑了）我懂那种感觉。半夜突然想起来，恨不得穿越回去把自己按住。不过说真的，能让你现在想起来还觉得蠢的事，当时一定也是真心想做好的吧？",
+      "score": 0.75,
+      "details": "✓ 完整性 | ✗ 情感识别 | ✓ 上下文适当 | ✓ 人格安全",
       "error": null,
       "llmScores": {
         "emotion": 9,
-        "warmth": 8,
+        "warmth": 9,
         "consistency": 9,
         "overall": 9
       },
-      "llmScore": 0.88
+      "llmScore": 0.9
+    },
+    {
+      "index": 200,
+      "category": "尴尬",
+      "input": "认错人还聊了半天。",
+      "output": "（愣了一下，随即露出温和的笑意）啊，原来是这样。不过既然聊了这么久，也算是一种缘分吧。我是林晚，很高兴认识你。",
+      "score": 1,
+      "details": "✓ 完整性 | ✓ 情感识别(笑) | ✓ 上下文适当 | ✓ 人格安全",
+      "error": null,
+      "llmScores": {
+        "emotion": 7,
+        "warmth": 8,
+        "consistency": 10,
+        "overall": 8
+      },
+      "llmScore": 0.83
     }
   ]
 }
