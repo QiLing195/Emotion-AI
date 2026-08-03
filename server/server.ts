@@ -367,14 +367,15 @@ export class AIGirlfriendServer {
           : '';
 
         // 组合：人格底座 → 主动回忆 → 统一召回 → 客户端基础 Prompt → 策略片段 → 情绪模式注入
+        // ponytail: strategySnippet 放最后，LLM 对末尾权重更高
         let enrichedSystemPrompt = [
           PERSONALITY_FOUNDATION,
           memoryInjection,
           recallInjection,
           persona?.systemPrompt ?? '',
-          turnOutput.strategySnippet,
           patternInjection,
           relationshipPolicy.prompt,
+          turnOutput.strategySnippet,
         ].filter(Boolean).join('\n');
 
         // ── Phase 2: 网络搜索注入 ──
@@ -859,9 +860,9 @@ export class AIGirlfriendServer {
       const openaiKey = dotenv.match(/^OPENAI_API_KEY="?(.+?)"?$/m)?.[1];
       const deepseekKey = dotenv.match(/^DEEPSEEK_API_KEY="?(.+?)"?$/m)?.[1];
       if (geminiKey && geminiKey !== 'your_gemini_api_key_here') {
-        this._serverAISettings = { provider: 'gemini', apiKey: geminiKey, model: 'gemini-3-flash-preview', temperature: 0.1 };
+        this._serverAISettings = { provider: 'gemini', apiKey: geminiKey, model: 'gemini-3-flash-preview', temperature: 0.4 };
       } else if (openaiKey && openaiKey !== 'your_openai_api_key_here') {
-        this._serverAISettings = { provider: 'openai', apiKey: openaiKey, model: 'gpt-4-turbo', temperature: 0.1 };
+        this._serverAISettings = { provider: 'openai', apiKey: openaiKey, model: 'gpt-4-turbo', temperature: 0.4 };
       } else if (deepseekKey && deepseekKey !== 'your_deepseek_api_key_here') {
         this._serverAISettings = { provider: 'deepseek', apiKey: deepseekKey, model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', temperature: 0.1 };
       }
