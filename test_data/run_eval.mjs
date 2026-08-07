@@ -13,7 +13,7 @@ process.env.NO_PROXY = process.env.no_proxy;
 const API = 'http://127.0.0.1:3000/api/chat';
 const INPUT_FILE = 'test_data/200_seed_inputs.json';
 const OUTPUT_FILE = 'test_data/eval_results.json';
-const DELAY_MS = 1500; // 请求间隔
+const DELAY_MS = 1000; // 请求间隔  // ponytail: 1500→1000, fit within 10min
 
 // —— 读取 + 打乱 ——
 const inputs = JSON.parse(readFileSync(INPUT_FILE, 'utf-8'));
