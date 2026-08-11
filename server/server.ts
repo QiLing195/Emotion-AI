@@ -752,6 +752,7 @@ export class AIGirlfriendServer {
         extremityDuration: 0,
         lastExtremitySign: 0,
         internalNarrative: '',
+        rewardStats: rewardLearner.getAllStats(),
       });
     });
 
