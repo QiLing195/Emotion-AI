@@ -140,8 +140,9 @@ export async function generateAIResponse(
         response_format: isJson ? { type: "json_object" } : undefined,
         temperature,
         // ponytail: 防模板过拟合 — 降低重复词/话题的采样概率
-        frequency_penalty: 0.3,
-        presence_penalty: 0.3,
+        // 0.3→0.5: LLM Judge 自然度 7.3/10, 模板开头仍是最大扣分项
+        frequency_penalty: 0.5,
+        presence_penalty: 0.5,
       });
       return response.choices[0].message.content || (isJson ? '{}' : '');
     }
