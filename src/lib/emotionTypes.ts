@@ -170,6 +170,79 @@ export const OFFLINE_RESILIENCE = 0.012; // 离线韧性恢复率
 export const RESILIENCE_LEAK = 0.997;    // 韧性自然衰减（防止永远增长）
 
 // ════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════
+// 复合情绪规则
+// ════════════════════════════════════════════════════════════
+
+export const COMPOSITE_RULES: CompositeRule[] = [
+  {
+    name: '怀旧',
+    description: '又开心又伤感，想起了过去的事',
+    evaluate: (e) => {
+      const v = Math.max(0, e.joy) * Math.max(0, e.sad);
+      return v > 0.08 ? Math.min(1, v * 4) : 0;
+    },
+  },
+  {
+    name: '激情',
+    description: '爱意和欲望交织，无法抗拒的吸引力',
+    evaluate: (e) => {
+      const v = Math.max(0, e.love) * Math.max(0, e.lust);
+      return v > 0.1 ? Math.min(1, v * 3) : 0;
+    },
+  },
+  {
+    name: '幸福',
+    description: '内心充满温暖和安宁，不需要更多了',
+    evaluate: (e) => {
+      const avg = (Math.max(0, e.joy) + Math.max(0, e.love) + Math.max(0, e.calm)) / 3;
+      return avg > 0.3 ? Math.min(1, avg * 1.2) : 0;
+    },
+  },
+  {
+    name: '鄙视',
+    description: '愤怒和反感的混合，居高临下的不屑',
+    evaluate: (e) => {
+      const v = Math.max(0, e.anger) * Math.max(0, e.disgust);
+      return v > 0.08 ? Math.min(1, v * 3) : 0;
+    },
+  },
+  {
+    name: '无助',
+    description: '恐惧和悲伤中耗尽力气，什么都做不了',
+    evaluate: (e, _m, energy) => {
+      const avg = (Math.max(0, e.fear) + Math.max(0, e.sad)) / 2;
+      const v = avg * (1 - energy) * 2;
+      return v > 0.1 ? Math.min(1, v) : 0;
+    },
+  },
+  {
+    name: '心碎',
+    description: '爱还在，但信任碎了，无法接受',
+    evaluate: (e) => {
+      const v = Math.max(0, e.love) * Math.max(0, e.sad);
+      return v > 0.08 ? Math.min(1, v * 3.5) : 0;
+    },
+  },
+  {
+    name: '焦虑',
+    description: '既渴望又害怕，心里七上八下的',
+    evaluate: (e) => {
+      const v = Math.max(0, e.greed) * Math.max(0, e.fear);
+      return v > 0.1 ? Math.min(1, v * 2.5) : 0;
+    },
+  },
+  {
+    name: '绝望',
+    description: '看不到希望的黑暗，什么都不想做了',
+    evaluate: (e, _m, energy) => {
+      if (e.fear > 0.5 && e.sad > 0.5 && energy < 0.3) return (e.fear + e.sad) / 2;
+      return 0;
+    },
+  },
+];
+
 // 3. 情感吸引子景观（各情感在状态空间中的吸引中心）
 // ════════════════════════════════════════════════════════════
 

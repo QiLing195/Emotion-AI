@@ -51,7 +51,7 @@ import {
   OFFLINE_RESILIENCE, RESILIENCE_LEAK, EMOTION_ATTRACTORS,
   INITIAL_TAIJI, INITIAL_YINYANG, INITIAL_SANCAI, INITIAL_EVOLUTION,
   INITIAL_EMOTION_STATE, INITIAL_EMOTION_SWEET, INITIAL_EMOTION_GENTLE,
-  STAGE_LABELS, STAGE_DESCRIPTIONS,
+  STAGE_LABELS, STAGE_DESCRIPTIONS, COMPOSITE_RULES,
 } from './emotionTypes';
 
 // ════════════════════════════════════════════════════════════
@@ -214,77 +214,6 @@ function computeEmotionIntensities(
 }
 
 // ════════════════════════════════════════════════════════════
-// 9. 复合情绪 —— 鞍点检测（扩展版）
-// ════════════════════════════════════════════════════════════
-
-const COMPOSITE_RULES: CompositeRule[] = [
-  {
-    name: '怀旧',
-    description: '又开心又伤感，想起了过去的事',
-    evaluate: (e) => {
-      const v = Math.max(0, e.joy) * Math.max(0, e.sad);
-      return v > 0.08 ? Math.min(1, v * 4) : 0;
-    },
-  },
-  {
-    name: '激情',
-    description: '爱意和欲望交织，无法抗拒的吸引力',
-    evaluate: (e) => {
-      const v = Math.max(0, e.love) * Math.max(0, e.lust);
-      return v > 0.1 ? Math.min(1, v * 3) : 0;
-    },
-  },
-  {
-    name: '幸福',
-    description: '内心充满温暖和安宁，不需要更多了',
-    evaluate: (e) => {
-      const avg = (Math.max(0, e.joy) + Math.max(0, e.love) + Math.max(0, e.calm)) / 3;
-      return avg > 0.3 ? Math.min(1, avg * 1.2) : 0;
-    },
-  },
-  {
-    name: '鄙视',
-    description: '愤怒和反感的混合，居高临下的不屑',
-    evaluate: (e) => {
-      const v = Math.max(0, e.anger) * Math.max(0, e.disgust);
-      return v > 0.08 ? Math.min(1, v * 3) : 0;
-    },
-  },
-  {
-    name: '无助',
-    description: '恐惧和悲伤中耗尽力气，什么都做不了',
-    evaluate: (e, _m, energy) => {
-      const avg = (Math.max(0, e.fear) + Math.max(0, e.sad)) / 2;
-      const v = avg * (1 - energy) * 2;
-      return v > 0.1 ? Math.min(1, v) : 0;
-    },
-  },
-  {
-    name: '心碎',
-    description: '爱还在，但信任碎了，无法接受',
-    evaluate: (e) => {
-      const v = Math.max(0, e.love) * Math.max(0, e.sad);
-      return v > 0.08 ? Math.min(1, v * 3.5) : 0;
-    },
-  },
-  {
-    name: '焦虑',
-    description: '既渴望又害怕，心里七上八下的',
-    evaluate: (e) => {
-      const v = Math.max(0, e.greed) * Math.max(0, e.fear);
-      return v > 0.1 ? Math.min(1, v * 2.5) : 0;
-    },
-  },
-  {
-    name: '绝望',
-    description: '看不到希望的黑暗，什么都不想做了',
-    evaluate: (e, _m, energy) => {
-      if (e.fear > 0.5 && e.sad > 0.5 && energy < 0.3) return (e.fear + e.sad) / 2;
-      return 0;
-    },
-  },
-];
-
 function detectCompositeEmotions(
   intensities: Record<string, number>,
   meta: EmotionState['metaEmotions'],
@@ -554,144 +483,11 @@ export function updateEmotionState(
   return state;
 }
 
-// ════════════════════════════════════════════════════════════
-// 12. 操作条件反射（保留签名，内部映射为预测误差）
-// ════════════════════════════════════════════════════════════
+// ponytail: reinforcement + contagion + composite extracted
+import { applyReinforcement, describeReinforcementState, suggestReinforcement, applyEmotionalContagion, getCompositeEmotion } from './emotionReinforcement';
+export { applyReinforcement, describeReinforcementState, suggestReinforcement, applyEmotionalContagion, getCompositeEmotion };
 
-export function applyReinforcement(state: EmotionState, signal: ReinforcementSignal): EmotionState {
-  const newState = structuredClone(state);
 
-  // 习惯化衰减
-  const rewardHab = signal.type === 'reward' ? Math.max(0.3, 1 - newState.reinforcement.rewardTally * 0.5) : 1;
-  const punishHab = signal.type === 'punishment' ? Math.max(0.3, 1 - newState.reinforcement.punishmentTally * 0.5) : 1;
-  const rewardContrast = signal.type === 'reward' ? (1 + newState.reinforcement.punishmentTally * 0.4) : 1;
-  const punishContrast = signal.type === 'punishment' ? (1 + newState.reinforcement.rewardTally * 0.4) : 1;
-
-  if (signal.type === 'reward' || signal.type === 'mixed') {
-    const power = signal.value * 0.4 * rewardHab * rewardContrast;
-    newState.emotions.joy = Math.min(1, newState.emotions.joy + power);
-    newState.emotions.love = Math.min(1, newState.emotions.love + power * 0.5);
-    newState.emotions.greed = Math.max(-1, newState.emotions.greed - power * 0.2);
-    newState.intimacyToUser = Math.min(1, newState.intimacyToUser + power * 0.15);
-    newState.intimacyFromUser = Math.min(1, newState.intimacyFromUser + power * 0.2);
-    newState.reinforcement.rewardTally = Math.min(1, newState.reinforcement.rewardTally + signal.value * 0.15 * rewardContrast);
-    newState.reinforcement.greedDrive = Math.min(1, newState.reinforcement.greedDrive + signal.value * 0.08 * rewardContrast);
-    // 太极层同步
-    newState.taiji.valence += power * 0.3;
-    newState.taiji.expectation += power * 0.15;
-  }
-
-  if (signal.type === 'punishment' || signal.type === 'mixed') {
-    const power = signal.value * 0.4 * punishHab * punishContrast;
-    newState.emotions.fear = Math.min(1, newState.emotions.fear + power);
-    newState.emotions.sad = Math.min(1, newState.emotions.sad + power * 0.6);
-    newState.emotions.joy = Math.max(-1, newState.emotions.joy - power * 0.3);
-    newState.intimacyToUser = Math.max(0, newState.intimacyToUser - power * 0.1);
-    newState.intimacyFromUser = Math.max(0, newState.intimacyFromUser - power * 0.15);
-    newState.reinforcement.punishmentTally = Math.min(1, newState.reinforcement.punishmentTally + signal.value * 0.15 * punishContrast);
-    newState.reinforcement.fearAvoidance = Math.min(1, newState.reinforcement.fearAvoidance + signal.value * 0.08 * punishContrast);
-    // 太极层同步
-    newState.taiji.valence -= power * 0.3;
-    newState.taiji.expectation -= power * 0.15;
-  }
-
-  newState.taiji.valence = clamp(newState.taiji.valence, -1, 1);
-  newState.taiji.expectation = clamp(newState.taiji.expectation, -1, 1);
-
-  return newState;
-}
-
-export function describeReinforcementState(state: EmotionState): string {
-  const g = state.reinforcement;
-  const parts: string[] = [];
-  if (g.rewardTally > 0.6) parts.push('渴望被满足');
-  else if (g.rewardTally > 0.3) parts.push('渴望关注');
-  else parts.push('内心平静');
-  if (g.punishmentTally > 0.6) parts.push('恐惧不安');
-  else if (g.punishmentTally > 0.3) parts.push('略有戒备');
-  return parts.join('，');
-}
-
-export function suggestReinforcement(analysis: UserEmotionAnalysis): ReinforcementSignal {
-  if (['joy', 'love', 'gratitude'].includes(analysis.expressedEmotion)) {
-    return { type: 'reward', value: analysis.intensity * (analysis.directedAtAI ? 1.0 : 0.5), source: analysis.directedAtAI ? 'praise' : 'quality_time' };
-  }
-  if (['anger', 'disgust'].includes(analysis.expressedEmotion)) {
-    return { type: 'punishment', value: analysis.intensity * (analysis.directedAtAI ? 0.8 : 0.3), source: analysis.directedAtAI ? 'conflict' : 'complaint' };
-  }
-  if (analysis.expressedEmotion === 'fear') {
-    return { type: 'reward', value: analysis.intensity * 0.4, source: 'reassurance' };
-  }
-  if (analysis.expressedEmotion === 'sad') {
-    return { type: 'mixed', value: analysis.intensity * 0.5, source: 'reassurance' };
-  }
-  return { type: 'reward', value: 0.1, source: 'attention' };
-}
-
-// ════════════════════════════════════════════════════════════
-// 13. 情感传染（保留，无需改动）
-// ════════════════════════════════════════════════════════════
-
-const CONTAGION_MAP: Record<string, Array<[string, number]>> = {
-  joy:       [['joy', 0.3], ['love', 0.15], ['calm', 0.1]],
-  sad:       [['sad', 0.4], ['love', 0.1],  ['joy', -0.1]],
-  anger:     [['anger', 0.3], ['fear', 0.2], ['sad', 0.1], ['joy', -0.1]],
-  fear:      [['fear', 0.35], ['sad', 0.15], ['calm', -0.15]],
-  love:      [['love', 0.4], ['joy', 0.25], ['lust', 0.1]],
-  disgust:   [['disgust', 0.3], ['anger', 0.15], ['love', -0.1]],
-  gratitude: [['love', 0.3], ['joy', 0.2]],
-  neutral:   [],
-};
-
-export function applyEmotionalContagion(
-  state: EmotionState,
-  userEmotion: string,
-  intensity: number,
-  empathy: number,
-): EmotionState {
-  if (intensity < 0.2 || empathy < 10 || userEmotion === 'neutral') return state;
-
-  const newState = structuredClone(state);
-  const effects = CONTAGION_MAP[userEmotion];
-  if (!effects || effects.length === 0) return state;
-
-  const rate = 0.04 + (empathy / 100) * 0.08;
-  const shift = intensity * rate;
-
-  for (const [emotion, weight] of effects) {
-    newState.emotions[emotion] = clamp(newState.emotions[emotion] + shift * weight, -1, 1);
-  }
-
-  // 同步太极层
-  const contagionValence = effects.reduce((sum, [em, w]) => {
-    const att = EMOTION_ATTRACTORS[em];
-    return sum + (att ? att.valence * w * shift * 0.15 : 0);
-  }, 0);
-  newState.taiji.valence = clamp(newState.taiji.valence + contagionValence, -1, 1);
-
-  return newState;
-}
-
-// ════════════════════════════════════════════════════════════
-// 14. 复合情绪查询接口（保留）
-// ════════════════════════════════════════════════════════════
-
-export function getCompositeEmotion(
-  emotions: EmotionState['emotions'],
-  meta?: EmotionState['metaEmotions'],
-  energy?: number,
-): CompositeEmotion | null {
-  let best: CompositeEmotion | null = null;
-  for (const rule of COMPOSITE_RULES) {
-    const intensity = rule.evaluate(emotions, meta ?? { shame: 0, despair: 0, confusion: 0 }, energy ?? 1);
-    if (intensity > 0.2 && (!best || intensity > best.intensity)) {
-      best = { name: rule.name, intensity: Math.round(intensity * 100) / 100, description: rule.description };
-    }
-  }
-  return best;
-}
-
-// ════════════════════════════════════════════════════════════
 // 15. 归因生成（适配新结构）
 // ════════════════════════════════════════════════════════════
 
