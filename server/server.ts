@@ -12,7 +12,6 @@ import { parseChatRequest, parseTtsRequest, parseVisionRequest } from './utils/r
 // Import services
 import { AIRequestError, DefaultAIEngine } from './services/aiEngine.js';
 import { WeChatOfficialAccountChannel } from './services/channels/wechat.js';
-import { MockIoTProvider } from './services/providers/mockIoT.js';
 import { mcpService } from './services/mcpService.js';
 import { firebaseService } from './services/firebase.js';
 import type { Application } from 'express';
@@ -27,17 +26,9 @@ interface IMessageChannel {
   registerRoutes(app: Application, aiEngine: DefaultAIEngine): void;
   setConfig(config: any): void;
 }
-interface IIoTProvider {
-  id: string;
-  name: string;
-  toggleDevice(deviceId: string, status: 'on' | 'off'): Promise<{ success: boolean; message?: string }>;
-}
-
 // Phase 2: Strategy layer injection
 import { aiCoordinator } from './services/aiCoordinator.js';
 import { analyzeEmotionEvent, analyzeUserEmotionLocally } from './services/emotionAnalyzer.js';
-import { buildRelationshipDemoScenarios, runRelationshipDemo } from './services/relationshipDemo.js';
-import { analyzeRelationalSpeech } from '../src/lib/relationalSpeechAnalyzer.js';
 import {
   filterRelationshipMemoryItems,
   getRelationshipResponsePolicy,
@@ -118,7 +109,6 @@ export class AIGirlfriendServer {
   private server: http.Server;
   private aiEngine: DefaultAIEngine;
   private messageChannels: IMessageChannel[] = [];
-  private iotProviders: IIoTProvider[] = [];
   private _tick = 0;
   private _relationshipState!: RelationshipStateV2;
   private _chatQueue: Promise<void> = Promise.resolve();
@@ -126,10 +116,6 @@ export class AIGirlfriendServer {
   private _serverAISettings: any = null;
   private _lastVision: { text: string; emotion: string; ts: number } | null = null;
   private _visionCooldown = 0;
-  // ponytail: 回复去重追踪 — 防止连续生成高度相似的回复
-  private _recentResponses: string[] = [];
-  private static _maxRecentResponses = 5;
-
   constructor() {
     this.app = express();
     this.server = http.createServer(this.app);
@@ -169,7 +155,7 @@ export class AIGirlfriendServer {
     });
 
     const rateBuckets = new Map<string, number[]>();
-    this.app.use(['/api/chat', '/api/emotion-demo', '/api/ai-test', '/api/tts', '/api/vision'], (req, res, next) => {
+    this.app.use(['/api/chat', '/api/ai-test', '/api/tts', '/api/vision'], (req, res, next) => {
       const now = Date.now();
       const windowStart = now - 60_000;
       const endpoint = req.originalUrl.split('?')[0];
@@ -428,26 +414,7 @@ export class AIGirlfriendServer {
           recentMessages,
         });
 
-        // ponytail: 回复去重 — 检测与最近回复的高度相似
         const aiText = result.text;
-        if (aiText && this._recentResponses.length > 0) {
-          const words = new Set(aiText.replace(/[（）\s]/g, '').split(''));
-          for (const prev of this._recentResponses.slice(-3)) {
-            const prevWords = new Set(prev.replace(/[（）\s]/g, '').split(''));
-            const intersection = [...words].filter(w => prevWords.has(w)).length;
-            const union = new Set([...words, ...prevWords]).size;
-            const jaccard = union > 0 ? intersection / union : 0;
-            if (jaccard > 0.65) {
-              console.log(`[Dedup] ⚠️ 回复与历史高度相似 (Jaccard=${jaccard.toFixed(2)})，建议检查过拟合`);
-              serverEmit('ResponseDedupWarning', { jaccard, tick: this._tick }, { correlationId: corrId, causedBy: msgEventId, source: 'dedup' });
-              break;
-            }
-          }
-        }
-        this._recentResponses.push(aiText);
-        if (this._recentResponses.length > AIGirlfriendServer._maxRecentResponses) {
-          this._recentResponses.shift();
-        }
 
         const relationshipTurn = processSuccessfulRelationshipTurn(this._relationshipState, {
           userText: message,
@@ -537,71 +504,6 @@ export class AIGirlfriendServer {
     });
 
     // Small diagnostic endpoint for inspecting the emotion analyzer in isolation.
-    this.app.post('/api/emotion-demo', async (req, res) => {
-      try {
-        const { message, settings } = req.body || {};
-        if (typeof message !== 'string' || !message.trim() || message.length > 8_000) {
-          res.status(400).json({ error: 'Message is required' });
-          return;
-        }
-
-        const serverSettings = this.readAISettings();
-        const effectiveSettings = settings?.apiKey ? settings : serverSettings;
-        const analysis = await analyzeEmotionEvent(message, effectiveSettings as any);
-        res.json({
-          input: message,
-          source: analysis.source,
-          userAnalysis: analysis.userAnalysis,
-          emotionEvent: analysis.event,
-        });
-      } catch (error) {
-        console.error('[Emotion Demo] Error:', error);
-        res.status(500).json({ error: 'Emotion analysis failed' });
-      }
-    });
-
-    this.app.get('/api/relationship-demo/scenarios', (req, res) => {
-      const scenarios = buildRelationshipDemoScenarios();
-      res.json({
-        scenarios: Object.entries(scenarios).map(([id, scenario]) => ({
-          id,
-          description: scenario.description,
-          eventCount: scenario.events.length,
-        })),
-      });
-    });
-
-    this.app.post('/api/relationship-demo', (req, res) => {
-      try {
-        const scenarios = buildRelationshipDemoScenarios();
-        const scenarioId = typeof req.body?.scenario === 'string' ? req.body.scenario : null;
-        const events = scenarioId ? scenarios[scenarioId]?.events : req.body?.events;
-        if (!events) {
-          res.status(400).json({ error: 'Provide a valid scenario or an events array' });
-          return;
-        }
-        res.json({
-          scenario: scenarioId,
-          description: scenarioId ? scenarios[scenarioId].description : 'Custom event sequence',
-          ...runRelationshipDemo(events),
-        });
-      } catch (error: any) {
-        res.status(400).json({ error: error?.message || 'Relationship demo failed' });
-      }
-    });
-
-    this.app.post('/api/relationship-speech-demo', (req, res) => {
-      const text = req.body?.text;
-      if (typeof text !== 'string' || !text.trim() || text.length > 2_000) {
-        res.status(400).json({ error: 'text is required and must not exceed 2000 characters' });
-        return;
-      }
-      const context = req.body?.context && typeof req.body.context === 'object'
-        ? req.body.context
-        : {};
-      res.json({ text, analysis: analyzeRelationalSpeech(text, context) });
-    });
-
     // Configuration endpoint
     this.app.post('/api/config', async (req, res) => {
       try {
@@ -632,33 +534,6 @@ export class AIGirlfriendServer {
     });
 
     // IoT control endpoint
-    this.app.post('/api/iot/control', async (req, res) => {
-      try {
-        const { providerId, deviceId, action } = req.body;
-        if (!providerId || !deviceId || !action) {
-          res.status(400).json({ error: 'providerId, deviceId, and action are required' });
-          return;
-        }
-
-        const provider = this.iotProviders.find(p => p.id === providerId);
-        if (!provider) {
-          res.status(404).json({ error: 'IoT provider not found' });
-          return;
-        }
-
-        if (action !== 'on' && action !== 'off') {
-          res.status(400).json({ error: 'action must be "on" or "off"' });
-          return;
-        }
-
-        const result = await provider.toggleDevice(deviceId, action);
-        res.json(result);
-      } catch (error) {
-        console.error('[IoT] Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
     // ── v1.0 Identity API ──
     this.app.get('/api/memories', (req, res) => {
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 200);
@@ -934,12 +809,7 @@ export class AIGirlfriendServer {
       wechatChannel.registerRoutes(this.app, this.aiEngine);
     }
 
-    // Register Mock IoT provider
-    const mockIoTProvider = new MockIoTProvider();
-    this.iotProviders.push(mockIoTProvider);
-
     console.log(`Registered ${this.messageChannels.length} message channels`);
-    console.log(`Registered ${this.iotProviders.length} IoT providers`);
   }
 
   async start(port: number = 3000) {
