@@ -31,6 +31,7 @@ const EPISODIC_MEMORY_FILE = path.join(__dirname, '../memories/episodic_memory.j
 const VALUE_SYSTEM_FILE = path.join(__dirname, '../memories/value_system.json');
 const CURIOSITY_STATE_FILE = path.join(__dirname, '../memories/curiosity_state.json');
 const SEMANTIC_MEMORY_FILE = path.join(__dirname, '../memories/semantic_memory.json');
+const SEMANTIC_EMBEDDINGS_FILE = path.join(__dirname, '../memories/semantic_embeddings.json');
 const MEMORY_GRAPH_FILE = path.join(__dirname, '../memories/memory_graph.json');
 const EMOTION_STATE_FILE = path.join(__dirname, '../memories/emotion_state.json');
 const RELATIONSHIP_STATE_FILE = path.join(__dirname, '../memories/relationship_state_v2.json');
@@ -57,14 +58,21 @@ export function loadEpisodicStore(): void {
 export function loadSemanticMemory(): void {
   try {
     if (fs.existsSync(SEMANTIC_MEMORY_FILE)) {
+      // ponytail: 加载预计算的 embedding 缓存，激活 cosine 语义搜索路径
+      let embeddingCache: Record<string, number[]> = {};
+      if (fs.existsSync(SEMANTIC_EMBEDDINGS_FILE)) {
+        embeddingCache = JSON.parse(fs.readFileSync(SEMANTIC_EMBEDDINGS_FILE, 'utf-8'));
+      }
       const raw = JSON.parse(fs.readFileSync(SEMANTIC_MEMORY_FILE, 'utf-8'));
       semanticMemoryPool = Object.entries(raw).map(([phrase, meta]: [string, any]) => ({
         id: `sem_${phrase.slice(0, 20)}`,
         content: phrase,
         type: meta.totalValence > 0.5 ? 'positive' : meta.totalValence < -0.3 ? 'negative' : 'neutral',
         createdAt: new Date(meta.lastSeen).toISOString(),
+        embedding: embeddingCache[phrase] ?? undefined,
       }));
-      console.log(`[Persistence] 已加载 ${semanticMemoryPool.length} 条语义记忆`);
+      const withEmb = semanticMemoryPool.filter(m => m.embedding?.length).length;
+      console.log(`[Persistence] 已加载 ${semanticMemoryPool.length} 条语义记忆 (${withEmb} 含 embedding)`);
     }
   } catch (e) { console.log('[Persistence] 语义记忆加载失败，使用空池'); }
 }

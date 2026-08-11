@@ -19,6 +19,7 @@ import type { Application } from 'express';
 
 // ponytail: inlined from deleted server/services/interfaces.ts
 import type { EmotionEvent } from '../src/lib/emotionEngine.js';
+import { rewardLearner } from '../src/lib/rewardLearner.js';
 
 interface IMessageChannel {
   id: string;
@@ -125,6 +126,9 @@ export class AIGirlfriendServer {
   private _serverAISettings: any = null;
   private _lastVision: { text: string; emotion: string; ts: number } | null = null;
   private _visionCooldown = 0;
+  // ponytail: 回复去重追踪 — 防止连续生成高度相似的回复
+  private _recentResponses: string[] = [];
+  private static _maxRecentResponses = 5;
 
   constructor() {
     this.app = express();
@@ -262,7 +266,9 @@ export class AIGirlfriendServer {
               source: 'disabled' as const,
             })
           : analyzeEmotionEvent(message, effectiveSettings as any);
-        const queryEmbeddingPromise: Promise<number[] | undefined> = effectiveSettings?.apiKey
+        // ponytail: 短问候跳过 embedding（≤3字符或纯标点），省 API 调用
+        const skipEmbedding = message.length < 4 || /^[\s!?！？.。，,、~-]+$/.test(message);
+        const queryEmbeddingPromise: Promise<number[] | undefined> = (effectiveSettings?.apiKey && !skipEmbedding)
           ? Promise.race([
               generateEmbeddings(effectiveSettings, message),
               new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), 2000)),
@@ -366,17 +372,35 @@ export class AIGirlfriendServer {
           ? `\n【相关记忆】${relationshipSafeMemories.map(i => `- ${i.content.slice(0, 80)}`).join('\n')}`
           : '';
 
+        // ponytail: 跨源去重 — 如果召回记忆和主动注入记忆内容高度重叠，只保留一份
+        const dedupedRecallInjection = memoryInjection && recallInjection
+          ? (() => {
+              const injectedContents = new Set(
+                memoryInjection.split('\n').filter(l => l.startsWith('-')).map(l => l.slice(2, 30))
+              );
+              const deduped = relationshipSafeMemories.filter(m =>
+                ![...injectedContents].some(ic => m.content.includes(ic) || ic.includes(m.content.slice(0, 30)))
+              );
+              return deduped.length > 0
+                ? `\n【相关记忆】${deduped.map(i => `- ${i.content.slice(0, 80)}`).join('\n')}`
+                : '';
+            })()
+          : recallInjection;
+
         // 组合：人格底座 → 主动回忆 → 统一召回 → 客户端基础 Prompt → 策略片段 → 情绪模式注入
         // ponytail: strategySnippet 放最后，LLM 对末尾权重更高
         let enrichedSystemPrompt = [
           PERSONALITY_FOUNDATION,
           memoryInjection,
-          recallInjection,
+          dedupedRecallInjection,
           persona?.systemPrompt ?? '',
           patternInjection,
           relationshipPolicy.prompt,
           turnOutput.strategySnippet,
         ].filter(Boolean).join('\n');
+
+        // ponytail: 幻觉自检 — 模型在生成回复前自查编造行为
+        enrichedSystemPrompt += '\n\n【回复前自检】输出前确认：①是否编造了具体的生活细节（逛街/做饭/追剧等）？②是否说了"上次你提到…"但记忆中没有？③是否替别人的错误道歉？如有任何一项，删除重写。';
 
         // ── Phase 2: 网络搜索注入 ──
         // 检测事实性问题 → 搜索 → 注入上下文（3 秒超时，不影响回复速度）
@@ -404,9 +428,30 @@ export class AIGirlfriendServer {
           recentMessages,
         });
 
+        // ponytail: 回复去重 — 检测与最近回复的高度相似
+        const aiText = result.text;
+        if (aiText && this._recentResponses.length > 0) {
+          const words = new Set(aiText.replace(/[（）\s]/g, '').split(''));
+          for (const prev of this._recentResponses.slice(-3)) {
+            const prevWords = new Set(prev.replace(/[（）\s]/g, '').split(''));
+            const intersection = [...words].filter(w => prevWords.has(w)).length;
+            const union = new Set([...words, ...prevWords]).size;
+            const jaccard = union > 0 ? intersection / union : 0;
+            if (jaccard > 0.65) {
+              console.log(`[Dedup] ⚠️ 回复与历史高度相似 (Jaccard=${jaccard.toFixed(2)})，建议检查过拟合`);
+              serverEmit('ResponseDedupWarning', { jaccard, tick: this._tick }, { correlationId: corrId, causedBy: msgEventId, source: 'dedup' });
+              break;
+            }
+          }
+        }
+        this._recentResponses.push(aiText);
+        if (this._recentResponses.length > AIGirlfriendServer._maxRecentResponses) {
+          this._recentResponses.shift();
+        }
+
         const relationshipTurn = processSuccessfulRelationshipTurn(this._relationshipState, {
           userText: message,
-          aiText: result.text,
+          aiText,
           userAnalysis: emotionAnalysis.userAnalysis,
           strategy: turnOutput.strategy,
         });
@@ -905,6 +950,16 @@ export class AIGirlfriendServer {
       const curiositySaveTimer = setInterval(() => {
         saveCuriosityState();
       }, 30_000);
+
+      // ponytail: 每日衰减策略统计 — 防止过拟合到早期交互模式
+      let lastDecayDate = new Date().toDateString();
+      setInterval(() => {
+        const today = new Date().toDateString();
+        if (today !== lastDecayDate) {
+          lastDecayDate = today;
+          rewardLearner.applyDailyDecay();
+        }
+      }, 3_600_000); // 每小时检查一次
 
       // Phase 2 PR 2: 优雅关闭时保存好奇心状态
       const gracefulShutdown = () => {
