@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build && tsc --project tsconfig.server.json",
-    "start": "node dist/server.js",
+    "start": "tsx server/index.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.server.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "obsidian:export": "node scripts/export-obsidian.cjs",
+    "obsidian:review": "tsx scripts/obsidian-review.ts",
+    "smoke:emotion": "tsx scripts/smoke-internal-emotion.ts"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
