@@ -143,6 +143,34 @@ class RewardLearner {
   }
 
   /**
+   * v1.13 持久化：导出/导入统计。
+   * 此前统计只活在内存里、服务重启即清零 → 依赖它的潜意识「策略证据」永远攒不够，
+   * 策略学习本身也每次从零开始。
+   */
+  exportStats(): StrategyStats[] {
+    return Array.from(this.stats.values()).map(s => ({ ...s }));
+  }
+
+  importStats(saved: Array<Partial<StrategyStats>> | null | undefined): void {
+    if (!Array.isArray(saved) || saved.length === 0) return;
+    for (const item of saved) {
+      if (!item || typeof item.strategy !== 'string') continue;
+      const key = item.strategy as StrategyType;
+      const current = this.stats.get(key);
+      if (!current) continue; // 未知策略名（旧数据）忽略
+      this.stats.set(key, {
+        ...current,
+        successes: Number(item.successes ?? current.successes),
+        failures: Number(item.failures ?? current.failures),
+        attempts: Number(item.attempts ?? current.attempts),
+        successRate: Number(item.successRate ?? current.successRate),
+        lastUsedAt: Number(item.lastUsedAt ?? current.lastUsedAt),
+        lastFeedbackAt: Number(item.lastFeedbackAt ?? current.lastFeedbackAt),
+      });
+    }
+  }
+
+  /**
    * 应用时间衰减（每日调用一次或定期调用）。
    * 旧数据逐渐衰减，防止过拟合到早期交互模式。
    */

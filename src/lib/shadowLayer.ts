@@ -23,6 +23,7 @@
 
 import type { ThoughtGraphState, ThoughtNode, CognitiveDissonance } from './thoughtGraph';
 import type { StrategyType } from './dialogueStrategy';
+import type { EmotionState } from './emotionTypes';
 
 // ════════════════════════════════════════════════════════════
 // 1. 类型定义
@@ -346,7 +347,6 @@ export class ShadowLayer {
   getActiveTraits(): ShadowTrait[] {
     return this.state.traits.filter(t => t.active);
   }
-
   getState(): ShadowState {
     return structuredClone(this.state);
   }
@@ -562,3 +562,57 @@ export interface SelfShadowReport {
 }
 
 export const shadowLayer = new ShadowLayer();
+
+// ════════════════════════════════════════════════════════════
+// 4. 情感出口（v1.13 接线）：把潜意识调制真正施加到情感状态
+// ════════════════════════════════════════════════════════════
+
+/**
+ * 把 rewardLearner 的策略统计映射成潜意识检测要的 `{uses, successes}` 形状。
+ *
+ * ⚠️ 踩过的坑：`rewardLearner.getAllStats()` 返回的是**数组**（StrategyStats[]），
+ * 早期实现按对象 `Object.entries()` 映射 → 键变成 "0"/"1"…，于是
+ * `collectStrategyEvidence` 永远找不到 'repair'/'empathize'/'boundary'，
+ * 「策略证据」这条通路静默失效（线上实测 totalDetections 恒为 0）。
+ */
+export function strategyStatsForShadow(
+  stats: Array<{ strategy: string; attempts?: number; uses?: number; successes?: number }>,
+): Record<string, { uses: number; successes: number }> {
+  const out: Record<string, { uses: number; successes: number }> = {};
+  for (const s of stats ?? []) {
+    if (!s || typeof s.strategy !== 'string') continue;
+    const uses = Number(s.uses ?? s.attempts ?? 0);
+    out[s.strategy] = { uses: Number.isFinite(uses) ? uses : 0, successes: Number(s.successes ?? 0) };
+  }
+  return out;
+}
+
+/**
+ * 单轮潜意识情绪影响的上限。
+ * 潜意识是"底色级"的慢变量（trait 置信度每秒涨 0.015），
+ * 若把它 [-0.2, 0.2] 的原始偏置直接施加，会盖过用户当下的话 → 这里强制收窄。
+ */
+export const SHADOW_MAX_TURN_BIAS = 0.03;
+
+function clampNum(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * 把活跃 trait 聚合出的情感调制施加到太极（纯函数）。
+ * 无活跃 trait / 偏置为 0 时返回原对象（零开销）。
+ */
+export function applyShadowEmotionBias(
+  state: EmotionState,
+  mod: EmotionModulation,
+  cap: number = SHADOW_MAX_TURN_BIAS,
+): EmotionState {
+  if (!state || !mod) return state;
+  const dValence = clampNum(mod.valenceBias ?? 0, -cap, cap);
+  const dArousal = clampNum(mod.arousalBias ?? 0, -cap, cap);
+  if (Math.abs(dValence) < 1e-6 && Math.abs(dArousal) < 1e-6) return state;
+  const next = structuredClone(state);
+  next.taiji.valence = clampNum(next.taiji.valence + dValence, -1, 1);
+  next.taiji.arousal = clampNum(next.taiji.arousal + dArousal, 0, 1);
+  return next;
+}

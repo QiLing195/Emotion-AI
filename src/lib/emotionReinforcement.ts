@@ -2,6 +2,7 @@
 
 import type { EmotionState, UserEmotionAnalysis, ReinforcementSignal, CompositeEmotion } from './emotionTypes';
 import { EMOTION_ATTRACTORS, COMPOSITE_RULES } from './emotionTypes';
+import { canonicalEmotion } from './emotionCanonical';
 
 // ════════════════════════════════════════════════════════════
 // 1. 操作条件反射
@@ -61,16 +62,19 @@ export function describeReinforcementState(state: EmotionState): string {
 }
 
 export function suggestReinforcement(analysis: UserEmotionAnalysis): ReinforcementSignal {
-  if (['joy', 'love', 'gratitude'].includes(analysis.expressedEmotion)) {
+  // 规范键归一：LLM 可能返回 "gratitude and warmth" 这类自然语言标签，
+  // 直接 includes() 匹配会静默失效（强化通路永不触发）。
+  const emotion = canonicalEmotion(analysis.expressedEmotion);
+  if (['joy', 'love', 'gratitude'].includes(emotion)) {
     return { type: 'reward', value: analysis.intensity * (analysis.directedAtAI ? 1.0 : 0.5), source: analysis.directedAtAI ? 'praise' : 'quality_time' };
   }
-  if (['anger', 'disgust'].includes(analysis.expressedEmotion)) {
+  if (['anger', 'disgust'].includes(emotion)) {
     return { type: 'punishment', value: analysis.intensity * (analysis.directedAtAI ? 0.8 : 0.3), source: analysis.directedAtAI ? 'conflict' : 'complaint' };
   }
-  if (analysis.expressedEmotion === 'fear') {
+  if (emotion === 'fear') {
     return { type: 'reward', value: analysis.intensity * 0.4, source: 'reassurance' };
   }
-  if (analysis.expressedEmotion === 'sad') {
+  if (emotion === 'sad') {
     return { type: 'mixed', value: analysis.intensity * 0.5, source: 'reassurance' };
   }
   return { type: 'reward', value: 0.1, source: 'attention' };
@@ -97,10 +101,14 @@ export function applyEmotionalContagion(
   intensity: number,
   empathy: number,
 ): EmotionState {
-  if (intensity < 0.2 || empathy < 10 || userEmotion === 'neutral') return state;
+  if (intensity < 0.2 || empathy < 10) return state;
+
+  // 规范键归一（LLM 可能给出中文或自然语言标签，如"疲惫、委屈"）
+  const key = canonicalEmotion(userEmotion);
+  if (key === 'neutral') return state;
 
   const newState = structuredClone(state);
-  const effects = CONTAGION_MAP[userEmotion];
+  const effects = CONTAGION_MAP[key];
   if (!effects || effects.length === 0) return state;
 
   const rate = 0.04 + (empathy / 100) * 0.08;

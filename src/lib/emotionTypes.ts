@@ -90,6 +90,121 @@ export interface EmotionState {
   intimacyFromUser: number;
   reinforcement: ReinforcementState;
 
+  /**
+   * v1.7 内在生活状态（可选：旧状态文件没有此字段也能正常加载）
+   * - satiation: 内在事件习惯化计数
+   * - mood: 慢变心情层（12~24h 尺度，跨轮/跨会话连续）
+   * - rumination: 反刍链（同一情绪连续主导的轮数）
+   * - motive: 动机池（她此刻心里挂着的事，每轮选 0 或 1 个作为说话来源）
+   */
+  internal?: {
+    satiation: Record<string, number>;
+    mood?: MoodState;
+    rumination?: RuminationState;
+    motive?: MotiveState;
+  };
+
+}
+
+/** v1.9 动机类型：每个动机都必须指向具体的人/事（禁止模板化空话） */
+export type MotiveKind =
+  | 'open_loop'    // 他提到但没落定的事（面试/体检/结果…）
+  | 'worry'        // 她的担忧
+  | 'memory_echo'  // 记忆回响（主动回忆的提起方式）
+  | 'wish'         // 她的愿望
+  | 'curiosity'    // 她最近好奇的事
+  | 'stance'       // 价值观立场（如"诚实比讨好重要"）
+  | 'state';       // 内在状态（低落/疲惫 → 想被靠近或想安静）
+
+export interface Motive {
+  id: string;
+  kind: MotiveKind;
+  /** 具体到可以直接说出口的一句话 */
+  content: string;
+  source: {
+    thoughtId?: string;
+    memoryId?: string;
+    interest?: string;
+    valueId?: string;
+  };
+  /** 紧迫度 [0,1] */
+  salience: number;
+  formedAt: number;
+  expiresAt: number;
+  /** 已提起次数 → 习惯化衰减（防"每次都问同一件事"） */
+  attempts: number;
+  lastAttemptAt?: number;
+  /** 用户回应过 → 闭环移除 */
+  satisfiedAt?: number;
+}
+
+export interface MotiveState {
+  pool: Motive[];
+  lastSelectedId?: string;
+  /** 上一轮说出口的动机内容（用于"别连着问同一件事"的话题级去重） */
+  lastSelectedContent?: string;
+  lastSelectedAt?: number;
+  /** 上一轮说出口的动机类型（用于 L1 反馈学习归因） */
+  lastSelectedKind?: MotiveKind;
+  /**
+   * v1.10 预取的候选（由 LLM 把模板念头具体化后写入，下一轮合并进池）。
+   * 结构同 MotiveCandidate，为避免类型循环在此内联声明。
+   */
+  pendingCandidates?: Array<{
+    kind: MotiveKind;
+    content: string;
+    source?: Motive['source'];
+    formedAt?: number;
+  }>;
+  /** 最近一次竞选的结论（每轮都写，含"本轮无动机/让位"的情况，供 /state 观测） */
+  lastSelection?: {
+    at: number;
+    reason: string;
+    selectedKind?: MotiveKind;
+    deferred: boolean;
+  };
+}
+
+/**
+ * v1.10 L1 动机反馈学习（RSI-lite）：
+ * **只学权重，不改规则** —— 从"她说出口的事有没有得到回应"统计各动机类型的回应率，
+ * 权重 = 0.5 + 回应率（有界 [0.5, 1.5]），样本不足时保持中性 1.0。
+ * 上界/下界保证任何类型都不会被永久封杀（保留开口的多样性）。
+ */
+export interface MotiveLearningState {
+  version: number;
+  stats: Record<string, { voiced: number; landed: number }>;
+  updatedAt: number;
+}
+
+/** v1.8 心情层：比"当下情绪"慢一个数量级的底色（半天~一天尺度） */
+export interface MoodState {
+  /**
+   * 心情偏差 [-1, 1] —— **相对她的静息状态的偏差**，不是太极效价绝对值。
+   * 0 = 平静如常；负 = 底色低落；正 = 底色明亮。
+   */
+  valence: number;
+  /** 心情唤醒 [0, 1] */
+  arousal: number;
+  /**
+   * 静息效价锚点：把"心情偏差"映射回太极时的基准。
+   * 首次建立心情时从当时的太极效价采样（她平时的底色），此后保持不变。
+   */
+  anchorValence: number;
+  /** 最后一次更新的时间戳（ms） */
+  updatedAt: number;
+  /** 累计采样轮数（用于可信度/调试） */
+  samples: number;
+}
+
+/** v1.8 反刍：同一情绪连续主导 → 边际强度衰减 + 自我安抚（防情绪卡死） */
+export interface RuminationState {
+  /** 当前连续主导的情绪名 */
+  emotion: string;
+  /** 连续轮数（≥1） */
+  streak: number;
+  /** 最后更新时间戳（ms） */
+  updatedAt: number;
 }
 
 export interface EmotionEvent {
@@ -111,7 +226,10 @@ export interface EmotionAttribution {
 }
 
 export interface UserEmotionAnalysis {
+  /** 规范情绪键（joy/sad/anger/fear/love/gratitude/disgust/neutral）——下游按此匹配 */
   expressedEmotion: string;
+  /** 原始自然语言标签（来自 LLM，如"疲惫、委屈"），仅用于展示/日志 */
+  emotionLabel?: string;
   likelyCause: string;
   intensity: number;
   directedAtAI: boolean;
