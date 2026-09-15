@@ -14,3 +14,6 @@ memories/*.jsonl
 !memories/.gitkeep
 logs/
 data/
+
+# Obsidian 导出物（可重复生成：node scripts/export-obsidian.cjs）
+obsidian_vault/
