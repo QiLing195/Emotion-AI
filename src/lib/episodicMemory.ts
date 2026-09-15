@@ -34,6 +34,10 @@ export interface EpisodicMemory {
   lastRecalledAt: number | null;
   /** 叙事片段的向量嵌入（用于语义检索，异步生成） */
   embedding?: number[];
+  /** v1.3 整合层：被合并/遗忘回收的记忆（保留供人工审查，不参与召回） */
+  archived?: boolean;
+  /** v1.3 整合层：被并入的主记忆 id */
+  mergedInto?: string;
 }
 
 export interface EpisodicMemoryStore {
@@ -356,7 +360,9 @@ export function recallRelevantMemories(
 
   const now = Date.now();
 
-  const scored = store.episodes.map(ep => {
+  const scored = store.episodes
+    .filter(ep => !ep.archived) // v1.3 整合层：已归档记忆不参与召回
+    .map(ep => {
     let score = ep.recallWeight;
 
     // 情感一致性加分：相同主导情绪的记忆更容易被唤醒
@@ -591,6 +597,7 @@ export function getSignificantEpisodes(
   topN: number = 20,
 ): EpisodicMemory[] {
   return [...store.episodes]
+    .filter(ep => !ep.archived) // v1.3 整合层：已归档记忆不参与"重要记忆"
     .sort((a, b) => b.recallWeight - a.recallWeight)
     .slice(0, topN);
 }
@@ -599,7 +606,7 @@ export function getRecentEpisodes(
   store: EpisodicMemoryStore,
   count: number = 10,
 ): EpisodicMemory[] {
-  return store.episodes.slice(0, count);
+  return store.episodes.filter(ep => !ep.archived).slice(0, count); // v1.3 已归档的不参与
 }
 
 // ════════════════════════════════════════════════════════════

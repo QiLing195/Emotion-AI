@@ -181,6 +181,21 @@ export class MemoryGraph {
     createdAt?: number;
   }): MemoryNode {
     const now = Date.now();
+
+    // v1.3 对象库收敛：同一来源对象（source+sourceId）已存在 → 复用既有节点，
+    // 只提权/刷新活跃度，不再创建"副本节点"（观测点/索引不复制对象）。
+    if (params.sourceId) {
+      const existing = [...this.nodeMap.values()].find(
+        n => !n.archived && n.source === params.source && n.sourceId === params.sourceId,
+      );
+      if (existing) {
+        existing.weight = Math.max(existing.weight, Math.min(1, Math.max(0, params.weight)));
+        existing.lastActivatedAt = now;
+        existing.activationCount++;
+        return existing;
+      }
+    }
+
     const id = `mem_${params.source}_${now}_${this.stats.totalAdded}`;
     const node: MemoryNode = {
       id,
@@ -773,6 +788,72 @@ function mapSource(source: MemoryNodeSource): MemorySource {
 // ════════════════════════════════════════════════════════════
 // 6. 工具函数
 // ════════════════════════════════════════════════════════════
+
+export interface EpisodicArchiveSyncReport {
+  synced: number;
+  archivedNodes: string[];
+}
+
+/**
+ * v1.3 对象库收敛：让图谱中的 episodic 节点跟随情景记忆状态。
+ * episodic 被整合层归档(archived)/移除后，其 graph 视图节点也应归档，
+ * 避免"对象已回收、图谱仍在召回"的副本漂移。
+ * @param graph  目标图谱
+ * @param episodesById 当前活跃情景记忆 id 集合（来自 episodic store）
+ */
+export function syncEpisodicArchivedNodes(
+  graph: MemoryGraph,
+  episodesById: ReadonlySet<string>,
+): EpisodicArchiveSyncReport {
+  const report: EpisodicArchiveSyncReport = { synced: 0, archivedNodes: [] };
+  for (const node of graph.getAllNodes()) {
+    if (node.source !== 'episodic' || node.archived) continue;
+    if (!episodesById.has(node.sourceId)) {
+      node.archived = true;
+      report.synced++;
+      report.archivedNodes.push(node.id);
+    }
+  }
+  return report;
+}
+
+/**
+ * v1.14 情景记忆 → 图谱补全（backfill）。
+ *
+ * 背景：`createNodeFromEpisode` 早已写好，但**生产代码从未调用** →
+ * 新记忆只有 episodic 存储、图谱里没有节点，BFS 召回看不到它们
+ * （实测 26 条 episode 却只有 19 个 episodic 节点，7 条"孤儿记忆"）。
+ *
+ * 幂等：`addNode` 对同一 (source, sourceId) 会复用既有节点，因此本函数可重复执行。
+ * 已归档的 episode 不补（避免把"已遗忘"的记忆重新拉回活跃图谱）。
+ */
+export function backfillEpisodicNodes(
+  graph: MemoryGraph,
+  episodes: readonly EpisodicMemory[],
+): { added: number; reused: number; skippedArchived: number } {
+  const existing = new Set(
+    graph.getAllNodes()
+      .filter(n => n.source === 'episodic' && !n.archived)
+      .map(n => n.sourceId),
+  );
+  let added = 0;
+  let reused = 0;
+  let skippedArchived = 0;
+  for (const ep of episodes ?? []) {
+    if (!ep?.id) continue;
+    if (existing.has(ep.id)) { reused++; continue; }
+    if ((ep as { archived?: boolean }).archived) { skippedArchived++; continue; }
+    try {
+      graph.addNode(createNodeFromEpisode(ep));
+      existing.add(ep.id);
+      added++;
+    } catch {
+      // 单条失败不影响整批（例如字段缺失的旧数据）
+      skippedArchived++;
+    }
+  }
+  return { added, reused, skippedArchived };
+}
 
 /** 中文文本的字符 bigram（两两字符一组） */
 function extractChineseBigrams(text: string): Set<string> {
