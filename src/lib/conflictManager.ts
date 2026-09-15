@@ -228,7 +228,7 @@ export class ConflictManager {
       signals.push({
         type: 'user_negative_directed',
         strength: userAnalysis.intensity,
-        text: `用户负面情绪指向AI (${userAnalysis.expressedEmotion}, intensity=${userAnalysis.intensity.toFixed(2)})`,
+        text: `用户负面情绪指向AI (${userAnalysis.emotionLabel ?? userAnalysis.expressedEmotion}, intensity=${userAnalysis.intensity.toFixed(2)})`,
         timestamp: now,
       });
     }

@@ -12,7 +12,19 @@
 //   // turn.updatedEmotionState → 更新持久化状态
 //   // turn.rhythmDecision → 响应延迟/长度/模式
 
-import { extractEmotionContext, classifyAttachmentStyle } from '../../src/lib/emotionEngine.js';
+import { extractEmotionContext, classifyAttachmentStyle, applyEmotionalContagion, suggestReinforcement } from '../../src/lib/emotionEngine.js';
+import { applyInternalEvents, deriveInternalEvents, thoughtTypeToInternal } from '../../src/lib/emotionInternal.js';
+import { applyMoodBias, updateMood, moodSampleFrom } from '../../src/lib/moodLayer.js';
+import { ruminationModulation, trackRumination, activatedDominant } from '../../src/lib/rumination.js';
+import {
+  accumulateSource,
+  buildEmergenceReport,
+  emptyEmergenceStats,
+  markTurn,
+  sumEmotionDelta,
+  type EmergenceReport,
+  type EmergenceStats,
+} from '../../src/lib/emergenceMetrics.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS } from '../../src/lib/dialogueStrategy.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
@@ -28,7 +40,7 @@ import { getShareableInsights } from '../../src/curiosity/insights.js';
 import { recordPatternCounts, getFunnelSnapshot, logFunnelSummary } from '../../src/curiosity/funnel.js';
 import { bus } from '../../src/eventBus.js';
 import { ThoughtGraph, assessThoughtGeneration, fillThoughtContent } from '../../src/lib/thoughtGraph.js';
-import { shadowLayer } from '../../src/lib/shadowLayer.js';
+import { shadowLayer, applyShadowEmotionBias, strategyStatsForShadow } from '../../src/lib/shadowLayer.js';
 import { MemoryGraph, queryMemoryGraph, memoryGraph, createNodeFromThought, createNodeFromDiscovery } from '../../src/lib/memoryGraph.js';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEngine.js';
 import type { StrategyDecision, StrategyType, StrategyContext } from '../../src/lib/dialogueStrategy.js';
@@ -45,6 +57,18 @@ import type { MemoryItem } from '../../src/lib/unifiedMemory.js';
 // ════════════════════════════════════════════════════════════
 // 1. 类型定义
 // ════════════════════════════════════════════════════════════
+
+/**
+ * v1.13 潜意识检测间隔（轮）。原生设计是"每 50 轮检测一次"，
+ * 这里改成"距上次检测 ≥N 轮"（避免重启后 `% 50` 错拍），并允许用环境变量调快/调慢：
+ *   SHADOW_DETECTION_INTERVAL_ROUNDS=20
+ * 参考时标：每条证据 +0.015 置信度，≥0.3 激活；一次检测通常产生 1~4 条证据，
+ * 因此默认间隔下"新特质浮现"大致需要 20~30 次检测（约 1000~1500 轮）。
+ */
+const SHADOW_DETECTION_INTERVAL_ROUNDS = (() => {
+  const raw = Number(process.env.SHADOW_DETECTION_INTERVAL_ROUNDS);
+  return Number.isFinite(raw) && raw >= 5 ? Math.floor(raw) : 50;
+})();
 
 export interface TurnInput {
   /** 用户原始文本 */
@@ -123,6 +147,8 @@ export interface TurnMetadata {
     arbitrationMs: number;
     rhythmDecisionMs: number;
     memoryGraphMs: number;
+    /** v1.7 内在情绪源（情绪传染 + 孤独/重逢/思维/兴趣等内在事件）耗时 */
+    internalEmotionMs: number;
     totalMs: number;
   };
 }
@@ -152,6 +178,12 @@ export class AICoordinator {
   private thoughtGraph = new ThoughtGraph();
   /** 🧩 记忆图谱（全局单例，统一四来源记忆 + BFS 激活扩散召回） */
   private memoryGraph = memoryGraph;
+  /** v1.8 涌现诊断：各情绪来源的累计绝对影响 */
+  private emergence: EmergenceStats = emptyEmergenceStats();
+  /** v1.8 涌现诊断：她自己的效价序列（用于自相关/波动，注意不是用户效价） */
+  private herValenceHistory: number[] = [];
+  /** v1.13 潜意识状态是否有更新（协调器不做 io，由 server 决定落盘时机） */
+  shadowStateDirty = false;
 
   /**
    * 处理一轮对话的完整管道。
@@ -181,7 +213,12 @@ export class AICoordinator {
       const weightedFeedback = feedbackSignal * attributionWeight;
       if (Math.abs(weightedFeedback) > 0.1) {
         rewardLearner.recordFeedback(weightedFeedback);
+        // 负载保持与 applyEvent 的 StrategyFeedback 同形（type/source/value），
+        // 这样事件既可观测、也可在需要时直接回放，不会出现 undefined 导致的 NaN。
         bus.emit('StrategyFeedback', {
+          type: weightedFeedback > 0 ? 'reward' : 'punishment',
+          source: 'quality_time',
+          value: Math.round(Math.abs(weightedFeedback) * 1000) / 1000,
           strategy: this.lastStrategy,
           feedback: Math.round(weightedFeedback * 1000) / 1000,
           valenceDelta: Math.round(this.lastTurnValenceDelta * 1000) / 1000,
@@ -279,6 +316,21 @@ export class AICoordinator {
     }
     const emotionMs = Date.now() - t3;
 
+    // ── 阶段 3.1: v1.8 操作条件反射（奖惩强化）──
+    // 此前 suggestReinforcement/applyReinforcement 只在旧前端 store 里被调用，
+    // 权威管道（server）从未接入：她被夸奖不会更亲近、被指责也不会更戒备。
+    // 只处理**明确指向她**的情绪（避免把"用户对老板生气"算到她头上）。
+    if (input.userAnalysis?.directedAtAI && input.userAnalysis.expressedEmotion !== 'neutral') {
+      const signal = suggestReinforcement(input.userAnalysis);
+      if (signal.value > 0.01) {
+        updatedEmotionState = applyEvent(updatedEmotionState, {
+          id: '', type: 'StrategyFeedback', level: 'cognitive', source: 'emotion',
+          timestamp: Date.now(),
+          data: { type: signal.type, source: signal.source, value: signal.value },
+        });
+      }
+    }
+
     // ── 阶段 3.5: 情绪加权模式检索（Phase 1: Emotion-Cognition Deep Coupling） ──
     const t3_5 = Date.now();
     const updatedEmotionCtx = extractEmotionContext(updatedEmotionState);
@@ -360,6 +412,134 @@ export class AICoordinator {
       this.thoughtGraph.cluster();
     }
 
+    // ── 阶段 3.65: v1.7 内在情绪源（情绪不再只由"用户当前这句话"驱动）──
+    // 逐源记录影响量（供涌现诊断：内在驱动 vs 用户驱动）
+    // 记账口径：|Δ效价| + |Δ唤醒| + Σ|Δ九情|（只看太极会低估只改九情的来源，如情绪传染）
+    const valenceBeforeInternal = updatedEmotionState.taiji.valence;
+    const arousalBeforeInternal = updatedEmotionState.taiji.arousal;
+    // ① 情绪传染：用户情绪按共情度传染给她（此前 applyEmotionalContagion 从未接入主链）
+    if (input.userAnalysis) {
+      const beforeTai = updatedEmotionState.taiji;
+      const beforeEmo = { ...updatedEmotionState.emotions };
+      updatedEmotionState = applyEmotionalContagion(
+        updatedEmotionState,
+        input.userAnalysis.expressedEmotion,
+        input.userAnalysis.intensity,
+        updatedEmotionState.evolution.empathy,
+      );
+      const afterTai = updatedEmotionState.taiji;
+      this.emergence = accumulateSource(
+        this.emergence,
+        'contagion',
+        afterTai.valence - beforeTai.valence,
+        afterTai.arousal - beforeTai.arousal,
+        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+      );
+    }
+    // ② 内在事件：孤独/重逢/思维/兴趣/发现/洞察 → 弱强度情绪变化（习惯化 + 单轮总量上限）
+    const t3_65 = Date.now();
+    const internalEvents = deriveInternalEvents({
+      idleMinutes: input.lastInteractionAt ? idleMins : undefined,
+      interestCount: userInterests.length,
+      thoughtTypes: seeds
+        .map(s => thoughtTypeToInternal(s.type))
+        .filter((t): t is NonNullable<typeof t> => t !== null),
+      hasDiscovery: pendingDiscoveries.length > 0,
+      hasInsight: generatedInsights.length > 0,
+    });
+    if (internalEvents.length > 0) {
+      const beforeTai = updatedEmotionState.taiji;
+      const beforeEmo = { ...updatedEmotionState.emotions };
+      updatedEmotionState = applyInternalEvents(updatedEmotionState, internalEvents);
+      const afterTai = updatedEmotionState.taiji;
+      this.emergence = accumulateSource(
+        this.emergence,
+        'internal',
+        afterTai.valence - beforeTai.valence,
+        afterTai.arousal - beforeTai.arousal,
+        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+      );
+    }
+    // ③ v1.8 心情层：把"上一轮之后的底色心情"轻推回本轮（强烈情绪时让位）
+    const nowMs = Date.now();
+    const prevMood = input.currentEmotionState.internal?.mood;
+    const prevRumination = input.currentEmotionState.internal?.rumination;
+    if (prevMood && prevMood.samples > 0) {
+      // 让位权重用"被激活的情绪"强度（不能把静息就高的 calm 算进来）
+      const dominantNow = activatedDominant(updatedEmotionState.emotions).intensity;
+      const beforeTai = updatedEmotionState.taiji;
+      const beforeEmo = { ...updatedEmotionState.emotions };
+      updatedEmotionState = applyMoodBias(
+        updatedEmotionState,
+        prevMood,
+        nowMs,
+        dominantNow,
+        // 起点取"本轮开始前"的效价：心情只推动底色，不抹平用户当下造成的变化
+        input.currentEmotionState.taiji.valence,
+      );
+      const afterTai = updatedEmotionState.taiji;
+      this.emergence = accumulateSource(
+        this.emergence,
+        'mood',
+        afterTai.valence - beforeTai.valence,
+        afterTai.arousal - beforeTai.arousal,
+        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+      );
+    }
+    // ④ v1.8 反刍：同一情绪连续主导 → 边际强度钝化 + 自我安抚（给情绪切换留出口）
+    {
+      const beforeTai = updatedEmotionState.taiji;
+      const beforeEmo = { ...updatedEmotionState.emotions };
+      updatedEmotionState = ruminationModulation(updatedEmotionState, prevRumination, nowMs);
+      const afterTai = updatedEmotionState.taiji;
+      this.emergence = accumulateSource(
+        this.emergence,
+        'rumination',
+        afterTai.valence - beforeTai.valence,
+        afterTai.arousal - beforeTai.arousal,
+        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+      );
+    }
+    // 用户话语直接刺激（阶段 3 的 applyEvent）作为 external 来源一并记账
+    this.emergence = accumulateSource(
+      this.emergence,
+      'external',
+      valenceBeforeInternal - input.currentEmotionState.taiji.valence,
+      arousalBeforeInternal - input.currentEmotionState.taiji.arousal,
+      sumEmotionDelta(input.currentEmotionState.emotions, updatedEmotionState.emotions),
+    );
+
+    // ⑤ 回写内在状态：心情采样（本轮九情净效价）+ 反刍链推进（只看激活情绪）
+    const activeDominant = activatedDominant(updatedEmotionState.emotions);
+    updatedEmotionState.internal = {
+      satiation: updatedEmotionState.internal?.satiation ?? {},
+      // v1.9 动机池由 server 在 Prompt 组装阶段维护，这里必须原样带走（否则每轮被清空）
+      ...(input.currentEmotionState.internal?.motive
+        ? { motive: input.currentEmotionState.internal.motive }
+        : {}),
+      mood: updateMood(
+        prevMood,
+        moodSampleFrom(updatedEmotionState),
+        nowMs,
+        // 锚点用她的人格基线（不是此刻的效价），否则心情会锚死在当下的低谷
+        Number.isFinite(input.currentEmotionState.evolution?.baseline)
+          ? input.currentEmotionState.evolution.baseline
+          : input.currentEmotionState.taiji.valence,
+      ),
+      rumination: trackRumination(
+        prevRumination,
+        activeDominant.name,
+        activeDominant.intensity,
+        nowMs,
+      ),
+    };
+    const internalEmotionMs = Date.now() - t3_65;
+
+    // ⑥ 涌现可观测：记轮数 + 她的效价序列（用于自相关/波动诊断）
+    this.emergence = markTurn(this.emergence);
+    this.herValenceHistory.push(updatedEmotionState.taiji.valence);
+    if (this.herValenceHistory.length > 50) this.herValenceHistory.shift();
+
     const thoughtSummary = this.thoughtGraph.getGraphSummary();
     const activeWishes = this.thoughtGraph.getActiveWishes().map(n => n.content);
     if (newThoughtIds.length > 0) {
@@ -370,25 +550,60 @@ export class AICoordinator {
     }
     const thoughtMs = Date.now() - t3_6;
 
-    // ── 阶段 3.7: 🌑 Shadow Layer 检测与调制 ──
-    // 每 50 轮检测一次潜意识 trait
-    if (roundNumber % 50 === 0) {
-      const emotionHist = {
-        stickyEmotions: findStickyEmotions(input.recentUserMoods ?? []),
-        avgArousal: updatedEmotionState.taiji.arousal,
-        avgValence: updatedEmotionState.taiji.valence,
-        reversalCount: updatedEmotionState.yinyang.reversalPressure > 0 ? 1 : 0,
-      };
-      shadowLayer.detectTraits(
-        this.thoughtGraph.getState(),
-        emotionHist,
-        null, // strategyStats — 后续可从 rewardLearner 获取
-        roundNumber,
-      );
+    // ── 阶段 3.7: 🌑 Shadow Layer 检测与施加（v1.13 接线）──
+    // 此前：shadowEmotionMod 定义后从不消费、detectTraits 的 strategyStats 传 null
+    //       （"策略证据"永不产生）、状态不持久化（重启清零）—— 498 行实现基本空转。
+    // 现在：①每 ≥50 轮（按持久化轮次，而非 `% 50 === 0`，避免重启后错拍）
+    //       ②喂入 rewardLearner 的真实策略统计 ③每轮把聚合偏置限幅施加到太极
+    let shadowDetected = false;
+    {
+      const shadowState = shadowLayer.getState();
+      const roundsSinceDetection = roundNumber - (shadowState.stats.lastDetectionRound ?? -SHADOW_DETECTION_INTERVAL_ROUNDS);
+      if (roundsSinceDetection >= SHADOW_DETECTION_INTERVAL_ROUNDS) {
+        const emotionHist = {
+          stickyEmotions: findStickyEmotions(input.recentUserMoods ?? []),
+          avgArousal: updatedEmotionState.taiji.arousal,
+          avgValence: updatedEmotionState.taiji.valence,
+          reversalCount: updatedEmotionState.yinyang.reversalPressure > 0 ? 1 : 0,
+        };
+        // 策略证据：把 rewardLearner 的统计映射成 {uses, successes}
+        // （注意 getAllStats() 返回数组；早期误用 Object.entries 导致这条通路静默失效）
+        const strategyStats = strategyStatsForShadow(rewardLearner.getAllStats() as any);
+        const activated = shadowLayer.detectTraits(
+          this.thoughtGraph.getState(),
+          emotionHist,
+          Object.keys(strategyStats).length > 0 ? strategyStats : null,
+          roundNumber,
+        );
+        if (activated.length > 0) {
+          console.log(`[Shadow] 新激活特质：${activated.map(t => `${t.label}(conf=${t.confidence.toFixed(2)})`).join('、')}`);
+        }
+        shadowDetected = true;
+      }
     }
+    // 潜意识状态有更新 → 标记待落盘（协调器不做 io，由 server 决定时机）
+    if (shadowDetected) this.shadowStateDirty = true;
     const shadowEmotionMod = shadowLayer.getEmotionModulation();
     const shadowStrategyMod = shadowLayer.getStrategyModulation();
     const shadowMemoryMod = shadowLayer.getMemoryModulation();
+
+    // 施加潜意识情绪偏置（限幅 ±SHADOW_MAX_TURN_BIAS：底色级慢变量，不许盖过用户当下的话）
+    {
+      const activeTraits = shadowLayer.getActiveTraits();
+      const before = updatedEmotionState.taiji;
+      const beforeEmo = { ...updatedEmotionState.emotions };
+      updatedEmotionState = applyShadowEmotionBias(updatedEmotionState, shadowEmotionMod);
+      if (activeTraits.length > 0) {
+        const after = updatedEmotionState.taiji;
+        this.emergence = accumulateSource(
+          this.emergence,
+          'shadow',
+          after.valence - before.valence,
+          after.arousal - before.arousal,
+          sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+        );
+      }
+    }
 
     // ── 阶段 3.8: 🧩 Memory Graph 激活 ──
     // 根据当前上下文，通过 BFS 激活扩散召回相关记忆
@@ -572,6 +787,7 @@ export class AICoordinator {
           arbitrationMs,
           rhythmDecisionMs: rhythmMs,
           memoryGraphMs: memoryMs,
+          internalEmotionMs,
           totalMs,
         },
       },
@@ -587,11 +803,21 @@ export class AICoordinator {
   }
 
   /**
+   * v1.8 涌现诊断报告：内在驱动占比 / 情绪自相关 / 波动 / 是否卡死。
+   * 供 /state 端点与调试使用，不参与对话决策。
+   */
+  getEmergenceReport(): EmergenceReport {
+    return buildEmergenceReport(this.emergence, this.herValenceHistory);
+  }
+
+  /**
    * 重置协调器状态（切换用户或清空会话时调用）。
    */
   reset(): void {
     this.turnCounter = 0;
     this.valenceHistory = [];
+    this.herValenceHistory = [];
+    this.emergence = emptyEmergenceStats();
     this.lastStrategy = null;
     this.lastTurnValenceDelta = 0;
     this.lastUserDirectedAtAI = false;

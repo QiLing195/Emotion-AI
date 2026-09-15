@@ -16,6 +16,12 @@ import {
   ValueSystem, createValueSystem,
   serializeValueSystem, deserializeValueSystem,
 } from '../src/lib/valueDiscovery.js';
+import { MemoryLedger } from '../src/lib/memoryGovernance.js';
+import { shadowLayer } from '../src/lib/shadowLayer.js';
+import { rewardLearner } from '../src/lib/rewardLearner.js';
+import {
+  createMotiveLearning, MOTIVE_LEARNING_VERSION, type MotiveLearningState,
+} from '../src/lib/motive.js';
 import { importCuriosityState, exportCuriosityState } from '../src/curiosity/patterns.js';
 import { interestModel } from '../src/curiosity/state.js';
 import { memoryGraph } from '../src/lib/memoryGraph.js';
@@ -35,11 +41,30 @@ const SEMANTIC_EMBEDDINGS_FILE = path.join(__dirname, '../memories/semantic_embe
 const MEMORY_GRAPH_FILE = path.join(__dirname, '../memories/memory_graph.json');
 const EMOTION_STATE_FILE = path.join(__dirname, '../memories/emotion_state.json');
 const RELATIONSHIP_STATE_FILE = path.join(__dirname, '../memories/relationship_state_v2.json');
+const MEMORY_LEDGER_FILE = path.join(__dirname, '../memories/memory_ledger.json');
+/** v1.9 会话状态：上一轮互动时间（孤独/重逢通路依赖它，重启后仍有效） */
+const SESSION_STATE_FILE = path.join(__dirname, '../memories/session_state.json');
+/** v1.9 身份叙事缓存：随经历刷新，供 Prompt 注入与 /api/identity 复用 */
+const IDENTITY_NARRATIVE_FILE = path.join(__dirname, '../memories/identity_narrative.json');
+/** v1.10 动机反馈学习账本（L1：只学权重，可随时删除回到中性） */
+const MOTIVE_LEARNING_FILE = path.join(__dirname, '../memories/motive_learning.json');
+/** v1.13 潜意识层状态（traits 置信度与证据；此前只在内存，重启清零） */
+const SHADOW_STATE_FILE = path.join(__dirname, '../memories/shadow_state.json');
+/** v1.13 策略学习统计（潜意识「策略证据」与策略学习都依赖它，此前重启清零） */
+const REWARD_STATS_FILE = path.join(__dirname, '../memories/reward_stats.json');
 
 // ── 运行时状态 ──
 export let episodicStore: EpisodicMemoryStore = createEpisodicMemoryStore();
 export let valueSystem: ValueSystem = createValueSystem();
 export let semanticMemoryPool: Array<{ id: string; content: string; type: string; createdAt: string; embedding?: number[] }> = [];
+/** v1.2 记忆治理账本：候选状态机（proposed→supported→verified/rolled_back）+ 审计 */
+export let memoryLedger: MemoryLedger = new MemoryLedger();
+/** v1.9 上一轮互动时间戳（ms）；null = 未知（不产生孤独事件） */
+export let lastInteractionAt: number | null = null;
+/** v1.9 身份叙事缓存（IdentityNarrative 的结构化 JSON） */
+export let identityNarrative: Record<string, unknown> | null = null;
+/** v1.10 动机反馈学习账本 */
+export let motiveLearning: MotiveLearningState = createMotiveLearning();
 
 // ════════════════════════════════════════════════════════════
 // 加载
@@ -159,13 +184,170 @@ export function loadRelationshipState(): RelationshipStateV2 {
   }
 }
 
+export function loadMemoryLedger(): void {
+  try {
+    if (fs.existsSync(MEMORY_LEDGER_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(MEMORY_LEDGER_FILE, 'utf-8'));
+      memoryLedger = MemoryLedger.from(raw);
+      console.log(`[Persistence] 已加载记忆治理账本: ${memoryLedger.serialize().entries.length} 条候选`);
+    }
+  } catch (e) { console.log('[Persistence] 记忆治理账本加载失败，使用空账本'); }
+}
+
+export function loadSessionState(): void {
+  try {
+    if (fs.existsSync(SESSION_STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SESSION_STATE_FILE, 'utf-8'));
+      if (typeof data?.lastInteractionAt === 'number' && Number.isFinite(data.lastInteractionAt)) {
+        const loadedAt: number = data.lastInteractionAt;
+        lastInteractionAt = loadedAt;
+        const idleMin = Math.round((Date.now() - loadedAt) / 60_000);
+        console.log(`[Persistence] 已加载会话状态：距上次互动 ${idleMin} 分钟`);
+      }
+    }
+  } catch (e) { console.log('[Persistence] 会话状态加载失败，按首次互动处理'); }
+}
+
+export function loadIdentityNarrative(): void {
+  try {
+    if (fs.existsSync(IDENTITY_NARRATIVE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(IDENTITY_NARRATIVE_FILE, 'utf-8'));
+      if (data && typeof data === 'object' && typeof data.summary === 'string') {
+        identityNarrative = data;
+        console.log(`[Persistence] 已加载身份叙事（第 ${data.roundNumber ?? '?'} 轮生成）`);
+      }
+    }
+  } catch (e) { console.log('[Persistence] 身份叙事加载失败，将在下轮重新生成'); }
+}
+
 export function loadAll(): EmotionState | null {
   loadEpisodicStore();
   loadValueSystem();
   loadSemanticMemory();
   loadCuriosityState();
   loadMemoryGraph();
+  loadMemoryLedger();
+  loadSessionState();
+  loadIdentityNarrative();
+  loadMotiveLearning();
+  loadShadowState();
+  loadRewardStats();
   return loadEmotionState();
+}
+
+/** v1.13 载入潜意识层状态（traits 证据与置信度） */
+export function loadShadowState(): void {
+  try {
+    if (fs.existsSync(SHADOW_STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SHADOW_STATE_FILE, 'utf-8'));
+      if (data && Array.isArray(data.traits)) {
+        shadowLayer.loadState(data as unknown as Parameters<typeof shadowLayer.loadState>[0]);
+        const active = (data.traits as Array<{ active?: boolean }>).filter(t => t?.active).length;
+        console.log(`[Persistence] 已加载潜意识状态：${data.traits.length} 个特质（活跃 ${active}）`);
+      }
+    }
+  } catch (e) { console.log('[Persistence] 潜意识状态加载失败，从零开始'); }
+}
+
+export function saveShadowState(): void {
+  try {
+    const tmp = SHADOW_STATE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(shadowLayer.getState(), null, 2), 'utf-8');
+    fs.renameSync(tmp, SHADOW_STATE_FILE);
+  } catch (e) { console.error('[Persistence] 保存潜意识状态失败:', e); }
+}
+
+/** v1.13 载入策略学习统计（rewardLearner 全局单例） */
+export function loadRewardStats(): void {
+  try {
+    if (!fs.existsSync(REWARD_STATS_FILE)) return;
+    const data = JSON.parse(fs.readFileSync(REWARD_STATS_FILE, 'utf-8'));
+    if (Array.isArray(data?.stats)) {
+      rewardLearner.importStats(data.stats);
+      const totalUses = (data.stats as Array<{ attempts?: number }>)
+        .reduce((sum, s) => sum + Number(s?.attempts ?? 0), 0);
+      console.log(`[Persistence] 已加载策略学习统计：${data.stats.length} 个策略，累计使用 ${totalUses} 次`);
+    }
+  } catch (e) { console.log('[Persistence] 策略学习统计加载失败，从零开始'); }
+}
+
+export function saveRewardStats(): void {
+  try {
+    const tmp = REWARD_STATS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ stats: rewardLearner.exportStats(), updatedAt: Date.now() }, null, 2), 'utf-8');
+    fs.renameSync(tmp, REWARD_STATS_FILE);
+  } catch (e) { console.error('[Persistence] 保存策略学习统计失败:', e); }
+}
+
+export function loadMotiveLearning(): void {
+  try {
+    if (fs.existsSync(MOTIVE_LEARNING_FILE)) {
+      const data = JSON.parse(fs.readFileSync(MOTIVE_LEARNING_FILE, 'utf-8'));
+      if (data && typeof data === 'object' && data.stats && typeof data.stats === 'object') {
+        motiveLearning = {
+          version: typeof data.version === 'number' ? data.version : MOTIVE_LEARNING_VERSION,
+          stats: data.stats as MotiveLearningState['stats'],
+          updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
+        };
+        const kinds = Object.keys(motiveLearning.stats).length;
+        console.log(`[Persistence] 已加载动机学习账本：${kinds} 种开口方式有统计`);
+      }
+    }
+  } catch (e) { console.log('[Persistence] 动机学习账本加载失败，回到中性权重'); }
+}
+
+/** 记录一次动机结果（内存态；落盘由 saveMotiveLearning 负责） */
+export function setMotiveLearning(next: MotiveLearningState): void {
+  motiveLearning = next;
+}
+
+export function getMotiveLearning(): MotiveLearningState {
+  return motiveLearning;
+}
+
+export function saveMotiveLearning(): void {
+  try {
+    const tmp = MOTIVE_LEARNING_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(motiveLearning, null, 2), 'utf-8');
+    fs.renameSync(tmp, MOTIVE_LEARNING_FILE);
+  } catch (e) { console.error('[Persistence] 保存动机学习账本失败:', e); }
+}
+
+/** 记录一次互动（内存态；落盘由 saveSessionState 负责） */
+export function markInteraction(at: number = Date.now()): void {
+  lastInteractionAt = at;
+}
+
+/** 上一轮互动时间戳（null = 未知） */
+export function getLastInteractionAt(): number | null {
+  return lastInteractionAt;
+}
+
+/** 当前缓存的身份叙事（无则 null） */
+export function getIdentityNarrative(): Record<string, unknown> | null {
+  return identityNarrative;
+}
+
+/** 记住新生成的身份叙事 */
+export function setIdentityNarrative(narrative: Record<string, unknown> | null): void {
+  identityNarrative = narrative;
+}
+
+export function saveSessionState(): void {
+  try {
+    const tmp = SESSION_STATE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ lastInteractionAt, updatedAt: Date.now() }, null, 2), 'utf-8');
+    fs.renameSync(tmp, SESSION_STATE_FILE);
+  } catch (e) { console.error('[Persistence] 保存会话状态失败:', e); }
+}
+
+export function saveIdentityNarrative(): void {
+  try {
+    if (!identityNarrative) return;
+    const tmp = IDENTITY_NARRATIVE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(identityNarrative, null, 2), 'utf-8');
+    fs.renameSync(tmp, IDENTITY_NARRATIVE_FILE);
+  } catch (e) { console.error('[Persistence] 保存身份叙事失败:', e); }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -250,6 +432,10 @@ function queueAtomicJsonWrite(file: string, value: unknown): Promise<void> {
 
 export function saveEmotionStateAsync(state: EmotionState): Promise<void> {
   return queueAtomicJsonWrite(EMOTION_STATE_FILE, state);
+}
+
+export function saveMemoryLedgerAsync(): Promise<void> {
+  return queueAtomicJsonWrite(MEMORY_LEDGER_FILE, memoryLedger.serialize());
 }
 
 export function saveEpisodicStoreAsync(): Promise<void> {

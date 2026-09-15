@@ -28,7 +28,8 @@ export default function App() {
   const setSettings = useAIBrainStore(s => s.setSettings);
   const [showOscilloscope, setShowOscilloscope] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(false);
+  // v1.5 语音播报默认开启：AI 回复时"文字 + 语音"同时给（可在 MediaPanel 开关或设置里关）
+  const [voiceOn, setVoiceOn] = useState(true);
   const [voiceText, setVoiceText] = useState('');
 
   // ── 可拖拽分隔线 ──
