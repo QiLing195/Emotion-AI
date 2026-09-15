@@ -4,6 +4,7 @@ import { getDominantEmotion, getMicroPhase, getRelationshipStage, STAGE_LABELS }
 import { XIAONUAN_STAGE_LABELS, resolveLoverStage } from '../lib/xiaoNuanStages';
 import { STAGE_LABELS_V2 } from '../lib/relationshipProgressionV2';
 import { initVoiceOutput, speakText } from '../lib/voiceOutput';
+import { dominantVoiceEmotion } from '../lib/voiceTone';
 
 function MessageBubble({ msg }: { msg: ChatMessageType }) {
   const isUser = msg.role === 'user';
@@ -78,6 +79,39 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  // ── v1.12 动机驱动主动消息：轮询服务端待投递队列（她主动找你）──
+  // 服务端只在"空闲 ≥2h + 心里挂着的事够紧迫 + 配额/时间窗放行"时才会投递，
+  // 这里只负责显示与播报，不做任何判断。
+  useEffect(() => {
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/proactive/pending');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list: Array<{ id: string; text: string; createdAt: string }> = data?.messages ?? [];
+        if (stopped || list.length === 0) return;
+        for (const m of list) {
+          addChatMessage({
+            id: m.id ?? `proactive_${Date.now()}`,
+            role: 'assistant',
+            content: m.text,
+            timestamp: m.createdAt ?? new Date().toISOString(),
+            type: 'text',
+          } as ChatMessageType);
+          const latestState = useAIBrainStore.getState().persona.emotionState;
+          const voiceEmotion = dominantVoiceEmotion(latestState?.emotions);
+          const ttsEnabled = voiceOn && (settings.tts?.enabled ?? true);
+          speakText(m.text, ttsEnabled, voiceEmotion, { provider: settings.tts?.provider ?? 'cosyvoice' });
+          console.log('[Proactive] 她主动发来一条消息');
+        }
+      } catch { /* 服务未就绪时静默重试 */ }
+    };
+    const timer = setInterval(poll, 20_000);
+    void poll();
+    return () => { stopped = true; clearInterval(timer); };
+  }, [addChatMessage, voiceOn, settings.tts?.enabled, settings.tts?.provider]);
+
   const syncServerState = (data: any) => {
     const updates: Partial<typeof persona> = {};
     if (data.emotionState) updates.emotionState = data.emotionState;
@@ -116,6 +150,8 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
+          // 传 userId 让服务端在 Firestore 可用时落库消息（App.tsx 以 guest 读取同步）
+          userId: 'guest',
           persona: {
             ...persona,
             emotionState: undefined,
@@ -142,7 +178,13 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
           timestamp: new Date().toISOString(),
           type: 'text',
         } as ChatMessageType);
-        speakText(aiText, voiceOn);
+        // v1.4/v1.5 语气随情感：服务端返回的最新情感状态驱动语音；provider 决定用哪个 TTS
+        const latestState = data.emotionState ?? useAIBrainStore.getState().persona.emotionState;
+        const voiceEmotion = dominantVoiceEmotion(latestState?.emotions);
+        // 语音播报：MediaPanel 开关 且 设置里未显式关闭 TTS（默认开）→ 文字与语音同时给
+        // provider 默认 cosyvoice（本地情感 TTS）；服务未启动时秒级失败 → 自动回退浏览器语音
+        const ttsEnabled = voiceOn && (settings.tts?.enabled ?? true);
+        speakText(aiText, ttsEnabled, voiceEmotion, { provider: settings.tts?.provider ?? 'cosyvoice' });
       }
 
       syncServerState(data);

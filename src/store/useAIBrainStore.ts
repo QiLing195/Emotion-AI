@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { Memory } from '../data/mockData';
 import { EmotionState, INITIAL_EMOTION_STATE, INITIAL_EMOTION_SWEET, INITIAL_EMOTION_GENTLE, EmotionEvent, updateEmotionState, getDominantEmotion, applyReinforcement, ReinforcementSignal, EmotionAttribution, generateAttribution, UserEmotionAnalysis, analyzeUserSentiment, getRelationshipStage, STAGE_LABELS, STAGE_DESCRIPTIONS, processTimeDecay, buildEmotionContext, validateEmotionState, sanitizeEmotionState, suggestReinforcement, intimacyToAffinity } from '../lib/emotionEngine';
 import { XIAONUAN_STAGE_LABELS, XIAONUAN_STAGE_DESCRIPTIONS, getXiaoNuanStageModulation, getNextStageThreshold, resolveLoverStage, getLoverStageLabel, getLoverStageDescription, type LoverStage } from '../lib/xiaoNuanStages';
@@ -65,7 +66,7 @@ export interface Preset extends Persona {
 
 export interface TTSSettings {
   enabled: boolean;
-  provider: 'gemini' | 'openai' | 'elevenlabs' | 'rvc_custom' | 'browser' | 'voxcpm';
+  provider: 'gemini' | 'openai' | 'elevenlabs' | 'rvc_custom' | 'browser' | 'voxcpm' | 'cosyvoice';
   voiceId: string;
   apiUrl?: string;
   apiKey?: string;
@@ -495,7 +496,8 @@ const syncPersonaToFirestore = (persona: Persona) => {
 };
 
 export const useAIBrainStore = create<AIBrainState>()(
-  (set) => ({
+  persist(
+    (set) => ({
     // Personality
     presets: INITIAL_PRESETS,
     activePresetId: 'sweet_girlfriend',
@@ -938,5 +940,15 @@ export const useAIBrainStore = create<AIBrainState>()(
       chatMessages: [],
       chatSummary: ''
     }),
-  })
+    }),
+    // ── 本地持久化：仅保存聊天记录，刷新/重开不丢失 ──
+    // Firestore 在本机/无服务端凭据环境不可用，localStorage 兜底；
+    // App.tsx 的 Firestore onSnapshot 有数据时仍会整组同步（多端场景）。
+    {
+      name: 'ai-friend-chat-storage',
+      version: 1,
+      partialize: (state) => ({ chatMessages: state.chatMessages }),
+      storage: createJSONStorage(() => localStorage),
+    },
+  )
 );
