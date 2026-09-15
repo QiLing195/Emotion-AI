@@ -55,6 +55,8 @@ export class DefaultAIEngine {
       if (!aiSettings) {
         throw new AIRequestError('AI settings are not configured.');
       }
+      // 局部常量：保留 strict 收窄，闭包内可直接使用
+      const systemPrompt = clientContext.clientSystemPrompt;
 
       try {
         let text: string;
@@ -63,7 +65,7 @@ export class DefaultAIEngine {
           const result = await executeStrongConnection('S4',
             () => generateAIChatResponse(
               aiSettings,
-              clientContext.clientSystemPrompt,
+              systemPrompt,
               messages,
               false,
               aiSettings.temperature ?? 0.7,
@@ -75,7 +77,7 @@ export class DefaultAIEngine {
           text = await executeStrongConnection('S4',
             () => generateAIResponse(
               aiSettings,
-              clientContext.clientSystemPrompt,
+              systemPrompt,
               userText,
               false,
               aiSettings.temperature ?? 0.7,

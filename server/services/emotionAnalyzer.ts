@@ -3,6 +3,7 @@ import type { EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEng
 import { generateAIResponse } from '../../src/lib/aiProvider.js';
 import type { AISettings } from '../../src/lib/aiProvider.js';
 import { extractJSON } from '../utils/index.js';
+import { canonicalEmotion, canonicalizeWithLabel } from '../../src/lib/emotionCanonical.js';
 
 export type EmotionAnalysisSource = 'llm' | 'fallback';
 
@@ -53,10 +54,17 @@ export function analyzeUserEmotionLocally(userText: string): UserEmotionAnalysis
 export function sanitizeUserAnalysis(raw: unknown, fallback: UserEmotionAnalysis): UserEmotionAnalysis {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fallback;
   const candidate = raw as Record<string, unknown>;
+  const rawLabel = typeof candidate.expressedEmotion === 'string' && candidate.expressedEmotion.trim()
+    ? candidate.expressedEmotion.trim().slice(0, 50)
+    : null;
+  // LLM 会返回自然语言标签（"疲惫、委屈" / "gratitude and warmth"）：
+  // 归一为规范键供下游匹配，原始标签留在 emotionLabel 供展示。
+  const { emotion, label } = rawLabel
+    ? canonicalizeWithLabel(rawLabel)
+    : { emotion: canonicalEmotion(fallback.expressedEmotion), label: undefined };
   return {
-    expressedEmotion: typeof candidate.expressedEmotion === 'string' && candidate.expressedEmotion.trim()
-      ? candidate.expressedEmotion.trim().slice(0, 50)
-      : fallback.expressedEmotion,
+    expressedEmotion: emotion,
+    ...(label ? { emotionLabel: label } : (fallback.emotionLabel ? { emotionLabel: fallback.emotionLabel } : {})),
     likelyCause: typeof candidate.likelyCause === 'string'
       ? candidate.likelyCause.trim().slice(0, 200)
       : fallback.likelyCause,
@@ -138,6 +146,9 @@ Return one JSON object only, with this exact shape:
 {"emotionEvent":{"deltaA":number,"deltaB":number,"deltaR":number,"intent":"user|self|third_party","GC":number,"agency":number,"fairness":number,"control":number},"userAnalysis":{"expressedEmotion":string,"likelyCause":string,"intensity":number,"directedAtAI":boolean}}
 Ranges: deltaA/deltaB/deltaR [-0.5, 0.5]; all other numbers [-1, 1].
 userAnalysis.intensity must be in [0, 1].
+userAnalysis.expressedEmotion MUST be exactly one of these tokens (no other words, no Chinese, no multiple values):
+"joy" | "sad" | "anger" | "fear" | "love" | "gratitude" | "disgust" | "neutral".
+Use "neutral" when the emotion is weak or ambiguous; put any nuance (e.g. tired, wronged, relieved) only in likelyCause.
 Use small changes for ordinary conversation and zero-centered values when evidence is weak.
 <user_text>${escapeData(userText)}</user_text>`;
 }
