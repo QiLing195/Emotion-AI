@@ -205,21 +205,21 @@ export default function SettingsView() {
             <span className="text-sm font-medium text-slate-800">启用语音</span>
           </div>
           <button
-            onClick={() => setSettings({ tts: { ...settings.tts, enabled: !settings.tts?.enabled, provider: settings.tts?.provider || 'rvc_custom', voiceId: settings.tts?.voiceId || '' } })}
-            className={`relative w-10 h-6 rounded-full transition-colors ${settings.tts?.enabled ? 'bg-indigo-500' : 'bg-slate-300'}`}
+            onClick={() => setSettings({ tts: { ...settings.tts, enabled: !(settings.tts?.enabled ?? true), provider: settings.tts?.provider || 'cosyvoice', voiceId: settings.tts?.voiceId || '' } })}
+            className={`relative w-10 h-6 rounded-full transition-colors ${(settings.tts?.enabled ?? true) ? 'bg-indigo-500' : 'bg-slate-300'}`}
           >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.tts?.enabled ? 'translate-x-4' : ''}`} />
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${(settings.tts?.enabled ?? true) ? 'translate-x-4' : ''}`} />
           </button>
         </div>
       </SettingGroup>
 
-      {settings.tts?.enabled && (
+      {(settings.tts?.enabled ?? true) && (
         <SettingGroup title="TTS 服务商">
           <div className="px-4 py-3">
             <div className="flex flex-wrap gap-2">
-              {(['browser', 'voxcpm', 'rvc_custom', 'gemini', 'openai', 'elevenlabs'] as const).map(p => {
+              {(['browser', 'cosyvoice', 'voxcpm', 'rvc_custom', 'gemini', 'openai', 'elevenlabs'] as const).map(p => {
                 const labels: Record<string, string> = {
-                  browser: '浏览器', voxcpm: 'VoxCPM', rvc_custom: 'RVC',
+                  browser: '浏览器', cosyvoice: 'CosyVoice（本地·情感）', voxcpm: 'VoxCPM', rvc_custom: 'RVC',
                   gemini: 'Gemini', openai: 'OpenAI', elevenlabs: 'ElevenLabs',
                 };
                 return (
