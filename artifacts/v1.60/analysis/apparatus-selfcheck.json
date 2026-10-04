@@ -7,6 +7,7 @@
     "DISABLE_PROACTIVE_LOOP": true,
     "DISABLE_LONG_TERM_DRIFT": true,
     "DISABLE_MEMORY_NARRATIVE_LLM": true,
+    "DISABLE_STATE_MOTIVE": true,
     "LAYA_STRATEGY": "off",
     "model": "stub",
     "temperature": 0

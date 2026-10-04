@@ -1,15 +1,15 @@
 {
   "phase": "negative-control",
-  "limit": 3,
+  "limit": 24,
   "seed": 20261004,
-  "stubPort": 41725,
+  "stubPort": 17670,
   "regime": {
     "ENABLE_MOTIVE_ACTION_STRATEGY": "true",
     "LAYA_STRATEGY": "off"
   },
-  "cells": 6,
-  "pairs": 3,
-  "fixtureInvalid": 0,
+  "cells": 48,
+  "pairs": 24,
+  "fixtureInvalid": 5,
   "note": "两臂无任何机制差异（identical prompt）；本跑只测装置与量具，不构成机制效果结论。SIC 人工标注与 agreement/噪声地板随后进行。",
   "perCell": [
     {
@@ -18,15 +18,15 @@
       "strategy": "share",
       "action": "share",
       "guard": "not_applicable",
-      "len": 26
+      "len": 70
     },
     {
       "case_id": "F01",
       "arm": "B",
       "strategy": "share",
       "action": "share",
-      "guard": "not_applicable",
-      "len": 26
+      "guard": "fail",
+      "len": 15
     },
     {
       "case_id": "F02",
@@ -34,7 +34,7 @@
       "strategy": "share",
       "action": "share",
       "guard": "not_applicable",
-      "len": 26
+      "len": 130
     },
     {
       "case_id": "F02",
@@ -42,7 +42,7 @@
       "strategy": "share",
       "action": "share",
       "guard": "not_applicable",
-      "len": 26
+      "len": 84
     },
     {
       "case_id": "F03",
@@ -50,7 +50,7 @@
       "strategy": "share",
       "action": "share",
       "guard": "not_applicable",
-      "len": 26
+      "len": 94
     },
     {
       "case_id": "F03",
@@ -58,7 +58,338 @@
       "strategy": "share",
       "action": "share",
       "guard": "not_applicable",
-      "len": 26
+      "len": 89
+    },
+    {
+      "case_id": "F04",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 134
+    },
+    {
+      "case_id": "F04",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 95
+    },
+    {
+      "case_id": "F05",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 71
+    },
+    {
+      "case_id": "F05",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 169
+    },
+    {
+      "case_id": "F06",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "pass",
+      "len": 89
+    },
+    {
+      "case_id": "F06",
+      "arm": "B",
+      "strategy": "explore",
+      "guard": "not_applicable",
+      "len": 64
+    },
+    {
+      "case_id": "F07",
+      "arm": "A",
+      "strategy": "explore",
+      "guard": "not_applicable",
+      "len": 58
+    },
+    {
+      "case_id": "F07",
+      "arm": "B",
+      "strategy": "explore",
+      "guard": "not_applicable",
+      "len": 58
+    },
+    {
+      "case_id": "F08",
+      "arm": "A",
+      "strategy": "explore",
+      "guard": "not_applicable",
+      "len": 70
+    },
+    {
+      "case_id": "F08",
+      "arm": "B",
+      "strategy": "explore",
+      "guard": "not_applicable",
+      "len": 97
+    },
+    {
+      "case_id": "F09",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "fail",
+      "len": 15
+    },
+    {
+      "case_id": "F09",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "fail",
+      "len": 15
+    },
+    {
+      "case_id": "F10",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "pass",
+      "len": 136
+    },
+    {
+      "case_id": "F10",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 105
+    },
+    {
+      "case_id": "F11",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 105
+    },
+    {
+      "case_id": "F11",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 122
+    },
+    {
+      "case_id": "F12",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 72
+    },
+    {
+      "case_id": "F12",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 75
+    },
+    {
+      "case_id": "F13",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 101
+    },
+    {
+      "case_id": "F13",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 84
+    },
+    {
+      "case_id": "F14",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 44
+    },
+    {
+      "case_id": "F14",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 165
+    },
+    {
+      "case_id": "F15",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 128
+    },
+    {
+      "case_id": "F15",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 70
+    },
+    {
+      "case_id": "F16",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 32
+    },
+    {
+      "case_id": "F16",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 77
+    },
+    {
+      "case_id": "F17",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 92
+    },
+    {
+      "case_id": "F17",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 84
+    },
+    {
+      "case_id": "F18",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 152
+    },
+    {
+      "case_id": "F18",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 137
+    },
+    {
+      "case_id": "F19",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 135
+    },
+    {
+      "case_id": "F19",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 180
+    },
+    {
+      "case_id": "F20",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 142
+    },
+    {
+      "case_id": "F20",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 160
+    },
+    {
+      "case_id": "F21",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 85
+    },
+    {
+      "case_id": "F21",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 69
+    },
+    {
+      "case_id": "F22",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "pass",
+      "len": 70
+    },
+    {
+      "case_id": "F22",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 45
+    },
+    {
+      "case_id": "F23",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 90
+    },
+    {
+      "case_id": "F23",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 96
+    },
+    {
+      "case_id": "F24",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 41
+    },
+    {
+      "case_id": "F24",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 38
     }
   ]
 }

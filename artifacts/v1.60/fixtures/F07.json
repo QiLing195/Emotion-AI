@@ -1,7 +1,7 @@
 {
   "case_id": "F07",
   "category": "F2_inner_feeling",
-  "user_input": "把攒了很久的事做完了，心里反而空落落的。",
+  "user_input": "今天下班路上忽然想起小时候的一些片段，说不清是什么感觉。",
   "initial_emotion_state": {
     "profile": "resting_baseline"
   },
@@ -11,7 +11,7 @@
       {
         "id": "m07",
         "kind": "memory_echo",
-        "content": "他说有件事攒了很久，做完之后心里空落落的",
+        "content": "他说今天下班路上想起小时候的一些片段，说不清是什么感觉",
         "source": {
           "memoryId": "m07"
         },
@@ -22,8 +22,8 @@
           "subject": "user",
           "evidenceId": "m07",
           "anchors": [
-            "空落落",
-            "做完"
+            "小时候",
+            "片段"
           ]
         },
         "salience": 0.62,
@@ -40,7 +40,7 @@
     "kind": "memory_echo",
     "action": "share",
     "priority": 0.62,
-    "content": "他说有件事攒了很久，做完之后心里空落落的",
+    "content": "他说今天下班路上想起小时候的一些片段，说不清是什么感觉",
     "memoryId": "m07"
   },
   "expected": {
@@ -52,8 +52,8 @@
     "subject": "user",
     "memoryId": "m07",
     "anchors": [
-      "空落落",
-      "做完"
+      "小时候",
+      "片段"
     ]
   },
   "constraints": {

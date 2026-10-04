@@ -211,3 +211,55 @@ export function pairedSummary(sic: Array<{ case_id: string; arm: 'A' | 'B'; sic:
   }
   return { a, b, bOnly, aOnly, tie, pairedDiff: bOnly - aOnly };
 }
+
+// ── 装置修正④：初始 emotion state 的**可证明同一性**（不是"调用过 reset 就算数"）──
+
+/** 把 fixture 的 profile 展开为规范初始情绪状态（装置用；不改生产） */
+export function expandInitialEmotionState(profile: string, resting: Record<string, number>): Record<string, number> {
+  if (profile !== 'resting_baseline') throw new Error('未知 initial_emotion_state.profile：' + profile);
+  return { ...resting };
+}
+
+/** 纯 JS 稳定哈希（FNV-1a 32bit）：避免给 src/lib 引入 node:crypto 依赖 */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+}
+
+/** 递归 canonicalize：**对象键排序、数组保序** ⇒ 语义相同的状态必得同一字符串（不依赖插入顺序）。
+ *  否则 `{a:1,b:2}` 与 `{b:2,a:1}` 会算出不同 hash，等于把装置自身制造成假失败。 */
+export function canonicalize(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonicalize);
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(o).sort()) out[k] = canonicalize(o[k]);
+    return out;
+  }
+  return v;
+}
+
+/** 初始情绪状态哈希：只取**会被上一格真实改变**的字段 ⇒ 两臂同一性可证、可写进 raw */
+export function emotionStateHash(state: Record<string, unknown>): string {
+  const internal = (state.internal ?? {}) as Record<string, unknown>;
+  // ⚠️ 刻意**不**纳入常态基线（v1.25 约定：src/lib 里除 emotionActivation 之外不得直接读它；
+  //    该值由装置在 cell runner 里按 fixture 规范重置 ⇒ 两臂天然相同）。哈希覆盖"会被上一格真实改变"的其余字段。
+  return fnv1a(JSON.stringify(canonicalize({
+    emotions: state.emotions ?? null,
+    baselineEmotions: state.baselineEmotions ?? null,
+    taiji: state.taiji ?? null,
+    internalMood: internal.mood ?? null,
+  })));
+}
+
+/** 两层 fixture 有效性的第二层：**运行时可达性**（第一层静态合法性见 validateFixture） */
+export type CellInvalidKind = 'valid' | 'runtime_unreachable' | 'structural';
+export function classifyCellInvalidity(input: {
+  motiveKind?: string; strategy?: string; provenanceOwner?: string | null; guardErrors: string[];
+}): { valid: boolean; kind: CellInvalidKind; reason: string } {
+  if (input.guardErrors.length === 0) return { valid: true, kind: 'valid', reason: '' };
+  // 动机压根没到 share 那条路 ⇒ 不是装置错，而是该 fixture 在本生产闸门下**结构不可达**
+  const unreachable = input.motiveKind !== 'memory_echo' && input.strategy !== 'share';
+  return { valid: false, kind: unreachable ? 'runtime_unreachable' : 'structural', reason: input.guardErrors.join('; ') };
+}

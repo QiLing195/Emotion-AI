@@ -1,13 +1,14 @@
 {
   "experiment": "v1.60-expression-self-initiation",
   "phase": "apparatus",
-  "generatedAt": "2026-10-04T05:53:49.740Z",
+  "generatedAt": "2026-10-04T14:26:30.269Z",
   "blindSeed": 20261004,
   "regime": {
     "ENABLE_MOTIVE_ACTION_STRATEGY": true,
     "DISABLE_PROACTIVE_LOOP": true,
     "DISABLE_LONG_TERM_DRIFT": true,
     "DISABLE_MEMORY_NARRATIVE_LLM": true,
+    "DISABLE_STATE_MOTIVE": true,
     "LAYA_STRATEGY": "off",
     "model": "stub",
     "temperature": 0

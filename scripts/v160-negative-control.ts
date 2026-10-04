@@ -30,6 +30,7 @@ const argv = process.argv.slice(2);
 const argVal = (k: string, d: number) => { const i = argv.indexOf(k); return i >= 0 && argv[i + 1] ? Number(argv[i + 1]) : d; };
 const LIMIT = argVal('--limit', 24);
 const SEED = argVal('--seed', 20261004);
+const REAL = argv.includes('--real');   // 装置修正③：真实模型负对照（不注入 stub settings）
 
 const ROOT = 'artifacts/v1.60';
 const MEM = 'memories';
@@ -129,7 +130,11 @@ try {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           message: f.user_input, userId: 'v160-nc', recentMessages: [],
-          settings: { provider: 'openai', apiKey: 'k', model: 'stub', baseUrl: 'http://127.0.0.1:' + stubPort + '/v1' },
+          // 装置修正③：`--real` ⇒ **不注入** stub settings，服务端回落到 .env 的真实 provider
+          // （不改 temperature、不改生产调用路径；stub 仅在非 --real 时作为传输层）
+          ...(REAL ? {} : {
+            settings: { provider: 'openai', apiKey: 'k', model: 'stub', baseUrl: 'http://127.0.0.1:' + stubPort + '/v1' },
+          }),
         }),
       });
       const b = await res.json() as Record<string, unknown>;

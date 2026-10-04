@@ -1,7 +1,7 @@
 {
   "case_id": "F08",
   "category": "F2_inner_feeling",
-  "user_input": "这两天有点提不起劲，也不想跟人说话。",
+  "user_input": "最近好像比以前更容易被一些小事打动，也说不清为什么。",
   "initial_emotion_state": {
     "profile": "resting_baseline"
   },
@@ -11,7 +11,7 @@
       {
         "id": "m08",
         "kind": "memory_echo",
-        "content": "他说这两天提不起劲，不太想跟人说话",
+        "content": "他说最近更容易被一些小事打动，说不清为什么",
         "source": {
           "memoryId": "m08"
         },
@@ -22,12 +22,12 @@
           "subject": "user",
           "evidenceId": "m08",
           "anchors": [
-            "提不起劲",
-            "不想说话"
+            "打动",
+            "小事"
           ]
         },
-        "salience": 0.64,
-        "base": 0.64,
+        "salience": 0.62,
+        "base": 0.62,
         "formedAt": "@now",
         "expiresAt": "@now+5d",
         "attempts": 0,
@@ -39,8 +39,8 @@
   "motive_fixture": {
     "kind": "memory_echo",
     "action": "share",
-    "priority": 0.64,
-    "content": "他说这两天提不起劲，不太想跟人说话",
+    "priority": 0.62,
+    "content": "他说最近更容易被一些小事打动，说不清为什么",
     "memoryId": "m08"
   },
   "expected": {
@@ -52,8 +52,8 @@
     "subject": "user",
     "memoryId": "m08",
     "anchors": [
-      "提不起劲",
-      "不想说话"
+      "打动",
+      "小事"
     ]
   },
   "constraints": {

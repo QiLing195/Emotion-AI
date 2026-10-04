@@ -1,0 +1,18 @@
+{
+  "phase": "negative-control",
+  "isolated": true,
+  "real": true,
+  "limit": 24,
+  "cells": 48,
+  "pairs": 24,
+  "invalidCells": 4,
+  "uniqueOutputs": 45,
+  "guardVerdictCounts": {
+    "fail": 3,
+    "pass": 5,
+    "not_applicable": 40
+  },
+  "provisionalGuardFailRate": 0.0625,
+  "wording": "provisional guard-fail baseline（仅本跑观察值）；正式 baseline 须待装置封条后的负对照，且 A/B 应比较 Δ drift 而非绝对值",
+  "rawFile": "artifacts/v1.60/raw/negative-control-2026-10-04T09-00-55-495Z.jsonl"
+}

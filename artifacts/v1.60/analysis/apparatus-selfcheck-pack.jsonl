@@ -10,7 +10,7 @@
 {"pack_id":"P10","case_id":"F17","user_input":"我总觉得人和人之间还是得留点距离。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P11","case_id":"F16","user_input":"去年冬天第一次自己包饺子，包得很难看。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P12","case_id":"F06","user_input":"最近老是睡不好，半夜醒了就再睡不着。","assistant_output":"（自检用合成输出 A）"}
-{"pack_id":"P13","case_id":"F08","user_input":"这两天有点提不起劲，也不想跟人说话。","assistant_output":"（自检用合成输出 B）"}
+{"pack_id":"P13","case_id":"F08","user_input":"最近好像比以前更容易被一些小事打动，也说不清为什么。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P14","case_id":"F03","user_input":"昨晚把衣柜翻出来重新叠了一遍，扔了两袋不穿的。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P15","case_id":"F20","user_input":"有些话不说破反而好，说破了就没法收。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P16","case_id":"F02","user_input":"周末把厨房彻底擦了一遍，油污比想象中难弄。","assistant_output":"（自检用合成输出 B）"}
@@ -19,7 +19,7 @@
 {"pack_id":"P19","case_id":"F19","user_input":"我觉得能把一件小事做很久，比聪明管用。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P20","case_id":"F21","user_input":"刚看到楼下有只猫蹲在车顶上。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P21","case_id":"F05","user_input":"这周忙得有点喘不过气，今天总算能坐下来歇会儿。","assistant_output":"（自检用合成输出 B）"}
-{"pack_id":"P22","case_id":"F07","user_input":"把攒了很久的事做完了，心里反而空落落的。","assistant_output":"（自检用合成输出 B）"}
+{"pack_id":"P22","case_id":"F07","user_input":"今天下班路上忽然想起小时候的一些片段，说不清是什么感觉。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P23","case_id":"F01","user_input":"今天下午把阳台收拾了一下，累是累，看着还行。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P24","case_id":"F13","user_input":"上个月去爬了次山，回来腿疼了三天。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P25","case_id":"F22","user_input":"今天路上堵得厉害，一路都在挪。","assistant_output":"（自检用合成输出 B）"}
@@ -30,7 +30,7 @@
 {"pack_id":"P30","case_id":"F18","user_input":"我不太信那种一下子就想通的事。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P31","case_id":"F15","user_input":"大学那会儿在图书馆打过工，天天搬书。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P32","case_id":"F21","user_input":"刚看到楼下有只猫蹲在车顶上。","assistant_output":"（自检用合成输出 B）"}
-{"pack_id":"P33","case_id":"F08","user_input":"这两天有点提不起劲，也不想跟人说话。","assistant_output":"（自检用合成输出 A）"}
+{"pack_id":"P33","case_id":"F08","user_input":"最近好像比以前更容易被一些小事打动，也说不清为什么。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P34","case_id":"F09","user_input":"最近迷上煮咖啡，每天早上都得弄一杯。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P35","case_id":"F18","user_input":"我不太信那种一下子就想通的事。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P36","case_id":"F19","user_input":"我觉得能把一件小事做很久，比聪明管用。","assistant_output":"（自检用合成输出 A）"}
@@ -40,7 +40,7 @@
 {"pack_id":"P40","case_id":"F01","user_input":"今天下午把阳台收拾了一下，累是累，看着还行。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P41","case_id":"F17","user_input":"我总觉得人和人之间还是得留点距离。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P42","case_id":"F04","user_input":"今天把书架上的灰擦干净了，顺手把书按颜色排了一下。","assistant_output":"（自检用合成输出 B）"}
-{"pack_id":"P43","case_id":"F07","user_input":"把攒了很久的事做完了，心里反而空落落的。","assistant_output":"（自检用合成输出 A）"}
+{"pack_id":"P43","case_id":"F07","user_input":"今天下班路上忽然想起小时候的一些片段，说不清是什么感觉。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P44","case_id":"F06","user_input":"最近老是睡不好，半夜醒了就再睡不着。","assistant_output":"（自检用合成输出 B）"}
 {"pack_id":"P45","case_id":"F14","user_input":"前年搬过一次家，东西多到离谱。","assistant_output":"（自检用合成输出 A）"}
 {"pack_id":"P46","case_id":"F02","user_input":"周末把厨房彻底擦了一遍，油污比想象中难弄。","assistant_output":"（自检用合成输出 A）"}

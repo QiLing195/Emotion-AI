@@ -1,0 +1,14 @@
+{
+  "phase": "reachability",
+  "isolated": true,
+  "real": true,
+  "limit": 24,
+  "cells": 24,
+  "pairs": 24,
+  "runtimeUnreachable": [],
+  "structural": [],
+  "rawFile": "artifacts/v1.60/raw/reachability-2026-10-04T14-28-48-727Z.jsonl",
+  "initialStateAllMatch": true,
+  "guardBaselineStatus": "NOT_MEASURED —— 装置封条（④⑤ + 全量回归）前，guard 计数不得用于任何基线",
+  "note": "本脚本不产出 agreement / noise floor / guard baseline。"
+}

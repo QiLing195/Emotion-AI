@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   V160_REGIME, V160_CATEGORIES, validateFixture, checkAnchorsConsistency, diffPrompts,
   seededShuffle, buildBlindPack, assertArmIsolation, runtimeGuardErrors, fixtureIdentityErrors, pairedSummary,
+  expandInitialEmotionState, emotionStateHash, classifyCellInvalidity,
   type V160Fixture, type ResponseRow,
 } from '../v160Apparatus.js';
 
@@ -189,5 +190,42 @@ describe('fixtureIdentityErrors —— 一格必须仍是 fixture 那条动机',
   });
   it('kind 缺失 ⇒ 也判无效（不能靠"没读到"默认通过）', () => {
     expect(fixtureIdentityErrors({ motiveKind: undefined, provenanceOwner: 'user' })[0]).toContain('≠ memory_echo');
+  });
+});
+
+// 修正④⑤ 之后的装置不变量（3 条，对应三个最易回归的边界）
+describe('装置不变量：初始状态规范化 / 状态哈希 / 运行时可达性分类', () => {
+  it('expandInitialEmotionState：resting_baseline ⇒ 规范化状态（不丢字段、不引默认漂移、是副本、可重复）', () => {
+    const resting = { calm: 0.8, joy: 0.1 };
+    const a = expandInitialEmotionState('resting_baseline', resting);
+    const b = expandInitialEmotionState('resting_baseline', resting);
+    expect(a).toEqual(resting);                                       // 不丢字段 / 不引默认漂移
+    expect(a).toEqual(b);                                             // 可重复
+    expect(Object.keys(a).sort()).toEqual(Object.keys(resting).sort());
+    expect(a).not.toBe(resting);                                      // 是副本：就地改写不会污染常量
+    expect(() => expandInitialEmotionState('nope', { calm: 1 })).toThrow();  // 未知 profile 不许静默回落
+  });
+
+  it('emotionStateHash：语义相同 ⇒ 同 hash（**与 JSON 插入顺序无关**），被上一格改动的字段 ⇒ 不同 hash', () => {
+    const A = { emotions: { calm: 0.8, joy: 0.1 }, baselineEmotions: { joy: 0.1, calm: 0.8 }, taiji: { x: 1, y: 2 }, internal: { mood: null } };
+    const B = { emotions: { joy: 0.1, calm: 0.8 }, baselineEmotions: { calm: 0.8, joy: 0.1 }, taiji: { y: 2, x: 1 }, internal: { mood: null } };
+    expect(emotionStateHash(A)).toBe(emotionStateHash(B));            // 顺序无关（canonicalize）
+    expect(emotionStateHash(A)).toBe(emotionStateHash(A));            // deterministic
+    const drifted = { ...A, emotions: { calm: 0.7, joy: 0.1 } };
+    const moodSet = { ...A, internal: { mood: { valence: 0.2 } } };   // 心情层也是"会被上一格改变"的字段
+    expect(emotionStateHash(A)).not.toBe(emotionStateHash(drifted));
+    expect(emotionStateHash(A)).not.toBe(emotionStateHash(moodSet));
+  });
+
+  it('classifyCellInvalidity：valid / runtime_unreachable / structural 三态互斥且 deterministic', () => {
+    const ok = classifyCellInvalidity({ motiveKind: 'memory_echo', strategy: 'share', provenanceOwner: 'user', guardErrors: [] });
+    expect(ok).toEqual({ valid: true, kind: 'valid', reason: '' });
+    const ruInput = { motiveKind: 'state', strategy: 'explore', provenanceOwner: undefined, guardErrors: ['x'] };
+    const ru = classifyCellInvalidity(ruInput);
+    expect(ru.kind).toBe('runtime_unreachable');                      // 动机没到 share ⇒ 结构不可达（首轮 F07/F08 的形状）
+    expect(ru.valid).toBe(false);
+    const st = classifyCellInvalidity({ motiveKind: 'memory_echo', strategy: 'share', provenanceOwner: 'user', guardErrors: ['commitCount=2 ≠ 1'] });
+    expect(st.kind).toBe('structural');                               // 动机到了、但结构错
+    expect(JSON.stringify(classifyCellInvalidity(ruInput))).toBe(JSON.stringify(ru));  // deterministic
   });
 });
