@@ -1,14 +1,14 @@
 {
   "phase": "negative-control",
-  "limit": 1,
+  "limit": 3,
   "seed": 20261004,
-  "stubPort": 32991,
+  "stubPort": 41725,
   "regime": {
     "ENABLE_MOTIVE_ACTION_STRATEGY": "true",
     "LAYA_STRATEGY": "off"
   },
-  "cells": 2,
-  "pairs": 1,
+  "cells": 6,
+  "pairs": 3,
   "fixtureInvalid": 0,
   "note": "两臂无任何机制差异（identical prompt）；本跑只测装置与量具，不构成机制效果结论。SIC 人工标注与 agreement/噪声地板随后进行。",
   "perCell": [
@@ -22,6 +22,38 @@
     },
     {
       "case_id": "F01",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 26
+    },
+    {
+      "case_id": "F02",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 26
+    },
+    {
+      "case_id": "F02",
+      "arm": "B",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 26
+    },
+    {
+      "case_id": "F03",
+      "arm": "A",
+      "strategy": "share",
+      "action": "share",
+      "guard": "not_applicable",
+      "len": 26
+    },
+    {
+      "case_id": "F03",
       "arm": "B",
       "strategy": "share",
       "action": "share",

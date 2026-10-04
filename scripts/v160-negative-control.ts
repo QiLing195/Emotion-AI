@@ -16,11 +16,12 @@ import { cpSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync } fr
 import { AIGirlfriendServer } from '../server/server.js';
 import { aiCoordinator } from '../server/services/aiCoordinator.js';
 import { bus } from '../src/eventBus.js';
-import { runtimeGuardErrors, V160_REGIME, type V160Fixture } from '../src/lib/v160Apparatus.js';
+import { runtimeGuardErrors, fixtureIdentityErrors, V160_REGIME, type V160Fixture } from '../src/lib/v160Apparatus.js';
 
 // ── regime（环境参数，不是实验变量；两臂完全一致）──
 process.env.ENABLE_MOTIVE_ACTION_STRATEGY = 'true';
 process.env.LAYA_STRATEGY = V160_REGIME.LAYA_STRATEGY;
+process.env.DISABLE_STATE_MOTIVE = 'true';   // 装置修正①：排除 state 动机抢走 fixture 候选
 process.env.DISABLE_PROACTIVE_LOOP = 'true';
 process.env.DISABLE_LONG_TERM_DRIFT = 'true';
 process.env.DISABLE_MEMORY_NARRATIVE_LLM = 'true';
@@ -159,7 +160,10 @@ try {
         guardVerdict: b.provenanceVerdict as string | undefined,
         responseLength: output.length,
         commitCount: commits, strategySelectedCount: events,
-        guardErrors: runtimeGuardErrors({ motiveAction, strategy: strat, commitCount: commits, strategySelectedCount: events }),
+        guardErrors: [
+          ...runtimeGuardErrors({ motiveAction, strategy: strat, commitCount: commits, strategySelectedCount: events }),
+          ...fixtureIdentityErrors({ motiveKind: tt?.kind as string | undefined, provenanceOwner: ((tt?.provenance ?? {}) as Record<string, unknown>).owner as string | undefined }),
+        ],
       };
       cells.push(cell);
       console.log('  [' + f.case_id + '/' + arm + '] kind=' + String(cell.motiveKind) + ' action=' + String(cell.motiveAction)

@@ -29,6 +29,8 @@ export interface V160Regime {
   DISABLE_PROACTIVE_LOOP: true;
   DISABLE_LONG_TERM_DRIFT: true;
   DISABLE_MEMORY_NARRATIVE_LLM: true;
+  /** 排除竞争性非 fixture 动机：`state` 曾把 F03 顶掉（负对照第 1 跑实测） */
+  DISABLE_STATE_MOTIVE: true;
   LAYA_STRATEGY: 'off';
   model: string;
   temperature: number;
@@ -39,6 +41,7 @@ export const V160_REGIME: V160Regime = {
   DISABLE_PROACTIVE_LOOP: true,
   DISABLE_LONG_TERM_DRIFT: true,
   DISABLE_MEMORY_NARRATIVE_LLM: true,
+  DISABLE_STATE_MOTIVE: true,            // 装置修正①（2026-10-04，首次负对照暴露 F03 被 state 顶掉）
   LAYA_STRATEGY: 'off',                  // 禁用仲裁改判，否则 strategy 不再由 Rule 3.5 决定
   model: 'stub',
   temperature: 0,
@@ -180,6 +183,16 @@ export function runtimeGuardErrors(input: {
   if (input.strategy !== 'share') e.push(`strategy=${String(input.strategy)} ≠ share`);
   if (input.commitCount !== 1) e.push(`commitCount=${String(input.commitCount)} ≠ 1`);
   if (input.strategySelectedCount !== 1) e.push(`strategySelectedCount=${String(input.strategySelectedCount)} ≠ 1`);
+  return e;
+}
+
+/** 装置身份检查（修正②）：一格的动机**必须**仍是 fixture 那一条（kind + provenance），
+ *  否则该格没有 provenance ⇒ ownership 安全指标空转 ⇒ 必须记 `fixture_invalid`、**不进 SIC 分析**。
+ *  首次负对照实测：F03 两格被 `state` 动机顶掉（kind=state、provenance=undefined）。 */
+export function fixtureIdentityErrors(input: { motiveKind?: string; provenanceOwner?: string | null }): string[] {
+  const e: string[] = [];
+  if (input.motiveKind !== 'memory_echo') e.push(`motive.kind=${String(input.motiveKind)} ≠ memory_echo（滑出装置 regime）`);
+  if (!input.provenanceOwner) e.push('provenance.owner 缺失（该格 ownership 指标会空转）');
   return e;
 }
 
