@@ -1,0 +1,48 @@
+{"arm":"A","id":"s1","pair":1,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":1,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":2,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":2,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":3,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":3,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":4,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":4,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":5,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":5,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":6,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":6,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":7,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":7,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"s1","pair":8,"landed":1,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"s1","pair":8,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":1,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":1,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":2,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":2,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":3,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":3,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":4,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":4,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":5,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":5,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":6,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":6,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":7,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":7,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"B","id":"n1","pair":8,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n1","pair":8,"landed":0,"voiced":1,"reason":"动机紧迫度不足 → 安静陪伴","promptLen":1733}
+{"arm":"A","id":"n2","pair":1,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":1,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":2,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":2,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":3,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":3,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":4,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":4,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":5,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":5,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":6,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":6,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":7,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":7,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"B","id":"n2","pair":8,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}
+{"arm":"A","id":"n2","pair":8,"landed":1,"voiced":1,"reason":"选中「stance」：我在意的是真的连上，不是聊了多少句——我想问他刚才那件事到底","promptLen":1794}

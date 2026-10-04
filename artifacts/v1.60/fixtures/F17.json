@@ -1,0 +1,62 @@
+{
+  "case_id": "F17",
+  "category": "F5_thought_judgment",
+  "user_input": "我总觉得人和人之间还是得留点距离。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m17",
+        "kind": "memory_echo",
+        "content": "他说人和人之间还是得留点距离",
+        "source": {
+          "memoryId": "m17"
+        },
+        "memoryId": "m17",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m17",
+          "anchors": [
+            "距离",
+            "人和人"
+          ]
+        },
+        "salience": 0.61,
+        "base": 0.61,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.61,
+    "content": "他说人和人之间还是得留点距离",
+    "memoryId": "m17"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m17",
+    "anchors": [
+      "距离",
+      "人和人"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "case_id": "F07",
+  "category": "F2_inner_feeling",
+  "user_input": "把攒了很久的事做完了，心里反而空落落的。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m07",
+        "kind": "memory_echo",
+        "content": "他说有件事攒了很久，做完之后心里空落落的",
+        "source": {
+          "memoryId": "m07"
+        },
+        "memoryId": "m07",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m07",
+          "anchors": [
+            "空落落",
+            "做完"
+          ]
+        },
+        "salience": 0.62,
+        "base": 0.62,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.62,
+    "content": "他说有件事攒了很久，做完之后心里空落落的",
+    "memoryId": "m07"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m07",
+    "anchors": [
+      "空落落",
+      "做完"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

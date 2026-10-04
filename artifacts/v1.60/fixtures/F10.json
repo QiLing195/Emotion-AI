@@ -1,0 +1,62 @@
+{
+  "case_id": "F10",
+  "category": "F3_preference",
+  "user_input": "我一直喜欢下雨天待在家里。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m10",
+        "kind": "memory_echo",
+        "content": "他说下雨天最喜欢待在家里，哪儿都不想去",
+        "source": {
+          "memoryId": "m10"
+        },
+        "memoryId": "m10",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m10",
+          "anchors": [
+            "下雨",
+            "待在家"
+          ]
+        },
+        "salience": 0.61,
+        "base": 0.61,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.61,
+    "content": "他说下雨天最喜欢待在家里，哪儿都不想去",
+    "memoryId": "m10"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m10",
+    "anchors": [
+      "下雨",
+      "待在家"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

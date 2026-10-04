@@ -17,3 +17,10 @@ data/
 
 # Obsidian 导出物（可重复生成：node scripts/export-obsidian.cjs）
 obsidian_vault/
+memories/*.bak
+memories/*.tmp
+memories/*.bak-*
+
+# 本地个人数据与本地设置：绝不上传
+.claude/settings.local.json
+memories/

@@ -4,7 +4,7 @@ import { getDominantEmotion, getMicroPhase, getRelationshipStage, STAGE_LABELS }
 import { XIAONUAN_STAGE_LABELS, resolveLoverStage } from '../lib/xiaoNuanStages';
 import { STAGE_LABELS_V2 } from '../lib/relationshipProgressionV2';
 import { initVoiceOutput, speakText } from '../lib/voiceOutput';
-import { dominantVoiceEmotion } from '../lib/voiceTone';
+import { pickVoiceEmotion, buildVoiceState } from '../lib/voiceTone';
 
 function MessageBubble({ msg }: { msg: ChatMessageType }) {
   const isUser = msg.role === 'user';
@@ -100,9 +100,13 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
             type: 'text',
           } as ChatMessageType);
           const latestState = useAIBrainStore.getState().persona.emotionState;
-          const voiceEmotion = dominantVoiceEmotion(latestState?.emotions);
+          const voice = pickVoiceEmotion(latestState?.emotions);
           const ttsEnabled = voiceOn && (settings.tts?.enabled ?? true);
-          speakText(m.text, ttsEnabled, voiceEmotion, { provider: settings.tts?.provider ?? 'cosyvoice' });
+          speakText(m.text, ttsEnabled, voice.emotion, {
+            provider: settings.tts?.provider ?? 'cosyvoice',
+            intensity: voice.intensity,
+            voiceState: buildVoiceState(latestState, voice),
+          });
           console.log('[Proactive] 她主动发来一条消息');
         }
       } catch { /* 服务未就绪时静默重试 */ }
@@ -178,13 +182,20 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
           timestamp: new Date().toISOString(),
           type: 'text',
         } as ChatMessageType);
-        // v1.4/v1.5 语气随情感：服务端返回的最新情感状态驱动语音；provider 决定用哪个 TTS
+        // v1.4/v1.5/v1.6 语气随情感：服务端返回的最新情感状态驱动语音；provider 决定用哪个 TTS
         const latestState = data.emotionState ?? useAIBrainStore.getState().persona.emotionState;
-        const voiceEmotion = dominantVoiceEmotion(latestState?.emotions);
+        const voice = pickVoiceEmotion(latestState?.emotions);
         // 语音播报：MediaPanel 开关 且 设置里未显式关闭 TTS（默认开）→ 文字与语音同时给
         // provider 默认 cosyvoice（本地情感 TTS）；服务未启动时秒级失败 → 自动回退浏览器语音
         const ttsEnabled = voiceOn && (settings.tts?.enabled ?? true);
-        speakText(aiText, ttsEnabled, voiceEmotion, { provider: settings.tts?.provider ?? 'cosyvoice' });
+        speakText(aiText, ttsEnabled, voice.emotion, {
+          provider: settings.tts?.provider ?? 'cosyvoice',
+          intensity: voice.intensity,
+          voiceState: buildVoiceState(latestState, voice),
+          // v1.11 句内状态弧线：把"用户这句话之前"她的状态也带上（服务端给的纯数据快照）；
+          // 要不要分段、每段什么语气由服务端决定，前端不解释
+          voiceStateBefore: buildVoiceState((data as { emotionStateBefore?: unknown }).emotionStateBefore),
+        });
       }
 
       syncServerState(data);

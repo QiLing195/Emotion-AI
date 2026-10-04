@@ -1,0 +1,62 @@
+{
+  "case_id": "F18",
+  "category": "F5_thought_judgment",
+  "user_input": "我不太信那种一下子就想通的事。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m18",
+        "kind": "memory_echo",
+        "content": "他说不太信那种一下子就想通的事",
+        "source": {
+          "memoryId": "m18"
+        },
+        "memoryId": "m18",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m18",
+          "anchors": [
+            "想通",
+            "一下子"
+          ]
+        },
+        "salience": 0.6,
+        "base": 0.6,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.6,
+    "content": "他说不太信那种一下子就想通的事",
+    "memoryId": "m18"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m18",
+    "anchors": [
+      "想通",
+      "一下子"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

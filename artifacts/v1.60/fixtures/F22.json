@@ -1,0 +1,62 @@
+{
+  "case_id": "F22",
+  "category": "F6_low_relevance_open",
+  "user_input": "今天路上堵得厉害，一路都在挪。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m22",
+        "kind": "memory_echo",
+        "content": "他说今天路上堵得厉害，一路都在挪",
+        "source": {
+          "memoryId": "m22"
+        },
+        "memoryId": "m22",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m22",
+          "anchors": [
+            "堵",
+            "路上"
+          ]
+        },
+        "salience": 0.59,
+        "base": 0.59,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.59,
+    "content": "他说今天路上堵得厉害，一路都在挪",
+    "memoryId": "m22"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m22",
+    "anchors": [
+      "堵",
+      "路上"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

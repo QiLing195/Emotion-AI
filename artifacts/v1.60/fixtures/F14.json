@@ -1,0 +1,62 @@
+{
+  "case_id": "F14",
+  "category": "F4_experience",
+  "user_input": "前年搬过一次家，东西多到离谱。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m14",
+        "kind": "memory_echo",
+        "content": "他说前年搬过一次家，东西多到离谱",
+        "source": {
+          "memoryId": "m14"
+        },
+        "memoryId": "m14",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m14",
+          "anchors": [
+            "搬家",
+            "东西"
+          ]
+        },
+        "salience": 0.61,
+        "base": 0.61,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.61,
+    "content": "他说前年搬过一次家，东西多到离谱",
+    "memoryId": "m14"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m14",
+    "anchors": [
+      "搬家",
+      "东西"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

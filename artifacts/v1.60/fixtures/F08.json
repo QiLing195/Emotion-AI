@@ -1,0 +1,62 @@
+{
+  "case_id": "F08",
+  "category": "F2_inner_feeling",
+  "user_input": "这两天有点提不起劲，也不想跟人说话。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m08",
+        "kind": "memory_echo",
+        "content": "他说这两天提不起劲，不太想跟人说话",
+        "source": {
+          "memoryId": "m08"
+        },
+        "memoryId": "m08",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m08",
+          "anchors": [
+            "提不起劲",
+            "不想说话"
+          ]
+        },
+        "salience": 0.64,
+        "base": 0.64,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.64,
+    "content": "他说这两天提不起劲，不太想跟人说话",
+    "memoryId": "m08"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m08",
+    "anchors": [
+      "提不起劲",
+      "不想说话"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

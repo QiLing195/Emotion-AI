@@ -1,0 +1,62 @@
+{
+  "case_id": "F09",
+  "category": "F3_preference",
+  "user_input": "最近迷上煮咖啡，每天早上都得弄一杯。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m09",
+        "kind": "memory_echo",
+        "content": "他说最近迷上煮咖啡，每天早上都要喝一杯",
+        "source": {
+          "memoryId": "m09"
+        },
+        "memoryId": "m09",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m09",
+          "anchors": [
+            "咖啡",
+            "早上"
+          ]
+        },
+        "salience": 0.61,
+        "base": 0.61,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.61,
+    "content": "他说最近迷上煮咖啡，每天早上都要喝一杯",
+    "memoryId": "m09"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m09",
+    "anchors": [
+      "咖啡",
+      "早上"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

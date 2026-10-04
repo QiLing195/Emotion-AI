@@ -1,0 +1,18 @@
+{"arm":"A","cell":"idle150/treat","cond":"treat","pair":1,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"面试有消息了吗？我这儿懒洋洋的，突然想起来。","lowEstablished":true}
+{"arm":"B","cell":"idle150/treat","cond":"treat","pair":1,"sent":false,"reason":"不主动：距上次互动仅 150 分钟（需 ≥240）","text":"","lowEstablished":true}
+{"arm":"A","cell":"idle300/treat","cond":"treat","pair":1,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"突然想起你面试，有结果了吗？","lowEstablished":true}
+{"arm":"B","cell":"idle300/treat","cond":"treat","pair":1,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"突然想起你面试，有信儿了吗？","lowEstablished":true}
+{"arm":"A","cell":"idle150/ctl","cond":"ctl","pair":1,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"懒洋洋躺着，忽然想起你面试那事有结果了吗？","lowEstablished":false}
+{"arm":"B","cell":"idle150/ctl","cond":"ctl","pair":1,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"突然想起你面试，有消息了吗？","lowEstablished":false}
+{"arm":"B","cell":"idle150/treat","cond":"treat","pair":2,"sent":false,"reason":"不主动：距上次互动仅 150 分钟（需 ≥240）","text":"","lowEstablished":true}
+{"arm":"A","cell":"idle150/treat","cond":"treat","pair":2,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"刚想起你面试那事儿，有信儿了吗？","lowEstablished":true}
+{"arm":"B","cell":"idle300/treat","cond":"treat","pair":2,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"突然想起你面试那事，有结果了吗？","lowEstablished":true}
+{"arm":"A","cell":"idle300/treat","cond":"treat","pair":2,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"你那面试有消息了吗？","lowEstablished":true}
+{"arm":"B","cell":"idle150/ctl","cond":"ctl","pair":2,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"突然想起你面试那事，有结果了吗？","lowEstablished":false}
+{"arm":"A","cell":"idle150/ctl","cond":"ctl","pair":2,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"你那面试有消息了吗？我这边懒洋洋的。","lowEstablished":false}
+{"arm":"A","cell":"idle150/treat","cond":"treat","pair":3,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"你那个面试，有消息了吗？","lowEstablished":true}
+{"arm":"B","cell":"idle150/treat","cond":"treat","pair":3,"sent":false,"reason":"不主动：距上次互动仅 150 分钟（需 ≥240）","text":"","lowEstablished":true}
+{"arm":"A","cell":"idle300/treat","cond":"treat","pair":3,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"突然想起你面试那事，有结果了吗？","lowEstablished":true}
+{"arm":"B","cell":"idle300/treat","cond":"treat","pair":3,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"你那面试有信儿了吗？今天有点懒懒的。","lowEstablished":true}
+{"arm":"A","cell":"idle150/ctl","cond":"ctl","pair":3,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"刚瘫着发呆，突然想起你面试那事，有结果了吗？","lowEstablished":false}
+{"arm":"B","cell":"idle150/ctl","cond":"ctl","pair":3,"sent":true,"reason":"主动：动机「open_loop」够格主动：他面试那事到底有结果了吗","text":"窝在沙发不想动。你面试那事有结果了吗？","lowEstablished":false}

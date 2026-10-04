@@ -2,6 +2,7 @@
 // 共情、信任、开放等维度随交互经验极慢速漂移，形成独一无二的性格
 
 import { EvolutionState, EmotionState, UserEmotionAnalysis, getDominantEmotion } from './emotionEngine';
+import { activationOf } from './emotionActivation';
 import { EpisodicMemory } from './episodicMemory';
 
 // ════════════════════════════════════════════════════════════
@@ -75,6 +76,31 @@ function deriveConflictStyle(evo: EvolutionState): PersonalityParams['conflictSt
 // 参数漂移
 // ════════════════════════════════════════════════════════════
 
+/**
+ * 人格漂移的**情绪门限**（v1.13 重标定）。
+ *
+ * 原来是 `dominant.intensity > 0.4 / 0.5`，但那个 dominant 来自**绝对值 argmax** ——
+ * 而绝对值里混着人格基调（calm 0.8），所以：
+ *   ① 它几乎永远返回 calm，而下面 7 条分支**没有一条认 calm** → 她自己的情绪贡献恒为 0；
+ *   ② 阈值 0.4/0.5 是按**基调尺度**定的（calm 静息就有 0.8），
+ *      而"相对基调被激起"的量级只有 0.05~0.4 —— 直接换读法也一条都撞不上。
+ *
+ * 现在读 `separateActivation()` 的**激活量**，门限按新尺度重标定：
+ * 锚点是 `ACTIVATION_DEADZONE`(0.05) —— "明显高于噪声"。
+ * **门限 = 死区 × 3**，与项目里既有的"死区 / 满档"口径一致
+ * （`SALIENCE_DEADZONE` 0.20 → `SALIENCE_FULL` 0.60 也是 3 倍）。
+ * 即：轻微被碰到（≈0.05）不改人格；**确实在这个情绪上（≥0.15）**才改。
+ */
+export const EMOTION_DRIFT_GATE = 0.15;
+/** 各情绪的门限（保留原来"joy 最容易、love 次之、sad/anger/fear 要求更强"的相对次序） */
+export const EMOTION_DRIFT_THRESHOLDS: Record<string, number> = {
+  joy: EMOTION_DRIFT_GATE * (2 / 3),   // 0.10 —— 开心最容易推动人格
+  love: EMOTION_DRIFT_GATE * (4 / 3),  // 0.20 —— 爱意要更明确
+  sad: EMOTION_DRIFT_GATE,             // 0.15
+  anger: EMOTION_DRIFT_GATE,           // 0.15
+  fear: EMOTION_DRIFT_GATE,            // 0.15
+};
+
 export function driftPersonalityParams(
   evolution: EvolutionState,
   emotionState: EmotionState,
@@ -84,7 +110,18 @@ export function driftPersonalityParams(
 ): { changes: Record<string, number>; log: string[] } {
   const changes: Record<string, number> = {};
   const log: string[] = [];
-  const dominant = getDominantEmotion(emotionState.emotions);
+  // v1.13：读**相对人格基线的激活态**，不读绝对值 argmax（后者永远给 calm，见下方说明）
+  const activation = activationOf(emotionState);
+  /**
+   * 她此刻是否**确实**在这个情绪上。
+   *
+   * 刻意**不要求**它是最强的那一个：实测里她的状态常是"难过 +0.35、同时平静 +0.12"这种
+   * 混合态（`clear === false`），若要求单一 argmax，她的难过就永远推不动人格。
+   * 混合情绪本来就是真的 —— 门限（0.10~0.20）已经保证"不是被轻轻碰一下"。
+   */
+  const feels = (emotion: string): boolean =>
+    (activation.delta[emotion] ?? 0) >= (EMOTION_DRIFT_THRESHOLDS[emotion] ?? EMOTION_DRIFT_GATE);
+
 
   // ponytail: 仅数值型人格字段参与漂移，字符串/对象字段排除
   const applyDrift = (field: 'trust' | 'openness' | 'playfulness' | 'empathy' | 'sensitivity' | 'resilience', delta: number, reason: string) => {
@@ -104,9 +141,9 @@ export function driftPersonalityParams(
     applyDrift('trust', config.trustDriftRate * 3, '用户表达爱意');
   } else if (userSentiment && userSentiment.expressedEmotion === 'anger' && userSentiment.directedAtAI) {
     applyDrift('trust', -config.trustDriftRate * 5, '用户表达愤怒并指向AI');
-  } else if (dominant.name === 'love' && dominant.intensity > 0.5) {
+  } else if (feels('love')) {
     applyDrift('trust', config.trustDriftRate * 1.5, '感受到强烈的爱意');
-  } else if (dominant.name === 'anger' && dominant.intensity > 0.4) {
+  } else if (feels('anger')) {
     applyDrift('trust', -config.trustDriftRate * 3, '感到愤怒');
   }
 
@@ -121,20 +158,20 @@ export function driftPersonalityParams(
   if (isUserVulnerable && evolution.trust > 50) {
     applyDrift('openness', config.opennessDriftRate * 4, '用户袒露脆弱且信任度高');
   }
-  if (dominant.name === 'fear' && dominant.intensity > 0.4) {
+  if (feels('fear')) {
     applyDrift('openness', -config.opennessDriftRate * 3, '恐惧情绪导致退缩');
   }
-  if (dominant.name === 'love' && dominant.intensity > 0.4 && evolution.trust > 55) {
+  if (feels('love') && evolution.trust > 55) {
     applyDrift('openness', config.opennessDriftRate * 2, '信任中感受爱意');
   }
 
   // ── 活泼度漂移 ──
   const playfulKw = ['哈哈', '嘻嘻', '调皮', '坏', '逗', '玩笑', '贫嘴', '撩'];
   const isPlayfulExchange = playfulKw.some(kw => userMessage.includes(kw));
-  if (isPlayfulExchange && dominant.name === 'joy') {
+  if (isPlayfulExchange && feels('joy')) {
     applyDrift('playfulness', config.playfulnessDriftRate * 3, '欢快的互动');
   }
-  if (dominant.name === 'sad' && dominant.intensity > 0.5) {
+  if (feels('sad')) {
     applyDrift('playfulness', -config.playfulnessDriftRate * 2, '悲伤时失去玩心');
   }
 
@@ -153,7 +190,7 @@ export function driftPersonalityParams(
   }
 
   // ── 韧性漂移 ──
-  if (dominant.name === 'joy' && dominant.intensity > 0.3 && emotionState.taiji.expectation > 0) {
+  if (feels('joy') && emotionState.taiji.expectation > 0) {
     applyDrift('resilience', config.resilienceDriftRate * 0.5, '积极恢复');
   }
 
@@ -198,6 +235,66 @@ export function computePersonalityDriftVelocity(
   }
 
   return velocities;
+}
+
+/** v1.23 长周期漂移的节流：每多少轮算一次（慢变量，别每轮都动） */
+export const LONG_TERM_DRIFT_INTERVAL_ROUNDS = 20;
+/** 样本太少不学（与动机学习同一条纪律：少样本不学，避免一条记忆就把人格带偏） */
+export const LONG_TERM_DRIFT_MIN_EPISODES = 5;
+
+/**
+ * 长周期漂移：**每个参数的单次最大位移**。
+ *
+ * ⚠️ 必须逐参数给尺度 —— 人格参数的**单位不一样**：`trust/openness/playfulness` 是 [0,100]，
+ * 而 `resilience` 是 **[0,1]**（线上实测 0.886）。`computePersonalityDriftVelocity` 吐出的
+ * `resilience` 速度是 0.5 / −0.2 这种量级，**直接当位移加到 0..1 的参数上会一次打爆**
+ * （0.886 + 0.5 远超上界，而 `clampPersonalityParams` 恰好**没有**夹 resilience）。
+ * 结论：共用系数是错的，一个参数一个数。
+ */
+export const LONG_TERM_DRIFT_SCALE: Record<string, number> = {
+  trust: 1.0,        // [0,100]
+  openness: 1.0,     // [0,100]
+  playfulness: 1.0,  // [0,100]
+  resilience: 0.01,  // [0,1] ← 与上面差两个数量级
+};
+
+/**
+ * 把「最近一段记忆的长期趋势」落到人格参数上（v1.23 接线；此前这个函数只算不用、零调用者）。
+ *
+ * 与阶段 3.7 的 `driftPersonalityParams` 分工：那条读**当轮情绪**（一瞬间的事），
+ * 这条读**一段记忆的总体倾向**（一段时间的事）—— 前者让她"被此刻打动"，后者让她"被经历塑造"。
+ * 两者动同一批参数，所以这里单次位移有硬上限、且样本不足就不学。
+ *
+ * @returns changes（实际位移）/ velocities（原始趋势，便于解释"为什么往这边动"）
+ */
+export function applyLongTermDrift(
+  evolution: EvolutionState,
+  recentEpisodes: EpisodicMemory[],
+): { changes: Record<string, number>; velocities: Record<string, number>; skipped?: string } {
+  if (!recentEpisodes || recentEpisodes.length < LONG_TERM_DRIFT_MIN_EPISODES) {
+    return {
+      changes: {}, velocities: {},
+      skipped: `样本不足（${recentEpisodes?.length ?? 0} < ${LONG_TERM_DRIFT_MIN_EPISODES}）`,
+    };
+  }
+
+  const velocities = computePersonalityDriftVelocity(evolution, recentEpisodes);
+  const changes: Record<string, number> = {};
+  const bag = evolution as unknown as Record<string, number>;
+
+  for (const [param, velocity] of Object.entries(velocities)) {
+    const scale = LONG_TERM_DRIFT_SCALE[param];
+    if (scale === undefined) continue;                      // 没登记尺度的参数一律不动（宁可不动）
+    const target = bag[param];
+    if (typeof target !== 'number' || !Number.isFinite(target)) continue;
+    const delta = clamp(velocity * scale, -scale, scale);    // 单次位移上限 = 该参数的尺度
+    if (Math.abs(delta) < 1e-4) continue;
+    bag[param] = target + delta;
+    changes[param] = delta;
+  }
+
+  clampPersonalityParams(evolution);
+  return { changes, velocities };
 }
 
 // ════════════════════════════════════════════════════════════

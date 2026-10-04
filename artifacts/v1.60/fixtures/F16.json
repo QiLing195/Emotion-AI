@@ -1,0 +1,62 @@
+{
+  "case_id": "F16",
+  "category": "F4_experience",
+  "user_input": "去年冬天第一次自己包饺子，包得很难看。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m16",
+        "kind": "memory_echo",
+        "content": "他说去年冬天第一次自己包饺子，包得很难看",
+        "source": {
+          "memoryId": "m16"
+        },
+        "memoryId": "m16",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m16",
+          "anchors": [
+            "包饺子",
+            "冬天"
+          ]
+        },
+        "salience": 0.6,
+        "base": 0.6,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.6,
+    "content": "他说去年冬天第一次自己包饺子，包得很难看",
+    "memoryId": "m16"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m16",
+    "anchors": [
+      "包饺子",
+      "冬天"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

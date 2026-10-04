@@ -1,0 +1,12 @@
+{"arm":"old","gapH":0.5,"sadBefore":0.2,"sadAfter":0.17645087300259646,"joyAfter":0.25815067266778097,"active":true,"established":true,"hours":30,"phase":"holding","closedBy":null,"lastEpisodeHours":null}
+{"arm":"old","gapH":6,"sadBefore":0.2,"sadAfter":0.18470215968847178,"joyAfter":0.25815067266778097,"active":true,"established":true,"hours":30,"phase":"holding","closedBy":null,"lastEpisodeHours":null}
+{"arm":"old","gapH":12,"sadBefore":0.2,"sadAfter":0.2012019393981913,"joyAfter":0.25815067266778097,"active":true,"established":true,"hours":30,"phase":"holding","closedBy":null,"lastEpisodeHours":null}
+{"arm":"old","gapH":24,"sadBefore":0.2,"sadAfter":0.15753968128582302,"joyAfter":0.2833655949568122,"active":true,"established":true,"hours":30,"phase":"holding","closedBy":null,"lastEpisodeHours":null}
+{"arm":"old","gapH":72,"sadBefore":0.2,"sadAfter":0.15753968128582302,"joyAfter":0.2833655949568122,"active":true,"established":true,"hours":30,"phase":"holding","closedBy":null,"lastEpisodeHours":null}
+{"arm":"old","gapH":168,"sadBefore":0.2,"sadAfter":0.15753968128582302,"joyAfter":0.2833655949568122,"active":true,"established":true,"hours":30,"phase":"holding","closedBy":null,"lastEpisodeHours":null}
+{"arm":"new","gapH":0.5,"sadBefore":0.2,"sadAfter":0.17208726160428628,"joyAfter":0.2579515540547951,"active":true,"established":true,"hours":30,"phase":"climbing","closedBy":null,"lastEpisodeHours":null}
+{"arm":"new","gapH":6,"sadBefore":0.2,"sadAfter":0.14399738923275415,"joyAfter":0.2562108246207587,"active":true,"established":true,"hours":30,"phase":"climbing","closedBy":null,"lastEpisodeHours":null}
+{"arm":"new","gapH":12,"sadBefore":0.2,"sadAfter":0.12867482728105173,"joyAfter":0.2551828151613569,"active":false,"established":false,"hours":0,"phase":"none","closedBy":"idle","lastEpisodeHours":30}
+{"arm":"new","gapH":24,"sadBefore":0.2,"sadAfter":0.05975416310952088,"joyAfter":0.2792423522794259,"active":false,"established":false,"hours":0,"phase":"none","closedBy":"idle","lastEpisodeHours":30}
+{"arm":"new","gapH":72,"sadBefore":0.2,"sadAfter":0.046394041725147044,"joyAfter":0.2792543187738417,"active":false,"established":false,"hours":0,"phase":"none","closedBy":"idle","lastEpisodeHours":30}
+{"arm":"new","gapH":168,"sadBefore":0.2,"sadAfter":0.04261692621695247,"joyAfter":0.2791758560520468,"active":false,"established":false,"hours":0,"phase":"none","closedBy":"idle","lastEpisodeHours":30}

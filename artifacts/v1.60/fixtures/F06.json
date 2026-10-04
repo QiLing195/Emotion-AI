@@ -1,0 +1,62 @@
+{
+  "case_id": "F06",
+  "category": "F2_inner_feeling",
+  "user_input": "最近老是睡不好，半夜醒了就再睡不着。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m06",
+        "kind": "memory_echo",
+        "content": "他说最近睡不好，半夜醒了就睡不着",
+        "source": {
+          "memoryId": "m06"
+        },
+        "memoryId": "m06",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m06",
+          "anchors": [
+            "睡",
+            "半夜"
+          ]
+        },
+        "salience": 0.63,
+        "base": 0.63,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.63,
+    "content": "他说最近睡不好，半夜醒了就睡不着",
+    "memoryId": "m06"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m06",
+    "anchors": [
+      "睡",
+      "半夜"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

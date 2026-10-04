@@ -150,3 +150,71 @@ describe('shouldSpecificize — 节流', () => {
     expect(shouldSpecificize(7, 0, 7)).toBe(false);
   });
 });
+
+// ── v1.49c：state（她自己此刻的状态）走**另一套**校验 ──
+//
+// 由来是一条实测（v1.49b 第三跑）：state 的内容原本是 moodStateMotive() 的**三句写死的话**，
+// 于是她"说自己"的那 16 条**前 12 字完全相同**（与 v1.38 被否的理由同源）。
+// 接到具体化这条路上要防的是**另一种**错：为了满足"具体锚点"而**编出她并没有的生活**
+// （"今天在公司被老板说了"），所以 state 的判据与其余三种相反 ——
+// **不要求**指向他/你，但**禁止**外部事件名词。
+describe('v1.49c state 的具体化校验（与其余三种相反的一套判据）', () => {
+  it('state 在允许类型里', () => {
+    expect(SPECIFICIZABLE_KINDS).toContain('state');
+  });
+
+  it('接受：第一人称 + 状态词，且**不含**他/你（这正是与其余三种的区别）', () => {
+    const ok = '我今天有点提不起劲，说不上来为什么';
+    expect(ok.includes('他') || ok.includes('你')).toBe(false);   // 前提：它确实没有指向他
+    expect(isUsableSpecificMotive('state', ok)).toBe(true);
+    expect(isUsableSpecificMotive('state', '最近我心里有点闷，做什么都懒懒的')).toBe(true);
+    // 对照：同一句话**去掉"我"**就不合格（"必须第一人称"是这条判据的一半）
+    expect(isUsableSpecificMotive('state', '最近心里有点闷，做什么都懒懒的')).toBe(false);
+  });
+
+  it('拒绝：编造她自己的生活（外部事件名词）—— 这一路最关键的一条', () => {
+    for (const bad of [
+      '今天在公司被老板说了两句，心里堵得慌',
+      '昨晚加班到很晚，今天一点劲都没有',
+      '下午去体检，回来就一直没精神',
+      '周末跟他去看了个展，回来有点累',
+    ]) {
+      expect(isUsableSpecificMotive('state', bad), bad).toBe(false);
+    }
+  });
+
+  it('拒绝：没有第一人称 / 没有状态词 / 太长 / 元描述', () => {
+    expect(isUsableSpecificMotive('state', '心里有点闷')).toBe(false);            // 缺"我"
+    expect(isUsableSpecificMotive('state', '我今天想跟他说说阳台的事')).toBe(false); // 无状态词
+    expect(isUsableSpecificMotive('state', '我'.repeat(70) + '闷')).toBe(false);      // 超长（>60）
+    expect(isUsableSpecificMotive('state', '我的动机是表达状态')).toBe(false);         // 元描述
+  });
+
+  it('其余三种**判据不变**：仍要求指向他/你 + 具体锚点', () => {
+    expect(isUsableSpecificMotive('wish', '想和他多待一会儿')).toBe(false);      // 有他、无锚点 ⇒ 空话
+    expect(isUsableSpecificMotive('wish', '他说面试的事，我想多陪他一会儿')).toBe(true);
+    // 反过来：一条合格的 state 不该被当成 wish 通过（它没有他/你）
+    expect(isUsableSpecificMotive('wish', '我今天有点提不起劲，说不上来为什么')).toBe(false);
+  });
+
+  it('parseSpecificMotives：给 state 带上基准（否则写出来也选不上），其余类型不带', () => {
+    const raw = JSON.stringify({
+      motives: [
+        { kind: 'state', content: '我今天有点提不起劲，说不上来为什么' },
+        { kind: 'wish', content: '他说面试的事，我想多陪他一会儿' },
+      ],
+    });
+    const withBase = parseSpecificMotives(raw, T0, { stateBase: 0.63 });
+    expect(withBase.find(m => m.kind === 'state')!.base).toBeCloseTo(0.63, 9);
+    expect(withBase.find(m => m.kind === 'wish')!.base).toBeUndefined();
+    // 不传 ⇒ 不带 base（退回类型先验 0.40，即"写出来也选不上"）
+    expect(parseSpecificMotives(raw, T0).find(m => m.kind === 'state')!.base).toBeUndefined();
+  });
+
+  it('prompt 里写明了 state 的规矩（只写她自己的状态、不许编外部事件）', () => {
+    const prompt = buildSpecificizePrompt({ recentUserTexts: ['今天收拾了阳台'] });
+    expect(prompt).toContain('state=她**自己**此刻的状态/心情');
+    expect(prompt).toContain('不要**出现任何外部事件或场景');
+    expect(prompt).toContain('编出来就是假的');
+  });
+});

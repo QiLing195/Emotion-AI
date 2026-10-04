@@ -16,6 +16,7 @@
 //   事件 → 情感波动 → ThoughtGenerator → ThoughtNode → 衰减/聚类/归档
 
 import type { EmotionState, EmotionEvent } from './emotionEngine';
+import { activationOf } from './emotionActivation';
 
 // ════════════════════════════════════════════════════════════
 // 1. 类型定义
@@ -791,10 +792,17 @@ export function fillThoughtContent(
   return options[idx];
 }
 
+/**
+ * 她此刻的情绪标签。
+ *
+ * v1.16：改读**相对人格基线的激活态**。旧实现是按绝对值取第一，而 calm 的静息值就有 0.8，
+ * 于是这个函数在线上几乎永远返回 `calm` —— 思维图谱的情感上下文与念头文案的
+ * `dominant` 分支实际长期固定在同一条上（"她在想你"这类文案永远走同一档）。
+ */
 function getDominantEmotion(emotionState: EmotionState): string {
   const emotions = emotionState.emotions;
   if (!emotions || Object.keys(emotions).length === 0) return 'neutral';
-  return Object.entries(emotions).sort(
-    ([, a], [, b]) => Math.abs(b) - Math.abs(a),
-  )[0]?.[0] ?? 'neutral';
+  // v1.23：基线跟着状态走（不同 persona 静息值不同，见 `activationOf`）
+  return activationOf(emotionState).activeEmotion ?? 'neutral';
 }
+

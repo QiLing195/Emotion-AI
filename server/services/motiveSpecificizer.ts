@@ -13,8 +13,19 @@
 import type { MotiveKind } from '../../src/lib/emotionTypes';
 import { MOTIVE_BASE_SALIENCE, type MotiveCandidate } from '../../src/lib/motive';
 
-/** 允许生成的动机类型（wish/worry 由模型产出；其余由规则层产生，不让模型乱造） */
-export const SPECIFICIZABLE_KINDS: MotiveKind[] = ['wish', 'worry', 'curiosity'];
+/**
+ * 允许生成的动机类型（wish/worry 由模型产出；其余由规则层产生，不让模型乱造）。
+ *
+ * v1.49c：加入 `state`（她自己此刻的状态）。理由是一条**实测**：`state` 的内容原本是
+ * `moodStateMotive()` 返回的**三句写死的话**，于是 A/B 里她"说自己"的那 16 条
+ * **前 12 字完全相同**（v1.49b 第三跑）。这与 v1.38 被否的理由同源（例子被照抄），
+ * 而本模块本来就是为这件事建的 —— 只是 `state` 至今没走这条路。
+ *
+ * ⚠️ `state` 的校验与其余三种**不同**（见 `isUsableSpecificMotive`）：它**不要求**指向他/你
+ * （那是"关于他的事"的要求），但**禁止**出现外部事件名词 —— 否则模型会为了满足锚点
+ * 编出"今天在公司被老板说了"这类**她并没有的生活**（v1.11 那一类造假，只是这次造的是她自己的）。
+ */
+export const SPECIFICIZABLE_KINDS: MotiveKind[] = ['wish', 'worry', 'curiosity', 'state'];
 /** 一次最多产出几条（防止刷屏式堆池） */
 export const SPECIFIC_MOTIVE_MAX = 3;
 /** 单条内容长度上限（太长会稀释 Prompt 末尾的注意力） */
@@ -37,14 +48,36 @@ const FORBIDDEN_PATTERNS = [
  * 这是本模块最关键的一条校验：宁可少生成，也不要让空话进池。
  */
 const REFERENT_RE = /[他你]/;
-const ANCHOR_RE = new RegExp([
-  '「[^」]{1,12}」',            // 引用他说过的话
+/** 时间锚点（对她自己的状态也成立：'我今天有点提不起劲' 是合法的） */
+const TIME_ANCHOR_SRC = [
   '今天', '昨天', '明天', '那天', '那次', '刚才', '刚刚', '最近', '上周', '下周', '这周', '周末',
   '那件事', '那句话', '那次说',
-  // 具体事件/对象名词（可扩展）
+].join('|');
+/** 外部事件/对象名词：对他成立（'他面试那天'），但**她自己的状态里不许出现**（那会是编造的生活） */
+const EVENT_ANCHOR_SRC = [
   '面试', '工作', '加班', '老板', '同事', '公司', '考试', '体检', '项目', '方案', '消息',
   '电话', '视频', '家人', '朋友', '妈妈', '爸爸', '睡', '吃饭', '生病', '感冒', '梦',
   '画画', '秘密', '生日', '纪念日', '旅行', '搬家', '出差', '请假', '结果',
+].join('|');
+const ANCHOR_RE = new RegExp(`「[^」]{1,12}」|${TIME_ANCHOR_SRC}|${EVENT_ANCHOR_SRC}`);
+/** `state` 专用：出现这些词就说明她在讲**外部发生的事**（她并没有那些生活） */
+/**
+ * `state` 专用：出现这些词就说明她在讲**外部发生的事**（她并没有那些生活）。
+ *
+ * ⚠️ 这张表是**兜底，不是证明**（黑名单必然有漏）。主要防线是 prompt 里那条
+ * "不要出现任何外部事件或场景，编出来就是假的" + 模型本身不该编；
+ * 这里只把**最典型、且无歧义**的那批堵掉（后几个正是 persona 自检点名的"逛街/做饭/追剧"那一类）。
+ * **宁可少生成，也不要让编造的生活进池。**
+ * ⚠️ 故意**不**并入上面的 ANCHOR_RE：那会改变其余三种类型的判据（本例要的是零 blast radius）。
+ */
+const STATE_FORBIDDEN_EVENT_RE = new RegExp(
+  `${EVENT_ANCHOR_SRC}|展览|展|电影|逛街|做饭|追剧|球|游戏|开会|上课|医院|酒`,
+);
+/** `state` 专用：必须是"她自己的状态"（第一人称 + 状态词） */
+const STATE_SELF_RE = /我/;
+const STATE_DESCRIPTOR_RE = new RegExp([
+  '闷', '沉', '累', '烦', '提不起', '没劲', '没力气', '不想动', '乏', '倦', '心里空',
+  '撑', '状态', '心情', '情绪', '静不下来', '心不在焉', '懒', '堵', '空落', '蔫',
 ].join('|'));
 
 export interface SpecificizeContext {
@@ -52,6 +85,8 @@ export interface SpecificizeContext {
   recentUserTexts: string[];
   /** 她当前的底色心情描述（可空） */
   moodDescription?: string;
+  /** v1.49c：她此刻的底色心情**数值**（供 state 的紧迫度；见 parseSpecificMotives） */
+  moodValence?: number;
   /** 她最在意的价值（可空） */
   topValue?: string;
   /** 思维图谱里的模板念头（作为"方向提示"，不要求照抄） */
@@ -66,7 +101,10 @@ export function buildSpecificizePrompt(ctx: SpecificizeContext): string {
     '要求：',
     '1) 每条都必须指向**具体的人或事**（他刚说过的、她记得的、她正在担心的），不要写"想和他多待一会儿"这类放到任何一天都成立的空话。',
     '2) 用第一人称心理独白的口吻，一句话，≤40 字，不带表情符号，不解释原因。',
-    `3) kind 只能是 ${SPECIFICIZABLE_KINDS.join(' / ')}：wish=她想要的，worry=她担心的，curiosity=她好奇的。`,
+    `3) kind 只能是 ${SPECIFICIZABLE_KINDS.join(' / ')}：wish=她想要的，worry=她担心的，curiosity=她好奇的，state=她**自己**此刻的状态/心情。`,
+    '3b) 写 state 时：只写她自己的状态（"我今天有点提不起劲，说不上来为什么"这种），'
+      + '**不要**出现任何外部事件或场景（工作/同事/老板/家务/出行/某件具体的事），也不要写他做了什么 —— '
+      + '她并没有那些生活，编出来就是假的；**不要解释原因**。',
     '4) 不要重复下面"已知他还没落定的事"里的话题。',
     '5) 只输出 JSON：{"motives":[{"kind":"wish","content":"..."}]}，最多 3 条；没有真实素材时输出 {"motives":[]}。',
   ];
@@ -88,14 +126,24 @@ function clampText(text: string): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, SPECIFIC_MOTIVE_MAX_CHARS);
 }
 
-/** 校验一条候选是否可入池 */
+/** 校验一条候选是否可入池（v1.49c：`state` 走**另一套**判据） */
 export function isUsableSpecificMotive(kind: unknown, content: unknown): boolean {
   if (typeof kind !== 'string' || typeof content !== 'string') return false;
   if (!SPECIFICIZABLE_KINDS.includes(kind as MotiveKind)) return false;
   const text = content.trim();
   if (text.length < 6) return false;          // 太短 → 没有具体指代
-  if (text.length > SPECIFIC_MOTIVE_MAX_CHARS * 2) return false;
   if (FORBIDDEN_PATTERNS.some(re => re.test(text))) return false;
+
+  if (kind === 'state') {
+    // 她自己的状态：长度更严（一句话）、必须第一人称 + 状态词、**不许**出现外部事件
+    if (text.length > SPECIFIC_MOTIVE_MAX_CHARS) return false;
+    if (!STATE_SELF_RE.test(text)) return false;
+    if (!STATE_DESCRIPTOR_RE.test(text)) return false;
+    if (STATE_FORBIDDEN_EVENT_RE.test(text)) return false;   // 编造她自己的生活 = 造假
+    return true;
+  }
+
+  if (text.length > SPECIFIC_MOTIVE_MAX_CHARS * 2) return false;
   // 必须"指向他/你" + "有具体锚点"，否则是放到任何一天都成立的空话
   if (!REFERENT_RE.test(text)) return false;
   if (!ANCHOR_RE.test(text)) return false;
@@ -106,7 +154,19 @@ export function isUsableSpecificMotive(kind: unknown, content: unknown): boolean
  * 解析 LLM 输出为候选（宽容解析：从任意文本里取出 JSON；非法条目直接丢弃）。
  * 解析失败返回空数组——绝不因为一次生成失败而污染状态。
  */
-export function parseSpecificMotives(raw: string | null | undefined, now = Date.now()): MotiveCandidate[] {
+/**
+ * 解析 LLM 输出为候选（宽容解析：从任意文本里取出 JSON；非法条目直接丢弃）。
+ * 解析失败返回空数组——绝不因为一次生成失败而污染状态。
+ *
+ * `opts.stateBase`（v1.49c）：`state` 的紧迫度取决于**她此刻有多沉**（见 `motive.ts` 的
+ * `stateMotiveFor`），而模板句走的是规则层那条路。具体化这条路要能入选，就必须带上同一个基准；
+ * 不传则退回类型先验（0.40）—— 那意味着"写出来也选不上"，所以调用方要么传、要么别开这个类型。
+ */
+export function parseSpecificMotives(
+  raw: string | null | undefined,
+  now = Date.now(),
+  opts: { stateBase?: number } = {},
+): MotiveCandidate[] {
   if (typeof raw !== 'string' || !raw.trim()) return [];
   let parsed: unknown = null;
   try {
@@ -127,7 +187,12 @@ export function parseSpecificMotives(raw: string | null | undefined, now = Date.
     const text = clampText(String(content));
     if (seen.has(text)) continue;
     seen.add(text);
-    out.push({ kind: kind as MotiveKind, content: text, formedAt: now });
+    out.push({
+      kind: kind as MotiveKind,
+      content: text,
+      formedAt: now,
+      ...(kind === 'state' && opts.stateBase !== undefined ? { base: opts.stateBase } : {}),
+    });
     if (out.length >= SPECIFIC_MOTIVE_MAX) break;
   }
   return out;

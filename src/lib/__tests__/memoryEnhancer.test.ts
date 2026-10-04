@@ -9,6 +9,7 @@ import {
   findDuplicatePairs,
   mergePair,
   runConsolidation,
+  mergeNearDuplicate,
   DEFAULT_ENHANCER_OPTIONS,
 } from '../memoryEnhancer';
 import {
@@ -207,5 +208,103 @@ describe('归档记忆不参与召回/重要查询', () => {
     expect(recalled.some(e => e.id === 'ghost')).toBe(false);
     const sig = getSignificantEpisodes(store, 5);
     expect(sig.some(e => e.id === 'ghost')).toBe(false);
+  });
+
+  // ── v1.17 相似度那个"近似超集"加成曾把两条不同的担忧顶过阈值 ──
+  describe('textSimilarity — 去掉中间地带的误伤', () => {
+    it('**回归**：长度比刚过 0.55 的两条不同事，不该拿到 0.875', () => {
+      const s = textSimilarity('你会不会觉得我很烦', '你会不会觉得我很无聊啊，总是聊工作');
+      // 改前：长度比 9/16 = 0.5625 过了 0.55 那档 → inter/min = 0.875 > 阈值 0.86 → 会被当重复合并
+      expect(s).toBeLessThan(DEFAULT_ENHANCER_OPTIONS.mergeThreshold);
+      expect(s).toBeLessThan(0.5);
+    });
+
+    it('体检 vs 面试（共享"我下周要…有点…"）—— 远低于阈值', () => {
+      expect(textSimilarity('我下周要去做一个体检，有点担心结果', '我下周要去面试，有点紧张'))
+        .toBeLessThan(0.5);
+    });
+
+    it('但**真近重复**仍要抓住：只差一个虚词 → 仍高于阈值', () => {
+      expect(textSimilarity('用户说喜欢雨天一个人看电影', '用户说喜欢在雨天一个人看电影'))
+        .toBeGreaterThan(DEFAULT_ENHANCER_OPTIONS.mergeThreshold);
+    });
+
+    it('完全相同 → 1；空串 → 0（边界不变）', () => {
+      expect(textSimilarity('今天吃了面', '今天吃了面')).toBe(1);
+      expect(textSimilarity('', '今天吃了面')).toBe(0);
+    });
+  });
+
+  // 实测根因：那三条「今天路上看到一只小猫，挺可爱的」时间戳相差 21s / 118s，
+  // 而周期整合按 ≥6h 节流 —— 节流窗口比重复产生窗口大两个数量级，于是近重复必然并存。
+  describe('mergeNearDuplicate — 当场合并近重复（周期整合 6h 等不及）', () => {
+    const cat = (id: string, agoMs: number) => makeEpisode({
+      id,
+      timestamp: Date.now() - agoMs,
+      eventSummary: '今天路上看到一只小猫，挺可爱的',
+      narrativeFragment: '当他说"今天路上看到一只小猫"的时候，心里软了一下。',
+      tags: ['亲密'],
+      emotionalImpact: { valenceBefore: 0, valenceAfter: 0.1, valenceDelta: 0.1, arousalPeak: 0.3, dominantEmotion: 'calm' },
+    });
+
+    it('同一件事在 2 分钟内被记第二次 → **当场**合并（不必等 6h）', () => {
+      const store = createEpisodicMemoryStore();
+      const first = cat('c1', 120_000);
+      store.episodes.push(first);
+      const fresh = cat('c2', 21_000);   // 相隔 99s，过 60s 闸门
+      store.episodes.push(fresh);
+
+      const archived = mergeNearDuplicate(store, fresh);
+      expect(archived).not.toBeNull();
+      // 被归档的那条打上 mergedInto；活跃条目只剩一条
+      expect(archived!.mergedInto).toBeTruthy();
+      expect(store.episodes.filter(e => !e.archived)).toHaveLength(1);
+    });
+
+    it('相隔 <60s 的同轮快照不算重复（闸门①）', () => {
+      const store = createEpisodicMemoryStore();
+      store.episodes.push(cat('c1', 60_000));
+      const fresh = cat('c2', 30_000);   // 相隔 30s
+      store.episodes.push(fresh);
+      expect(mergeNearDuplicate(store, fresh)).toBeNull();
+    });
+
+    it('不同的事不会被合并（体检 vs 面试）—— 实测这两条文本相似度高达 0.5', () => {
+      const store = createEpisodicMemoryStore();
+      store.episodes.push(makeEpisode({
+        id: 'a', timestamp: Date.now() - 120_000,
+        eventSummary: '我下周要去做一个体检，有点担心结果', tags: ['担忧'],
+        emotionalImpact: { valenceBefore: 0, valenceAfter: 0.1, valenceDelta: 0.1, arousalPeak: 0.3, dominantEmotion: 'calm' },
+      }));
+      const fresh = makeEpisode({
+        id: 'b', timestamp: Date.now() - 30_000,
+        eventSummary: '我下周要去面试，有点紧张', tags: ['担忧'],
+        emotionalImpact: { valenceBefore: 0, valenceAfter: 0.1, valenceDelta: 0.1, arousalPeak: 0.3, dominantEmotion: 'calm' },
+      });
+      store.episodes.push(fresh);
+      expect(mergeNearDuplicate(store, fresh)).toBeNull();   // 0.5 < 阈值 0.86
+    });
+
+    it('只看最近若干条（不做全库两两比较）', () => {
+      const store = createEpisodicMemoryStore();
+      for (let i = 0; i < 40; i++) {
+        store.episodes.push(makeEpisode({
+          id: `old${i}`, timestamp: Date.now() - 600_000 + i,
+          eventSummary: `很久以前的第 ${i} 件事`, tags: ['日常'],
+        }));
+      }
+      store.episodes.unshift(cat('target', 900_000));   // 同类重复，但已被挤出回看窗口
+      const fresh = cat('new', 30_000);
+      store.episodes.push(fresh);
+      expect(mergeNearDuplicate(store, fresh)).toBeNull();
+    });
+
+    it('没有重复时返回 null（正常记忆不受影响）', () => {
+      const store = createEpisodicMemoryStore();
+      store.episodes.push(makeEpisode({ id: 'z1', eventSummary: '今天加班到很晚', tags: ['工作'] }));
+      const fresh = makeEpisode({ id: 'z2', timestamp: Date.now() - 30_000, eventSummary: '明天想去爬山', tags: ['兴趣'] });
+      store.episodes.push(fresh);
+      expect(mergeNearDuplicate(store, fresh)).toBeNull();
+    });
   });
 });

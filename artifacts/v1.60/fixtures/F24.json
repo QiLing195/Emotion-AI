@@ -1,0 +1,62 @@
+{
+  "case_id": "F24",
+  "category": "F6_low_relevance_open",
+  "user_input": "刚才刮了阵风，把晾的衣服吹掉一件。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m24",
+        "kind": "memory_echo",
+        "content": "他说刚才刮风把晾的衣服吹掉了一件",
+        "source": {
+          "memoryId": "m24"
+        },
+        "memoryId": "m24",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m24",
+          "anchors": [
+            "风",
+            "衣服"
+          ]
+        },
+        "salience": 0.59,
+        "base": 0.59,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.59,
+    "content": "他说刚才刮风把晾的衣服吹掉了一件",
+    "memoryId": "m24"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m24",
+    "anchors": [
+      "风",
+      "衣服"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

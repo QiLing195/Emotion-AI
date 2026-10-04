@@ -1,0 +1,31 @@
+{
+  "experiment": "v1.60-expression-self-initiation",
+  "phase": "apparatus",
+  "generatedAt": "2026-10-04T05:53:49.740Z",
+  "blindSeed": 20261004,
+  "regime": {
+    "ENABLE_MOTIVE_ACTION_STRATEGY": true,
+    "DISABLE_PROACTIVE_LOOP": true,
+    "DISABLE_LONG_TERM_DRIFT": true,
+    "DISABLE_MEMORY_NARRATIVE_LLM": true,
+    "LAYA_STRATEGY": "off",
+    "model": "stub",
+    "temperature": 0
+  },
+  "attributionIsolation": "v1.60 不检验 Motive.action→Strategy=share（属 C-2 既有结论）；「share 生效」不计入 v1.60 收益。",
+  "preRunClarification": {
+    "pack_id": "盲标包每行加 pack_id（P01…P48）：一 case 有 A/B 两行，仅凭 case_id 无法区分行 ⇒ 标注不可执行。此为**运行前**格式澄清，不涉及任何显示过结果后的规则改动。",
+    "fixtureFileFormat": "规范写 F01.yaml…F24.yaml，实现用 F01.json…F24.json（格式声明，语义不变）。"
+  },
+  "fixtureCount": 24,
+  "categories": [
+    "F1_daily_behavior",
+    "F2_inner_feeling",
+    "F3_preference",
+    "F4_experience",
+    "F5_thought_judgment",
+    "F6_low_relevance_open"
+  ],
+  "armManifestRows": 48,
+  "note": "本阶段只造测量装置：不含 B 臂操纵文案，不含任何生产逻辑改动。"
+}

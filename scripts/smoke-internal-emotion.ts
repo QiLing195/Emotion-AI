@@ -1,8 +1,20 @@
 // 临时烟雾测试：直接驱动 aiCoordinator.processTurn，验证 v1.7/v1.8 内在情绪源已接入主链
 // 覆盖：情绪传染 / 内在事件 / 心情层 / 反刍 / 强化（奖惩）/ 涌现诊断
+//
+// v1.13 追加：每轮并排打印**两种情绪读法**：
+//   旧 = 绝对值 argmax（基调 calm 0.8 参与竞争 → 几乎永远"平静"）
+//   新 = 激发态（相对人格基线的偏离 → 这一轮她真正被激起了什么）
 import { aiCoordinator } from '../server/services/aiCoordinator.js';
 import { INITIAL_EMOTION_STATE } from '../src/lib/emotionEngine.js';
+import { separateActivation } from '../src/lib/emotionActivation.js';
+import { lowPeriodOf } from '../src/lib/lowPeriod.js';
 import type { EmotionState } from '../src/lib/emotionTypes.js';
+
+/** 旧读法：绝对值 argmax（复刻 /state 里 dominant 的算法） */
+function rawDominant(emotions: Record<string, number>): string {
+  const top = Object.entries(emotions).sort((a, b) => b[1] - a[1])[0];
+  return `${top?.[0] ?? 'neutral'} ${(top?.[1] ?? 0).toFixed(2)}`;
+}
 
 function turn(label: string, text: string, state: EmotionState, opts: Record<string, unknown> = {}) {
   const out = aiCoordinator.processTurn({
@@ -16,11 +28,16 @@ function turn(label: string, text: string, state: EmotionState, opts: Record<str
   } as never);
   const es = out.updatedEmotionState;
   const mood = es.internal?.mood;
+  const act = separateActivation(es.emotions);
   console.log(
     `${label.padEnd(14)} valence=${es.taiji.valence.toFixed(4)} sad=${es.emotions.sad.toFixed(4)} ` +
     `joy=${es.emotions.joy.toFixed(4)} mood(V)=${mood?.valence.toFixed(4)} samples=${mood?.samples} ` +
     `rumination=${es.internal?.rumination?.emotion}x${es.internal?.rumination?.streak} ` +
     `internalMs=${out.metadata.timings.internalEmotionMs}`,
+  );
+  console.log(
+    `${''.padEnd(14)} ├ 旧读法(绝对值) ${rawDominant(es.emotions)}` +
+    `  └ 新读法(激发态) ${act.note}`,
   );
   return es;
 }
@@ -77,3 +94,38 @@ console.log('涌现诊断：', JSON.stringify({
   stuck: report.stuck,
   note: report.note,
 }, null, 0));
+
+// ⑦ v1.37 低谷期时长：**跨轮**的量，逐轮那条链路里本来无处安放。
+//   验证三件事：连续低落如何累加时长/轮数、她自己往回爬会被记下来、
+//   以及"他换了话题"到底能不能结束一段低谷（答案请自己看输出，别预设）。
+console.log('\n── v1.37 低谷期时长（read-only，尚未接进任何行为）──');
+{
+  const HOUR = 3_600_000;
+  // 自检跑得比真实时间快得多 ⇒ 用**模拟时钟**读（起点 + N 小时），否则 hours 恒 ≈ 0。
+  // 真实运行里 `since` 与 `Date.now()` 都是墙钟，不需要这一层。
+  const read = (s: EmotionState, plusHours: number) =>
+    lowPeriodOf(s, (s.lowPeriod?.since ?? Date.now()) + plusHours * HOUR);
+
+  let lp = structuredClone(INITIAL_EMOTION_STATE) as EmotionState;
+  for (let i = 1; i <= 5; i++) {
+    lp = turn(`低谷第${i}轮`, '今天很难过', lp, {
+      userAnalysis: { expressedEmotion: 'sad', intensity: 0.8, directedAtAI: false, likelyCause: '' },
+    });
+    const r = read(lp, i);
+    if (i <= 2 || i === 5) {
+      console.log(`低谷第${i}轮：active=${r.active} established=${r.established} phase=${r.phase} `
+        + `hours=${r.hours} turns=${r.turns} depth=${r.depth} peak=${r.peakDepth}`);
+    }
+  }
+  console.log('（注意 turns < 轮数：进入判据看的是**上一轮落定**的状态 —— 她自己先攒，攒过 0.12 才开始计时）');
+
+  for (let i = 1; i <= 6; i++) {
+    lp = turn(`中性第${i}轮`, '今天吃了面', lp, {
+      userAnalysis: { expressedEmotion: 'neutral', intensity: 0.1, directedAtAI: false, likelyCause: '' },
+    });
+    const r = read(lp, 5 + i);
+    console.log(`中性第${i}轮：active=${r.active} phase=${r.phase} depth=${r.depth} turns=${r.turns}`);
+    if (!r.active) { console.log(`→ 已结案：${r.note}`); break; }
+    if (i === 6) console.log(`→ 6 轮中性话仍未结案：${r.note}`);
+  }
+}

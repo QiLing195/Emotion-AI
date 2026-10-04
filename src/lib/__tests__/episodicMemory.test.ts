@@ -10,6 +10,10 @@ import {
   generateIdentitySummary,
   serializeEpisodicStore,
   deserializeEpisodicStore,
+  isUsableNarrative,
+  narrativeRejectReason,
+  parseNarrativeReply,
+  updateEpisodeNarrative,
 } from '../episodicMemory';
 import { INITIAL_EMOTION_STATE } from '../emotionEngine';
 
@@ -290,5 +294,196 @@ describe('recallRelevantMemories with embedding', () => {
       [0.1, 0.2], // 维度不匹配
     );
     expect(result.length).toBeGreaterThan(0); // 仍应返回结果（规则分）
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// v1.20 情绪读法收尾：静息就明说静息，不再拿 calm 基调冒充
+//
+// 病根：`dominantEmotion` 原来兜底到 `getDominantEmotion()`（绝对值 argmax），
+// 而 calm 的人格基调就是 0.8 → 几乎永远返回 calm。实测存量 41 条里 32 条（78%）是这么来的。
+// ════════════════════════════════════════════════════════════
+
+describe('v1.20 静息 vs 平静', () => {
+  /** 所有情绪都停在各自基线附近（偏移 < 死区 0.05）→ 激活态报"静息" */
+  function restingState() {
+    const s = structuredClone(INITIAL_EMOTION_STATE);
+    s.emotions.joy = (s.emotions.joy ?? 0) + 0.02; // 噪声级偏移，不该被当成"被激起"
+    s.taiji.arousal = 0.7;                          // 保证跨过形成门限
+    s.taiji.valence = 0.4;
+    return s;
+  }
+
+  it('静息 → 记成 resting（不是 calm），叙事不许顺口说成满足/幸福', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const ep = tryFormEpisode(store, restingState(), '我下周要去做一个体检，有点担心结果', '');
+
+    expect(ep).not.toBeNull();
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('resting');
+    expect(ep!.narrativeFragment).not.toMatch(/满足|幸福|平静|安稳/);
+    // resting 不是情绪键 → "情感一致性 ×1.5" 永远不成立（没有情绪的记忆不该因情绪被优先召回）
+    expect(['joy', 'sad', 'anger', 'fear', 'love', 'calm', 'disgust', 'lust', 'greed'])
+      .not.toContain(ep!.emotionalImpact.dominantEmotion);
+  });
+
+  it('静息时标签兜底给「日常」，不再恒打 calm（calm 基调 0.8 恒 > 0.5 阈值）', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const ep = tryFormEpisode(store, restingState(), '今天天气不错', '');
+
+    expect(ep).not.toBeNull();
+    expect(ep!.tags).toContain('日常');
+    expect(ep!.tags).not.toContain('calm');
+  });
+
+  it('她**确实**平静（calm 高出自身基线、越过死区）时仍记 calm —— 别把真平静也抹掉', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const es = restingState();
+    es.emotions.calm = 0.9; // 基线 0.8 → +0.10 > 死区 0.05
+
+    const ep = tryFormEpisode(store, es, '今天天气不错', '');
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('calm');
+  });
+
+  it('被激起的具体情绪照旧记它自己（sad 0.7 → sad）', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const es = makeEmotionState(0.3, 'sad');
+    es.taiji.valence = 0.7;
+    es.taiji.arousal = 0.7;
+
+    const ep = tryFormEpisode(store, es, '我今天特别难过，什么都做不好', '');
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('sad');
+    expect(ep!.narrativeFragment).toMatch(/石头|失落|无力/);
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// v1.21 叙事选择：激活态明确才用她的情绪；说不清/静息才回退锚点
+// ════════════════════════════════════════════════════════════
+
+describe('v1.21 叙事情绪：平局不硬选 / 锚点只管兜底', () => {
+  const SECRET = '我其实一直很害怕失去你，从小就缺乏安全感，从来不敢跟任何人说这些';
+
+  function restingWith(over: Record<string, number> = {}) {
+    const s = structuredClone(INITIAL_EMOTION_STATE);
+    s.taiji.arousal = 0.7;
+    s.taiji.valence = 0.4;
+    Object.assign(s.emotions, over);
+    return s;
+  }
+
+  it('两个情绪旗鼓相当（差 < 余量 0.05）→ 不硬挑赢家，退回锚点/静息', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const es = restingWith({ joy: 0.45, love: 0.42 }); // 差 0.03，joy 数值最高
+    const ep = tryFormEpisode(store, es, '今天天气不错', '');
+
+    expect(ep).not.toBeNull();
+    // 激活态确实报 joy 领先，但**说不清** —— 记忆不该替她把话说死
+    expect(ep!.emotionalImpact.dominantEmotion).not.toBe('joy');
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('resting');
+  });
+
+  it('明确领先（差 ≥ 余量）→ 用她自己的情绪', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const es = restingWith({ sad: 0.6, joy: 0.1 });
+    const ep = tryFormEpisode(store, es, '今天天气不错', '');
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('sad');
+  });
+
+  it('静息 + 自我暴露锚点 → 按"被信任"记 love（不再记 sad）', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const ep = tryFormEpisode(store, restingWith(), SECRET, '');
+    expect(ep!.selfPatternTriggered).toBe('self_disclosure');
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('love');
+    expect(ep!.narrativeFragment).not.toMatch(/失落|抽空/);
+  });
+
+  it('锚点事件但她的情绪**明确** → 以她自己的情绪为准（锚点不再覆盖）', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const ep = tryFormEpisode(store, restingWith({ sad: 0.7 }), SECRET, '');
+    expect(ep!.selfPatternTriggered).toBe('self_disclosure');
+    expect(ep!.emotionalImpact.dominantEmotion).toBe('sad'); // 她说得清 → 听她的
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// v1.21 LLM 叙事：确定性后置校验（宁可用套话，也不让编造进记忆）
+// ════════════════════════════════════════════════════════════
+
+describe('v1.21 叙事校验', () => {
+  const HIS = '我下周要去做一个体检，有点担心结果';
+
+  it('正常一句话 → 可用', () => {
+    expect(isUsableNarrative('说不出的忐忑，我怕他一个人扛着', HIS)).toBe(true);
+  });
+
+  it('引文逐字出自他的原话 → 可用；改了一个词 → 拒（防记错他说了什么）', () => {
+    expect(isUsableNarrative('当他说"体检"的时候，我心里揪了一下', HIS)).toBe(true);
+    expect(isUsableNarrative('当他说"我下周要去复检"的时候，心揪了一下', HIS)).toBe(false);
+  });
+
+  it('替他把**过去**断言出来 → 拒；当下的转述 → 放行（这条曾误杀真实产出）', () => {
+    expect(isUsableNarrative('你上次说体检前紧张得没睡好，我也跟着难受', HIS)).toBe(false);
+    expect(isUsableNarrative('听你说难过，我只想紧紧抱住你', HIS)).toBe(true);
+  });
+
+  it('人称错位（用"她"指对方）→ 拒（实测模型真会这样写）', () => {
+    expect(isUsableNarrative('她说话的语气很轻，我听得出那点不安', HIS)).toBe(false);
+  });
+
+  it('只是**撞了模板里的短语**不算照抄（这条实测误杀过真实产出）', () => {
+    // 模板原句是"心里没什么起伏，但我把这件事记下了"；这句是新写的，只共用一个短语
+    expect(isUsableNarrative('听你说下周要去复查我心里没什么起伏，只是记下了这个日子', HIS)).toBe(true);
+    expect(narrativeRejectReason('听你说下周要去复查我心里没什么起伏，只是记下了这个日子', HIS)).toBeNull();
+  });
+
+  it('整句照抄模板 / 元描述 / 太短 / 超长 → 拒', () => {
+    expect(isUsableNarrative('内心是平静的，像湖面没有一丝波澜', HIS)).toBe(false);
+    expect(isUsableNarrative('作为一个AI，我的情绪参数显示担忧', HIS)).toBe(false);
+    expect(isUsableNarrative('嗯', HIS)).toBe(false);
+    expect(isUsableNarrative('a'.repeat(80), HIS)).toBe(false);
+    expect(isUsableNarrative(null, HIS)).toBe(false);
+  });
+
+  it('校验会给出**具体原因**（不许静默失败）', () => {
+    expect(narrativeRejectReason('嗯', HIS)).toMatch(/太短/);
+    expect(narrativeRejectReason('内心是平静的，像湖面没有一丝波澜', HIS)).toMatch(/照抄模板/);
+    expect(narrativeRejectReason('说不出的忐忑，我怕他一个人扛着', HIS)).toBeNull();
+  });
+
+  it('解析：剥掉 markdown / "叙事："前缀 / 整体引号', () => {
+    expect(parseNarrativeReply('```\n我心里紧了一下，想陪他一起去\n```', HIS))
+      .toBe('我心里紧了一下，想陪他一起去');
+    expect(parseNarrativeReply('叙事：我心里紧了一下，想陪他一起去', HIS))
+      .toBe('我心里紧了一下，想陪他一起去');
+    expect(parseNarrativeReply('“我心里紧了一下，想陪他一起去”', HIS))
+      .toBe('我心里紧了一下，想陪他一起去');
+    expect(parseNarrativeReply('模型今天不配合', HIS)).toBeNull();
+  });
+
+  it('updateEpisodeNarrative：合格才写，并标 narrativeSource=llm', () => {
+    const store = createEpisodicMemoryStore();
+    store.prevValence = 0.0;
+    const es = makeEmotionState(0.3, 'sad');
+    es.taiji.valence = 0.7;
+    es.taiji.arousal = 0.7;
+    const ep = tryFormEpisode(store, es, '我今天特别难过', '')!;
+    const before = ep.narrativeFragment;
+    expect(ep.narrativeSource).toBe('template');
+
+    expect(updateEpisodeNarrative(store, ep.id, '内心是平静的，像湖面没有一丝波澜')).toBe(false);
+    expect(ep.narrativeFragment).toBe(before);          // 不合格 → 一个字都不动
+    expect(ep.narrativeSource).toBe('template');
+
+    expect(updateEpisodeNarrative(store, ep.id, '听他说难过，我的心一下子沉了下去')).toBe(true);
+    expect(ep.narrativeFragment).toBe('听他说难过，我的心一下子沉了下去');
+    expect(ep.narrativeSource).toBe('llm');
   });
 });

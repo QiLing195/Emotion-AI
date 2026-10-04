@@ -12,9 +12,9 @@
 //   - 增强：embedding 余弦相似度（需要 API key，可选）
 
 import type { EmotionState } from './emotionEngine';
-import { getDominantEmotion } from './emotionEngine';
+import { activationOf } from './emotionActivation';
 import type { EpisodicMemoryStore, EpisodicMemory } from './episodicMemory';
-import { recallRelevantMemories } from './episodicMemory';
+import { recallRelevantMemoriesScored } from './episodicMemory';
 import type { Discovery } from '../curiosity/types';
 
 // ════════════════════════════════════════════════════════════
@@ -101,7 +101,17 @@ export function recall(
 ): RecallResult {
   const t0 = Date.now();
   const caps = { ...DEFAULT_SOURCE_CAPS, ...query.sourceCaps };
-  const dominant = getDominantEmotion(query.emotionState.emotions);
+  // v1.20：改用**激活态**读数。原来这里是 `getDominantEmotion(...name)`（绝对值 argmax），
+  // 而 calm 的人格基调就是 0.8，于是 `dominant.name` 几乎永远是 'calm' ——
+  // 「按情绪召回」彻底退化成「按文本召回」：静息记忆恒拿 ×1.5 情感一致性加分、
+  // 标签加分永远查 `getRelatedTags('calm')`，另一面真正被激起的 love/sad 反而召不回同类记忆。
+  // 与 v1.16 在 `memoryGraph.traverse` / `dialogueStrategy.selectRedirectTopic` 修的是同一个病。
+  // 静息时 name 用 'resting'（不是任何情绪键）→ 各项情绪加分自然全部不成立，这是对的。
+  const activation = activationOf(query.emotionState);
+  const dominant = {
+    name: activation.activeEmotion ?? 'resting',
+    intensity: activation.activeIntensity,
+  };
 
   const items: MemoryItem[] = [];
 
@@ -166,20 +176,26 @@ function recallEpisodic(
   cap: number,
   queryEmbedding?: number[],
 ): MemoryItem[] {
-  const episodes = recallRelevantMemories(store, dominant, cap, queryEmbedding);
-  return episodes.map(ep => ({
-    id: ep.id,
-    source: 'episodic' as const,
-    content: ep.narrativeFragment,
-    relevanceScore: ep.recallWeight,
-    emotionalMatch: ep.emotionalImpact.dominantEmotion,
-    timestamp: ep.timestamp,
-    metadata: {
-      tags: ep.tags,
-      valenceDelta: ep.emotionalImpact.valenceDelta,
-      arousalPeak: ep.emotionalImpact.arousalPeak,
-    },
-  }));
+  const scored = recallRelevantMemoriesScored(store, dominant, cap, queryEmbedding);
+  return scored
+    // 空叙事不算记忆（v1.13 把"自相矛盾"的旧叙事清空后留下的条目会变成一条空 bullet）
+    .filter(s => (s.episode.narrativeFragment ?? '').length > 0)
+    .map(({ episode: ep, score }) => ({
+      id: ep.id,
+      source: 'episodic' as const,
+      content: ep.narrativeFragment,
+      // v1.20：这里原来写的是裸 `ep.recallWeight` —— 而 `rankAndDedupe` 会按这个字段**重排**，
+      // 于是上面算出来的「情感一致性 ×1.5 / 标签重合 / 时间衰减」在最终顺序里被整体丢掉
+      // （只有"进前 cap 名"那一刀还看得到它们）。改成用真正算出来的分。
+      relevanceScore: Math.min(1, score),
+      emotionalMatch: ep.emotionalImpact.dominantEmotion,
+      timestamp: ep.timestamp,
+      metadata: {
+        tags: ep.tags,
+        valenceDelta: ep.emotionalImpact.valenceDelta,
+        arousalPeak: ep.emotionalImpact.arousalPeak,
+      },
+    }));
 }
 
 function recallSemantic(

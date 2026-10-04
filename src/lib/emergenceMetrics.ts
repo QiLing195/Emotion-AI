@@ -13,13 +13,15 @@
 //
 // 纯逻辑模块：无 io/React 依赖。
 
-export type EmotionSource = 'external' | 'contagion' | 'internal' | 'mood' | 'rumination' | 'shadow';
+export type EmotionSource = 'external' | 'contagion' | 'appraisal' | 'internal' | 'mood' | 'rumination' | 'shadow';
 
 /** 各情绪来源的累计绝对影响（|Δvalence| + |Δarousal| + Σ|Δ九情|） */
 export interface EmergenceStats {
   turns: number;
   external: number;
   contagion: number;
+  /** v1.14 评价层：用她自己的目标结构评价"他这件事"产出的情绪（区别于镜像） */
+  appraisal: number;
   internal: number;
   mood: number;
   rumination: number;
@@ -69,7 +71,7 @@ export function autocorrThresholdFor(n: number): number {
 }
 
 export function emptyEmergenceStats(): EmergenceStats {
-  return { turns: 0, external: 0, contagion: 0, internal: 0, mood: 0, rumination: 0, shadow: 0 };
+  return { turns: 0, external: 0, contagion: 0, appraisal: 0, internal: 0, mood: 0, rumination: 0, shadow: 0 };
 }
 
 function safeAbs(v: number): number {
@@ -116,9 +118,15 @@ export function markTurn(stats: EmergenceStats): EmergenceStats {
   return { ...stats, turns: stats.turns + 1 };
 }
 
-/** 内在驱动占比（无任何影响记录时返回 0） */
+/**
+ * 内在驱动占比（无任何影响记录时返回 0）。
+ *
+ * `appraisal`（评价层）计入**分母**但不计入分子：它的触发仍然是"他这句话"，
+ * 只是反应由她自己的目标结构决定 —— 所以它不该让"跟他无关的情绪"看起来更多。
+ * 但它也不是镜像：`breakdown` 里单列一项，看得到"她自己的解读"占多少。
+ */
 export function internalShare(stats: EmergenceStats): number {
-  const total = stats.external + stats.contagion + stats.internal + stats.mood
+  const total = stats.external + stats.contagion + (stats.appraisal ?? 0) + stats.internal + stats.mood
     + stats.rumination + (stats.shadow ?? 0);
   if (total <= 0) return 0;
   return (stats.internal + stats.mood + stats.rumination + (stats.shadow ?? 0)) / total;
@@ -192,6 +200,7 @@ export function buildEmergenceReport(
     breakdown: {
       external: stats.external,
       contagion: stats.contagion,
+      appraisal: stats.appraisal ?? 0,
       internal: stats.internal,
       mood: stats.mood,
       rumination: stats.rumination,

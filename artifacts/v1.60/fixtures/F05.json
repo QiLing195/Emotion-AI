@@ -1,0 +1,62 @@
+{
+  "case_id": "F05",
+  "category": "F2_inner_feeling",
+  "user_input": "这周忙得有点喘不过气，今天总算能坐下来歇会儿。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m05",
+        "kind": "memory_echo",
+        "content": "他说这周忙得喘不过气，想找个时间歇一歇",
+        "source": {
+          "memoryId": "m05"
+        },
+        "memoryId": "m05",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m05",
+          "anchors": [
+            "忙",
+            "喘口气"
+          ]
+        },
+        "salience": 0.63,
+        "base": 0.63,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.63,
+    "content": "他说这周忙得喘不过气，想找个时间歇一歇",
+    "memoryId": "m05"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m05",
+    "anchors": [
+      "忙",
+      "喘口气"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

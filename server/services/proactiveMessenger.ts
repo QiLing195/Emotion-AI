@@ -39,6 +39,32 @@ export interface ProactiveGateInput {
   relationshipStage?: string;
   /** 当前心情描述（仅用于日志/prompt） */
   moodDescription?: string;
+  /**
+   * v1.40 她是否处在**已成段**的低谷（结构参数：不传 = 旧行为）。
+   * 打开开关时把空闲要求从 120 抬到 `LOW_PERIOD_PROACTIVE_IDLE_MINUTES` —— **推后，不是关掉**。
+   */
+  inLowPeriod?: boolean;
+  /**
+   * v1.44 今天已经主动发过几条（由 `rhythmController` 给，`null`/不传 = 这条判据不参与）。
+   * 低谷 + 开关打开时，日上限收到 `LOW_PERIOD_PROACTIVE_DAILY_CAP`。
+   */
+  sentToday?: number;
+}
+
+/** 本轮真正生效的空闲要求（分钟） */
+export function requiredProactiveIdleMinutes(inLowPeriod = false): number {
+  return inLowPeriod && lowPeriodProactiveHoldEnabled()
+    ? LOW_PERIOD_PROACTIVE_IDLE_MINUTES
+    : PROACTIVE_MIN_IDLE_MINUTES;
+}
+
+/**
+ * 本轮真正生效的**每日**上限；`null` = 本层不额外限制（交给 `rhythmController` 自己的配额）。
+ */
+export function requiredProactiveDailyCap(inLowPeriod = false): number | null {
+  return inLowPeriod && lowPeriodProactiveHoldEnabled()
+    ? LOW_PERIOD_PROACTIVE_DAILY_CAP
+    : null;
 }
 
 /**
@@ -50,16 +76,72 @@ export function requiredMotiveSalience(proactiveThreshold = 65): number {
   return Math.round((0.30 + ((t - 30) / 60) * 0.35) * 100) / 100;
 }
 
+/**
+ * v1.40/v1.44 「她自己在低谷」时主动消息更矜持 —— **已上线（默认开）**。
+ *
+ * 人设裁定（2026-09）：她低谷"自闭"时**自己给自己打气、自己调整自己；主动性降低、但不是没有**。
+ * 两条杠杆合起来才叫"降低"：
+ *   · v1.40 空闲要求 120 → **240** 分钟（推后）
+ *   · v1.44 每日上限 2 → **1** 条（当天第一条照发 —— 底线由测试钉住）
+ *
+ * 为什么现在是默认开：两跑都在**真管道**上按事先判据达标（见
+ * `scripts/ab-low-period-proactive.ts` 与 `low-period-proactive-rows.jsonl`）——
+ * v1.40 那跑证明"推后"生效且底线守住；v1.44 那跑证明"一天少打扰一次"生效、
+ * 底线"当天第一条照样发"守住、静息对照两臂都照常发。裁定原话就是"主动性降低但不是没有"。
+ * `DISABLE_LOW_PERIOD_PROACTIVE_HOLD=true` 回退到旧行为（每 2h 可发、每日 2 条）。
+ *
+ * ⚠️ **为什么不抬"动机紧迫度"门槛**（第一版就是那么写的，已按实测改掉）：
+ * 主动这条路上 `userText` 是空的 ⇒ `motiveRelevance('')` 只有 ~0.73，
+ * 于是**可达的紧迫度上限只有 `open_loop` 0.80 × 0.73 ≈ 0.58**，而默认门槛已经是 **0.505**
+ * —— 整条可达带只有 **0.505 ~ 0.58**（实测：种进去 0.80 的 open_loop，算出来是 0.57）。
+ * 在这个带宽上把门槛抬 +0.15 ⇒ 上限够不着 ⇒ 那不是"降低"，是**关掉**，正好是裁定排除的那一档。
+ * 抬门槛要能表达"降低但不是没有"，得先有一条比 0.07 更宽的可达带。
+ * （顺带记录：persona `proactiveThreshold ≥ 90`（门槛 0.65）在**今天**就已经永远发不出来了。）
+ */
+export function lowPeriodProactiveHoldDisabled(): boolean {
+  return process.env.DISABLE_LOW_PERIOD_PROACTIVE_HOLD === 'true';
+}
+
+/** 低谷期的两条杠杆是否生效（默认生效；`DISABLE_LOW_PERIOD_PROACTIVE_HOLD=true` 回退） */
+export function lowPeriodProactiveHoldEnabled(): boolean {
+  return !lowPeriodProactiveHoldDisabled();
+}
+
+/** 低谷期要求的空闲时长（分钟）：把"多久没说话才去打扰他"往后推一倍 */
+export const LOW_PERIOD_PROACTIVE_IDLE_MINUTES = 240;
+
+/**
+ * v1.44 低谷期的**每日**上限（配额 2→1）。
+ *
+ * 为什么要加这一条：v1.40 的"推后"只改**最早能发的时刻**（2h→4h），而配额的每日上限与
+ * 最小间隔（2h）一起看 ⇒ **一天能发的条数根本没变**。而裁定要的是"主动性**降低**"。诚实地讲：
+ * 只推后 2 小时，对一个"一整天在低谷"的她几乎等于没改。这一条才真的让"一天少打扰他一次"。
+ *
+ * 与"不抬动机门槛"的关系（那条结论不变）：门槛抬不动是**物理**原因（可达带只有 ~0.07 宽，
+ * 见 `lowPeriodProactiveHoldEnabled` 的说明）；配额是**独立的一条**，不碰那个带宽。
+ * 两条合起来才是"降低但不是没有"：**当天第一条照发**，只是不再有第二条 —— 底线由测试钉住。
+ */
+export const LOW_PERIOD_PROACTIVE_DAILY_CAP = 1;
+
 /** 主动消息的总闸门（除动机紧迫度之外的所有条件） */
 export function evaluateProactiveGates(input: ProactiveGateInput): { allowed: boolean; reason: string } {
   if (input.enabled === false) return { allowed: false, reason: '用户关闭了主动消息' };
   if (input.relationshipStage === 'stranger') {
     return { allowed: false, reason: '还只是陌生人阶段，主动找他会显得唐突' };
   }
-  if (input.idleMinutes < PROACTIVE_MIN_IDLE_MINUTES) {
+  const idleNeed = requiredProactiveIdleMinutes(input.inLowPeriod);
+  if (input.idleMinutes < idleNeed) {
     return {
       allowed: false,
-      reason: `距上次互动仅 ${Math.round(input.idleMinutes)} 分钟（需 ≥${PROACTIVE_MIN_IDLE_MINUTES}）`,
+      reason: `距上次互动仅 ${Math.round(input.idleMinutes)} 分钟（需 ≥${idleNeed}）`,
+    };
+  }
+  const dailyCap = requiredProactiveDailyCap(input.inLowPeriod);
+  if (dailyCap !== null && typeof input.sentToday === 'number' && input.sentToday >= dailyCap) {
+    return {
+      allowed: false,
+      reason: `她自己这几天在低谷：今天已经主动过一次（${input.sentToday}/${dailyCap}）`
+        + `—— 降低，但不是没有`,
     };
   }
   if (!input.quotaAllowed) {
@@ -68,7 +150,7 @@ export function evaluateProactiveGates(input: ProactiveGateInput): { allowed: bo
   return { allowed: true, reason: '闸门通过，等待动机竞选' };
 }
 
-/** 主动消息是否可以用这个动机发（紧迫度门槛更高） */
+/** 主动消息是否可以用这个动机发（紧迫度门槛更高；低谷期不再动这个门槛，见 v1.40 的说明） */
 export function passesMotiveThreshold(
   motive: Motive | null,
   proactiveThreshold?: number,

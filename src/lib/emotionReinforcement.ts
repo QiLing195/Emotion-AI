@@ -20,8 +20,24 @@ export function applyReinforcement(state: EmotionState, signal: ReinforcementSig
 
   if (signal.type === 'reward' || signal.type === 'mixed') {
     const power = signal.value * 0.4 * rewardHab * rewardContrast;
-    newState.emotions.joy = Math.min(1, newState.emotions.joy + power);
-    newState.emotions.love = Math.min(1, newState.emotions.love + power * 0.5);
+    // v1.21：**reward ≠ 一律"开心"**。落点由 source 决定。
+    //
+    // 实测（2026-09）：他说「我其实一直很害怕失去你，从小就缺乏安全感，从来不敢跟任何人说这些」，
+    // `suggestReinforcement` 把"他的恐惧指向她"判成 reward(0.32, source='reassurance')，
+    // 而这里机械地给 joy —— 她的激活态变成 **joy +0.128 压过 love +0.104**，
+    // 报出来是「开心与爱意并存」，记忆与声音都变成"开心"。把同一句设成 directedAtAI=false
+    // 则她**静息** —— 也就是说那份"开心"整份来自这条机制，不是来自他说的话。
+    //
+    // 语义上：他袒露脆弱、怕失去她 → 她该有的是**被信任、想靠近**（love）＋一点安心（calm），
+    // 别人的不安不该变成她自己的喜悦。praise / quality_time / attention 这些**他给她的好**
+    // 才继续走 joy（那才是"被满足"）。
+    if (signal.source === 'reassurance') {
+      newState.emotions.love = Math.min(1, newState.emotions.love + power);
+      newState.emotions.calm = Math.min(1, newState.emotions.calm + power * 0.3);
+    } else {
+      newState.emotions.joy = Math.min(1, newState.emotions.joy + power);
+      newState.emotions.love = Math.min(1, newState.emotions.love + power * 0.5);
+    }
     newState.emotions.greed = Math.max(-1, newState.emotions.greed - power * 0.2);
     newState.intimacyToUser = Math.min(1, newState.intimacyToUser + power * 0.15);
     newState.intimacyFromUser = Math.min(1, newState.intimacyFromUser + power * 0.2);

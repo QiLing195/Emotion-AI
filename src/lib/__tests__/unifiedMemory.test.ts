@@ -166,6 +166,55 @@ describe('recall — Phase 3 curiosity 发现源', () => {
   });
 });
 
+// ════════════════════════════════════════════════════════════
+// v1.20 情绪加分跟着**激活态**走（不再是 calm 基调白拿）
+// ════════════════════════════════════════════════════════════
+
+describe('recall — 情绪一致性加分读激活态', () => {
+  /** 只把 calm 抬到 0.9（相对基线 +0.10 > 死区 0.05）→ 她**确实**平静 */
+  function calmActivated() {
+    const s = structuredClone(INITIAL_EMOTION_STATE);
+    s.emotions.calm = 0.9;
+    return s;
+  }
+  /** 全部停在基线附近（偏移 < 死区）→ 静息：她此刻没有明显情绪 */
+  function resting() {
+    return structuredClone(INITIAL_EMOTION_STATE);
+  }
+
+  function storeWithTwo() {
+    const store = createEpisodicMemoryStore();
+    const ts = Date.now();
+    const mk = (id: string, emotion: string, weight: number) => ({
+      id, timestamp: ts, roundNumber: 1,
+      eventSummary: id,
+      emotionalImpact: { valenceBefore: 0, valenceAfter: 0, valenceDelta: 0, arousalPeak: 0.3, dominantEmotion: emotion },
+      narrativeFragment: `记忆 ${id} 的叙事内容足够长以便注入`,
+      recallWeight: weight, tags: ['日常'], recallCount: 0, lastRecalledAt: null,
+    });
+    // calm 记忆权重更低：它要赢，只能靠"情绪一致性 ×1.5"
+    store.episodes.push(mk('e_calm', 'calm', 0.40) as never, mk('e_sad', 'sad', 0.50) as never);
+    return store;
+  }
+
+  it('静息时 calm 记忆不再白拿 ×1.5（否则 0.40×1.5=0.60 会翻盘压过 0.50）', () => {
+    const result = recall(storeWithTwo(), { text: '随便聊聊', emotionState: resting() as never, maxResults: 2 });
+    expect(result.items[0].id).toBe('e_sad');
+  });
+
+  it('她确实平静（calm 越过基线死区）时，calm 记忆才被优先召回', () => {
+    const result = recall(storeWithTwo(), { text: '随便聊聊', emotionState: calmActivated() as never, maxResults: 2 });
+    expect(result.items[0].id).toBe('e_calm');
+  });
+
+  it('她被激起 sad 时，sad 记忆胜出', () => {
+    const s = structuredClone(INITIAL_EMOTION_STATE);
+    s.emotions.sad = 0.5; // 相对基线 +0.5
+    const result = recall(storeWithTwo(), { text: '随便聊聊', emotionState: s as never, maxResults: 2 });
+    expect(result.items[0].id).toBe('e_sad');
+  });
+});
+
 describe('recall — Phase 3 embedding 语义搜索', () => {
   it('有 queryEmbedding 时启用语义匹配', () => {
     const store = createEpisodicMemoryStore();

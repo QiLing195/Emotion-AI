@@ -1,0 +1,62 @@
+{
+  "case_id": "F15",
+  "category": "F4_experience",
+  "user_input": "大学那会儿在图书馆打过工，天天搬书。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m15",
+        "kind": "memory_echo",
+        "content": "他说大学时在图书馆打过工，天天搬书",
+        "source": {
+          "memoryId": "m15"
+        },
+        "memoryId": "m15",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m15",
+          "anchors": [
+            "图书馆",
+            "搬书"
+          ]
+        },
+        "salience": 0.61,
+        "base": 0.61,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.61,
+    "content": "他说大学时在图书馆打过工，天天搬书",
+    "memoryId": "m15"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m15",
+    "anchors": [
+      "图书馆",
+      "搬书"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

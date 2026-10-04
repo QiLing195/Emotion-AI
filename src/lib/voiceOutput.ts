@@ -2,19 +2,42 @@
 // v1.4: 语音随情绪变化（tone：rate/pitch/volume），情绪值来自 voiceTone 白名单
 // v1.5: 支持 provider 选择（cosyvoice = 本地情感 TTS，服务不可用自动回退浏览器）
 
-import { resolveEmotionTone, browserSpeechParams, type VoiceEmotion } from './voiceTone';
+import { resolveEmotionTone, browserSpeechParams, type VoiceEmotion, type VoiceStateSnapshot } from './voiceTone';
 
 export interface SpeakOptions {
   /** 'cosyvoice' 走本地情感 TTS；'browser' 直接用浏览器语音；其它/缺省走服务端 edge-tts */
   provider?: string;
+  /** 情绪强度 0~1（情感引擎）；服务端据此选温和档/强化档指令与语速 */
+  intensity?: number;
+  /**
+   * v1.9 她的**状态快照**（原样转发，客户端不做解释）。
+   * 服务端 `resolveVocalPerformance` 会把 valence/arousal/expectation/心情底色/反刍
+   * 一起纳入发声决策；不传则退回"情绪标签 + 强度"的老行为。
+   */
+  voiceState?: VoiceStateSnapshot;
+  /**
+   * v1.11 "用户这句话之前"她的状态（用于句内状态弧线）。
+   * 服务端据此在 before→after 之间插值，决定这句话要不要分段、每段什么语气。
+   */
+  voiceStateBefore?: VoiceStateSnapshot;
 }
 
 let speaking = false;
-let pendingQueue: Array<{ text: string; emotion?: VoiceEmotion; provider?: string }> = [];
+let pendingQueue: Array<{
+  text: string; emotion?: VoiceEmotion; provider?: string;
+  intensity?: number; voiceState?: VoiceStateSnapshot; voiceStateBefore?: VoiceStateSnapshot;
+}> = [];
 let audioEl: HTMLAudioElement | null = null;
 
 // ── 服务端 TTS（edge-tts 韵律 / CosyVoice 情感，均随情绪）──
-async function speakViaServer(text: string, emotion?: VoiceEmotion, provider?: string): Promise<boolean> {
+async function speakViaServer(
+  text: string,
+  emotion?: VoiceEmotion,
+  provider?: string,
+  intensity?: number,
+  voiceState?: VoiceStateSnapshot,
+  voiceStateBefore?: VoiceStateSnapshot,
+): Promise<boolean> {
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
@@ -23,6 +46,9 @@ async function speakViaServer(text: string, emotion?: VoiceEmotion, provider?: s
         text,
         voice: 'zh-CN-XiaoxiaoNeural',
         emotion: emotion ?? 'neutral',
+        intensity,
+        voiceState,
+        voiceStateBefore,
         provider: provider === 'cosyvoice' ? 'cosyvoice' : undefined,
       }),
     });
@@ -79,7 +105,7 @@ function speakViaBrowser(text: string, emotion?: VoiceEmotion): void {
 function playNext(): void {
   if (pendingQueue.length > 0) {
     const next = pendingQueue.shift()!;
-    void doSpeak(next.text, next.emotion, next.provider);
+    void doSpeak(next.text, next.emotion, next.provider, next.intensity, next.voiceState, next.voiceStateBefore);
   }
 }
 
@@ -92,7 +118,14 @@ function cleanText(text: string): string {
     .trim();
 }
 
-async function doSpeak(text: string, emotion?: VoiceEmotion, provider?: string): Promise<void> {
+async function doSpeak(
+  text: string,
+  emotion?: VoiceEmotion,
+  provider?: string,
+  intensity?: number,
+  voiceState?: VoiceStateSnapshot,
+  voiceStateBefore?: VoiceStateSnapshot,
+): Promise<void> {
   if (!text) return;
   speaking = true;
 
@@ -103,7 +136,7 @@ async function doSpeak(text: string, emotion?: VoiceEmotion, provider?: string):
   }
 
   // 服务端（cosyvoice 本地情感 / edge-tts）→ 失败回退浏览器
-  const ok = await speakViaServer(text, emotion, provider);
+  const ok = await speakViaServer(text, emotion, provider, intensity, voiceState, voiceStateBefore);
   if (!ok) {
     speakViaBrowser(text, emotion);
   }
@@ -121,11 +154,15 @@ export function speakText(
   if (!clean) return;
 
   if (speaking) {
-    pendingQueue.push({ text: clean, emotion, provider: opts?.provider });
+    pendingQueue.push({
+      text: clean, emotion, provider: opts?.provider,
+      intensity: opts?.intensity, voiceState: opts?.voiceState,
+      voiceStateBefore: opts?.voiceStateBefore,
+    });
     return;
   }
 
-  void doSpeak(clean, emotion, opts?.provider);
+  void doSpeak(clean, emotion, opts?.provider, opts?.intensity, opts?.voiceState, opts?.voiceStateBefore);
 }
 
 export function stopSpeaking(): void {

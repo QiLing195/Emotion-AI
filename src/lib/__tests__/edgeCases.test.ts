@@ -2,7 +2,7 @@
 // 覆盖：applyEvent 回放一致性、仲裁多规则、dedup 边界、clock 边界、人格漂移冲突
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { applyEvent, replayState, buildEmotionUpdatedPayload } from '../stateReducer';
+import { applyEvent, buildEmotionUpdatedPayload } from '../stateReducer';
 import { INITIAL_EMOTION_STATE, setDeterministicMode, getDominantEmotion, updateEmotionState } from '../emotionEngine';
 import { arbitrate, hasOverrides, formatOverrides } from '../arbitration';
 import { clock } from '../clock';
@@ -16,7 +16,7 @@ afterAll(() => { setDeterministicMode(false); });
 // ════════════════════════════════════════════════════════════
 
 describe('applyEvent 回放一致性', () => {
-  it('replayState 同序列同结果', () => {
+  it('同一 state + 同一事件序列 → 结果精确一致（确定性）', () => {
     const state = structuredClone(INITIAL_EMOTION_STATE);
     const evt: EmotionEvent = { deltaA: 0.3, deltaB: -0.2, deltaR: 0, intent: 'user' };
     const ctx = { baseA: 0.5, baseB: 0.5, baseR: 0.5, emotionalStability: 0.5, empathy: 50, optimism: 50 };
@@ -28,9 +28,10 @@ describe('applyEvent 回放一致性', () => {
         data: buildEmotionUpdatedPayload({ stimulus: { ...evt, deltaA: 0.1 }, context: ctx }) },
     ];
 
-    const r1 = replayState(structuredClone(state), events);
-    const r2 = replayState(structuredClone(state), events);
-    // 同序列回放应精确一致
+    const run = () => events.reduce((s, e) => applyEvent(s, e), structuredClone(state));
+    const r1 = run();
+    const r2 = run();
+    // 同序列应精确一致（beforeAll 已开确定性模式，噪声项被关掉）
     expect(r1.taiji.valence).toBe(r2.taiji.valence);
     expect(r1.taiji.arousal).toBe(r2.taiji.arousal);
   });

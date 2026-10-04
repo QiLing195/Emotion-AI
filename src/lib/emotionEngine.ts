@@ -27,6 +27,11 @@ import {
 // Phase 1: Emotion-Cognition Deep Coupling — 情绪上下文 DTO
 import type { EmotionContext } from '../types/shared';
 
+// v1.48：状态块可改读**激发态**（`ENABLE_ACTIVATION_STATE`，默认关）。
+// 依赖方向是**单向**的：emotionActivation → emotionTypes（叶子），本文件 → emotionActivation。
+// 有回归测试扫源码钉住这条（若哪天 emotionActivation 反过来 import 本文件就会成环，
+// 而环在 ESM 下的表现是"某个常量在模块初始化时读到 undefined"——静默且难查）。
+import { activationOf, activationStateBlockEnabled, emotionLabel, type EmotionActivation } from './emotionActivation';
 /** 特性开关：v4.1 算法补丁。设为 false 可立即回退到 v4.0 原始行为。 */
 const USE_EMOTION_OPTIMIZER = true;
 
@@ -48,6 +53,7 @@ import type {
 import {
   ALPHA_V, ALPHA_A, ALPHA_E, REVERSAL_RATE, EXTREMITY_THRESHOLD,
   COUPLING_BASE, ATTRACTOR_SENS, ADAPT_FAST, ADAPT_MEDIUM, ADAPT_SLOW,
+  SALIENCE_DEADZONE, SALIENCE_FULL,
   OFFLINE_RESILIENCE, RESILIENCE_LEAK, EMOTION_ATTRACTORS,
   INITIAL_TAIJI, INITIAL_YINYANG, INITIAL_SANCAI, INITIAL_EVOLUTION,
   INITIAL_EMOTION_STATE, INITIAL_EMOTION_SWEET, INITIAL_EMOTION_GENTLE,
@@ -66,6 +72,18 @@ function taijiUpdate(
 ): void {
   // 预测误差 — 情感的唯一驱动力
   let predictionError = eventValence - taiji.expectation;
+
+  // ⚠️ v1.15 修复「没有消息被当成坏消息」：
+  // 之前 eventSalience 只用于唤醒，效价/预期则被**全额**预测误差驱动。
+  // 于是"全零事件"（NLU 无信号、纯寒暄）会得到 error = 0 − expectation(如 +0.2) = −0.2，
+  // 再被损失厌恶放大 → 她的效价被无中生有地扣掉；实测 12 轮零信号事件把 valence 从
+  // 0.2 拖到 −0.31、disgust 0→0.35，并成为"长期停在低谷"的根因。
+  // 语义修正：**没有信号 = 没有误差**（误差必须先有信息量），按显著性门控。
+  const infoFactor = clamp(
+    (eventSalience - SALIENCE_DEADZONE) / Math.max(1e-6, SALIENCE_FULL - SALIENCE_DEADZONE),
+    0, 1,
+  );
+  predictionError *= infoFactor;
 
   // 🆕 S6: 从人格参数计算个性化 alpha（替代硬编码常量）
   const alphas = (evolution && USE_EMOTION_OPTIMIZER)
@@ -624,6 +642,20 @@ export function buildEmotionContext(
 
   const blocks: string[] = [];
   const dominant = getDominantEmotion(e.emotions);
+  /**
+   * v1.48：状态块改读**激发态**（开关默认关，见 `activationStateBlockEnabled`）。
+   *
+   * 为什么：这一段是她的状态进 Prompt 的**唯一**通路，而它一直按**绝对值**读——
+   * 基调（calm 0.80 / love 0.40）在竞争里永远赢，于是结论恒为"她很平静，
+   * 回答时自然地流露出这种情绪"。真管道探针实测：她激活态是「难过（+0.06）」的那一轮，
+   * 系统对她说的却是「主导情绪: calm」。
+   *
+   * 关着时下面两行与旧版**逐字节相同**（回归测试钉住）；开着时：
+   *   · 基调**仍然写进去**（`爱意 0.40` 是关系事实，不该删），但明确标成"平时的底色"；
+   *   · 另起一行说"此刻的偏离"，并显式说出被压低的基调（`平静被压低 −0.36：你此刻并不平静`）——
+   *     这句话旧读法根本表达不了，而它正是"他正在说他爸的手术、而她被说成很平静"的解药。
+   */
+  const activation = activationStateBlockEnabled() ? activationOf(e) : null;
 
   // 太极状态
   blocks.push(`能量水平: ${(e.taiji.arousal * 100).toFixed(0)}%`);
@@ -635,7 +667,31 @@ export function buildEmotionContext(
     .filter(k => Math.abs(e.emotions[k]) > 0.05)
     .sort((a, b) => Math.abs(e.emotions[b]) - Math.abs(e.emotions[a]))
     .slice(0, 3);
-  if (active.length > 0) {
+  if (activation) {
+    // 底色照写（关系事实），但**取基线值**而不是绝对值 top-3 ——
+    // 否则"此刻被激起"的那一项会同时出现在"底色"里（难过 0.18 被说成她的底色，是错的）。
+    const baseTop = Object.keys(activation.baseline)
+      .filter(k => Math.abs(activation.baseline[k]) > 0.05)
+      .sort((a, b) => Math.abs(activation.baseline[b]) - Math.abs(activation.baseline[a]))
+      .slice(0, 3);
+    if (baseTop.length > 0) {
+      blocks.push(`底色: ${baseTop.map(k => `${emotionLabel(k)} ${activation.baseline[k].toFixed(2)}`).join('、')}`);
+    }
+    if (activation.resting) {
+      blocks.push('此刻: 没有明显偏离底色（你在静息）');
+    } else {
+      const lead = `${emotionLabel(activation.activeEmotion)} +${activation.activeIntensity.toFixed(2)}`;
+      const second = activation.runnerUp && !activation.clear
+        ? `、${emotionLabel(activation.runnerUp)} +${activation.runnerUpIntensity.toFixed(2)}`
+        : '';
+      const coexist = activation.runnerUp && !activation.clear ? '；两股劲儿并存' : '';
+      blocks.push(`此刻被激起: ${lead}${second}（相对你自己的底色${coexist}）`);
+      if (activation.suppressed.length > 0) {
+        blocks.push(`${activation.suppressed.map(k => emotionLabel(k)).join('、')}被压低`
+          + `（${activation.suppressed.map(k => activation.delta[k].toFixed(2)).join('、')}）——你此刻并不在这个底色上`);
+      }
+    }
+  } else if (active.length > 0) {
     blocks.push(`当前情绪: ${active.map(k => `${k}(${e.emotions[k].toFixed(2)})`).join(', ')}`);
   }
 
@@ -704,10 +760,35 @@ export function buildEmotionContext(
   let context = `\n【当前状态】${blocks.join('。')}。`;
   context += attributionLine;
   if (includeDominantGuidance) {
-    context += `\n主导情绪: ${dominant.name}。回答时自然地流露出这种情绪。`;
+    // v1.48：这一行原来是 `主导情绪: ${dominant.name}。回答时自然地流露出这种情绪。`
+    // —— `dominant` 是**绝对值** argmax，所以它在任何一轮都说"流露出平静"。
+    context += activation
+      ? activationGuidanceLine(activation)
+      : `\n主导情绪: ${dominant.name}。回答时自然地流露出这种情绪。`;
   }
 
   return context;
+}
+
+/**
+ * v1.48 状态块末尾那句"怎么用这份状态"。
+ *
+ * 两条纪律：
+ *  ① **不写成要宣布的心情**（`回答时自然地流露出难过` 会让她说"我很难过"这种自述）——
+ *     所以是"让这份情绪落进话里"，并明确禁止把它当标签念出来；
+ *  ② 静息时**明确说"不必硬演"** —— 旧读法表达不了"她此刻没有明显情绪"，
+ *     它只能给一个基调让她演，这正是"每个回合她都在平静"的来源。
+ */
+function activationGuidanceLine(a: EmotionActivation): string {
+  if (a.resting) {
+    return '\n此刻状态: 静息。回答时不必硬演某种情绪——按你原本的样子说话就好。';
+  }
+  const lead = `${emotionLabel(a.activeEmotion)}（+${a.activeIntensity.toFixed(2)} 相对你的底色）`;
+  if (!a.clear && a.runnerUp) {
+    return `\n此刻状态: ${lead} 与 ${emotionLabel(a.runnerUp)}（+${a.runnerUpIntensity.toFixed(2)}）并存。`
+      + '回答时让这两股劲儿都在，不必挑一个来演。';
+  }
+  return `\n此刻状态: ${lead}。回答时让这份情绪自然落进你的话里，别把它当成一个标签念出来。`;
 }
 
 // ════════════════════════════════════════════════════════════

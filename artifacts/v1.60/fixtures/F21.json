@@ -1,0 +1,62 @@
+{
+  "case_id": "F21",
+  "category": "F6_low_relevance_open",
+  "user_input": "刚看到楼下有只猫蹲在车顶上。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m21",
+        "kind": "memory_echo",
+        "content": "他说楼下常有只猫蹲在车顶上",
+        "source": {
+          "memoryId": "m21"
+        },
+        "memoryId": "m21",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m21",
+          "anchors": [
+            "猫",
+            "车顶"
+          ]
+        },
+        "salience": 0.59,
+        "base": 0.59,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.59,
+    "content": "他说楼下常有只猫蹲在车顶上",
+    "memoryId": "m21"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m21",
+    "anchors": [
+      "猫",
+      "车顶"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

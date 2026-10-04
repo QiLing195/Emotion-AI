@@ -19,6 +19,27 @@ export const CANONICAL_EMOTIONS = [
 export type CanonicalEmotion = (typeof CANONICAL_EMOTIONS)[number];
 
 /**
+ * v1.36：**正面**情绪键（"他这句话是好事"）。
+ *
+ * 为什么需要它：`dialogueStrategy` 的 Rule 1 只看**强度**（`userIntensity >= 0.7`）——
+ * 于是「我今天升职了！」（joy，0.75）和「我面试又挂了」（sad，0.80）走**同一条分支**。
+ * 实测（v1.34 账本 s10）：他说升职，规则给出 **`accompany`（安静陪着）**；
+ * 而 `empathize` 的片段里本来就有一整段「**积极情绪的共鸣**」（"我升职了！"正是它举的例子）。
+ * 也就是说**对的片段早就在那儿，只是被劫持了**。
+ *
+ * 刻意只收"他这边是好事"的三个键；`neutral` **不算**正面 ——
+ * 中性高唤醒仍走旧行为，不去猜他到底高兴还是难受。
+ * 与 `motive.NEGATIVE_USER_EMOTIONS`（sad/anger/fear/disgust）互为补集，
+ * `emotionCanonical.test.ts` 里有一条不变量钉住两者不重叠。
+ */
+export const POSITIVE_USER_EMOTIONS: ReadonlySet<string> = new Set(['joy', 'gratitude', 'love']);
+
+/** 他这句话是不是"好事"（按键判断；未归一/未知键一律 false ⇒ 保持旧行为） */
+export function isPositiveUserEmotion(emotion: string | null | undefined): boolean {
+  return typeof emotion === 'string' && POSITIVE_USER_EMOTIONS.has(emotion);
+}
+
+/**
  * 别名表：键为小写别名（含中文词/短语、英文同义词、常见口语），值为规范键。
  * 匹配规则（见 canonicalEmotion）：先精确匹配，再按**别名长度降序**做包含匹配，
  * 这样「不开心」不会被「开心」抢先命中。
@@ -95,11 +116,6 @@ export function canonicalEmotion(
     if (text.includes(alias)) return canonical;
   }
   return fallback;
-}
-
-/** 是否为规范键（用于校验/调试） */
-export function isCanonicalEmotion(raw: string | null | undefined): boolean {
-  return typeof raw === 'string' && (CANONICAL_EMOTIONS as readonly string[]).includes(raw);
 }
 
 /**

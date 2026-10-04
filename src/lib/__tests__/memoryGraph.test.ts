@@ -4,7 +4,7 @@ import {
   createNodeFromEpisode,
   createNodeFromDiscovery,
   createNodeFromThought,
-  createNodeFromSemantic,
+  syncEpisodicNode,
   queryMemoryGraph,
   type MemoryNode,
   type MemoryEdge,
@@ -14,7 +14,6 @@ import type { EmotionState } from '../emotionEngine';
 import type { EpisodicMemory } from '../episodicMemory';
 import type { ThoughtNode } from '../thoughtGraph';
 import type { Discovery } from '../../curiosity/types';
-import type { SemanticMemoryEntry } from '../unifiedMemory';
 
 // ── 辅助：构建最小可用的 EmotionState ──
 
@@ -124,19 +123,6 @@ function mockThought(overrides: Partial<ThoughtNode> = {}): ThoughtNode {
     emotionalContext: { valence: 0.6, arousal: 0.5, dominantEmotion: 'joy' },
     sourceMemoryId: null,
     archived: false,
-    ...overrides,
-  };
-}
-
-// ── 辅助：构建测试用的 SemanticMemoryEntry ──
-
-function mockSemantic(overrides: Partial<SemanticMemoryEntry> = {}): SemanticMemoryEntry {
-  return {
-    id: 'sem_test_001',
-    content: '用户喜欢在晚上聊天',
-    type: 'preference',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    tags: ['偏好', '时间'],
     ...overrides,
   };
 }
@@ -751,18 +737,6 @@ describe('MemoryGraph 工厂方法', () => {
     expect(params.sourceId).toBe(t.id);
   });
 
-  it('createNodeFromSemantic 正确转换', () => {
-    const s = mockSemantic();
-    const params = createNodeFromSemantic(s);
-
-    expect(params.source).toBe('semantic');
-    expect(params.content).toBe(s.content);
-    expect(params.tags).toContain('偏好');
-    expect(params.tags).toContain('时间');
-    expect(params.weight).toBe(0.7); // preference 类型权重较高
-    expect(params.sourceId).toBe(s.id);
-  });
-
   it('工厂方法创建的节点可直接添加到图谱', () => {
     const graph = new MemoryGraph();
     const ep = mockEpisode();
@@ -771,6 +745,28 @@ describe('MemoryGraph 工厂方法', () => {
 
     expect(node.source).toBe('episodic');
     expect(graph.getActiveNodes()).toHaveLength(1);
+  });
+
+  it('v1.20：「静息」节点之间不建情感边（resting 不是情绪，别连成一团）', () => {
+    const graph = new MemoryGraph();
+    // 两条内容/标签都不同、唯一共同点只是"她当时没被激起"的记忆
+    graph.addNode({ ...createNodeFromEpisode(mockEpisode({ id: 'ep_r1', tags: ['日常'] })),
+      content: '记忆甲', emotionalSignature: { valence: 0, arousal: 0.3, dominantEmotion: 'resting' } });
+    graph.addNode({ ...createNodeFromEpisode(mockEpisode({ id: 'ep_r2', tags: ['回忆'] })),
+      content: '记忆乙', emotionalSignature: { valence: 0.05, arousal: 0.3, dominantEmotion: 'resting' } });
+
+    expect(graph.getActiveNodes()).toHaveLength(2);
+    expect(graph.getAllEdges().filter(e => e.type === 'emotional')).toHaveLength(0);
+  });
+
+  it('v1.20：真情绪仍然照旧建情感边（回归：别把闸门焊死）', () => {
+    const graph = new MemoryGraph();
+    graph.addNode({ ...createNodeFromEpisode(mockEpisode({ id: 'ep_s1', tags: ['日常'] })),
+      content: '记忆甲', emotionalSignature: { valence: 0, arousal: 0.3, dominantEmotion: 'sad' } });
+    graph.addNode({ ...createNodeFromEpisode(mockEpisode({ id: 'ep_s2', tags: ['回忆'] })),
+      content: '记忆乙', emotionalSignature: { valence: 0.05, arousal: 0.3, dominantEmotion: 'sad' } });
+
+    expect(graph.getAllEdges().filter(e => e.type === 'emotional').length).toBeGreaterThan(0);
   });
 });
 
@@ -815,6 +811,40 @@ describe('queryMemoryGraph', () => {
     expect(sources.has('episodic')).toBe(true);
     expect(sources.has('curiosity')).toBe(true);
   });
+
+  it('v1.20：空内容节点既不召回也不当种子（叙事被清空的记忆）', () => {
+    // 叙事被清空（narrativeStale）后，episodic 节点的 content 变成空串。
+    // 但它靠标签/情绪一致/权重仍可能当种子并沿边扩散 —— 必须整体排除。
+    graph.addNode({ ...createNodeFromEpisode(mockEpisode({ id: 'ep_empty', tags: ['摄影'] })),
+      content: '', emotionalSignature: { valence: 0, arousal: 0.3, dominantEmotion: 'resting' } });
+    graph.addNode(createNodeFromEpisode(mockEpisode({ id: 'ep_full', tags: ['摄影'] })));
+
+    const items = queryMemoryGraph(graph, mockQuery({ text: '摄影', emotionState: mockEmotionState() }), { maxResults: 10 });
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every(i => i.content.length > 0)).toBe(true);
+  });
+
+  it('v1.21：syncEpisodicNode 让图谱副本跟着 episode 走（叙事重写后两处必须一致）', () => {
+    const ep = mockEpisode({ id: 'ep_sync' });
+    const graph2 = new MemoryGraph();
+    graph2.addNode(createNodeFromEpisode(ep));
+    const node = graph2.getAllNodes().find(n => n.sourceId === ep.id)!;
+    expect(node.content).toBe(ep.narrativeFragment);
+
+    // 模拟 LLM 重写叙事 + 情绪/权重变化
+    ep.narrativeFragment = '听他说难过，我的心一下子沉了下去';
+    ep.recallWeight = 0.91;
+    ep.tags = ['悲伤'];
+    ep.emotionalImpact.dominantEmotion = 'sad';
+
+    expect(syncEpisodicNode(graph2, ep)).toBe(true);
+    expect(node.content).toBe('听他说难过，我的心一下子沉了下去');
+    expect(node.weight).toBe(0.91);
+    expect(node.tags).toEqual(['悲伤']);
+    expect(node.emotionalSignature.dominantEmotion).toBe('sad');
+    // 找不到对应节点时返回 false（不抛异常）
+    expect(syncEpisodicNode(graph2, mockEpisode({ id: 'ep_not_there' }))).toBe(false);
+  });
 });
 
 // ════════════════════════════════════════════════════════════
@@ -828,6 +858,10 @@ describe('MemoryGraph 边界条件', () => {
     graph = new MemoryGraph();
   });
 
+  // ⚠️ 显式超时：这是 O(n²) 的重活（510 次插入，每次都可能触发归档扫描），
+  // 单跑约 0.7s，但全量跑时 16 个 worker 抢 16 核（机器上还有别的负载）会被饿到 15s+，
+  // 于是撞上 5s 默认超时 —— 用墙钟当判据本来就脆，这里给足余量而不是掩盖性能问题：
+  // 真正的性能判据是同文件里的「大量节点遍历的性能」。
   it('超过 MAX_NODES 时自动归档低权重节点', () => {
     for (let i = 0; i < 510; i++) {
       graph.addNode({
@@ -841,7 +875,7 @@ describe('MemoryGraph 边界条件', () => {
       });
     }
     expect(graph.getActiveNodes().length).toBeLessThanOrEqual(500);
-  });
+  }, 60_000);
 
   it('activate 不存在的节点返回 null', () => {
     expect(graph.activate('nonexistent')).toBeNull();

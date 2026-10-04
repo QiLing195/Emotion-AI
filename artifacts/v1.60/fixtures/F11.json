@@ -1,0 +1,62 @@
+{
+  "case_id": "F11",
+  "category": "F3_preference",
+  "user_input": "比起出门，我更喜欢一个人待着。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m11",
+        "kind": "memory_echo",
+        "content": "他说比起出门，更喜欢一个人待着",
+        "source": {
+          "memoryId": "m11"
+        },
+        "memoryId": "m11",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m11",
+          "anchors": [
+            "一个人",
+            "出门"
+          ]
+        },
+        "salience": 0.6,
+        "base": 0.6,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.6,
+    "content": "他说比起出门，更喜欢一个人待着",
+    "memoryId": "m11"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m11",
+    "anchors": [
+      "一个人",
+      "出门"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

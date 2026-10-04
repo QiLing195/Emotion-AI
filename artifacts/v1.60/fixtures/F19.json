@@ -1,0 +1,62 @@
+{
+  "case_id": "F19",
+  "category": "F5_thought_judgment",
+  "user_input": "我觉得能把一件小事做很久，比聪明管用。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m19",
+        "kind": "memory_echo",
+        "content": "他说能把一件小事做很久，比聪明管用",
+        "source": {
+          "memoryId": "m19"
+        },
+        "memoryId": "m19",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m19",
+          "anchors": [
+            "做很久",
+            "聪明"
+          ]
+        },
+        "salience": 0.6,
+        "base": 0.6,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.6,
+    "content": "他说能把一件小事做很久，比聪明管用",
+    "memoryId": "m19"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m19",
+    "anchors": [
+      "做很久",
+      "聪明"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

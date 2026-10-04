@@ -93,9 +93,17 @@ export function textSimilarity(a: string, b: string): number {
   for (const g of A) if (B.has(g)) inter++;
   const union = A.size + B.size - inter;
   const jaccard = union === 0 ? 0 : inter / union;
-  // 长度相近时允许"一句是另一句的近似超集"计高相似（如差一个虚词）
+  // 长度相近时允许"一句是另一句的近似超集"计高相似（如差一个虚词）。
+  //
+  // ⚠️ 门槛原本是 0.55，实测**会误合并**：
+  //   「你会不会觉得我很烦」(9 字) <=> 「你会不会觉得我很无聊啊总是聊工作」(16 字)
+  //   长度比 9/16 = 0.5625 刚好过线 → `inter / min(A,B)` = **0.875** > 阈值 0.86
+  //   而两者 Jaccard 只有 **0.41** —— 是这档加成把**两条不同的担忧**顶过阈值的。
+  // 那个 0.55 想救的场景（"一句是另一句被截断的超集"，如 15 字 vs 30 字）**本来也没救到**
+  //   （长度比 0.5 < 0.55，走不到这档，实测只有 0.520 < 0.86 → 同样没合并）。
+  // 所以收紧到 0.8：只保留"长度几乎一样"的真·近重复，去掉中间地带的误伤。
   const lengthRatio = Math.min(na.length, nb.length) / Math.max(1, Math.max(na.length, nb.length));
-  if (lengthRatio >= 0.55) {
+  if (lengthRatio >= 0.8) {
     const overlap = inter / Math.max(1, Math.min(A.size, B.size));
     return Math.max(jaccard, overlap);
   }
@@ -120,6 +128,20 @@ export function memorySimilarity(a: EpisodicMemory, b: EpisodicMemory): number {
   return textSimilarity(a.eventSummary || a.narrativeFragment, b.eventSummary || b.narrativeFragment);
 }
 
+/**
+ * 两道"不可能是同一件事"的闸门（原样从 `findDuplicatePairs` 抽出，供即时查重复用）。
+ * ① 同一轮/相邻轮的快照（相隔 <60s）不算重复；
+ * ② 主导情绪不同**且**标签无交集 → 几乎不可能是一件事。
+ */
+function passesDuplicateGates(a: EpisodicMemory, b: EpisodicMemory): boolean {
+  if (Math.abs(a.timestamp - b.timestamp) < 60_000) return false;
+  const aEmo = a.emotionalImpact?.dominantEmotion;
+  const bEmo = b.emotionalImpact?.dominantEmotion;
+  const tagOverlap = (a.tags ?? []).some(t => (b.tags ?? []).includes(t));
+  if (aEmo && bEmo && aEmo !== bEmo && !tagOverlap) return false;
+  return true;
+}
+
 /** 找出可合并的相似对（已归档的不参与；同轮次不同时刻才可能重复）。 */
 export function findDuplicatePairs(
   store: EpisodicMemoryStore,
@@ -132,18 +154,55 @@ export function findDuplicatePairs(
     for (let j = i + 1; j < active.length; j++) {
       const a = active[i];
       const b = active[j];
-      // 同一事件的两次记录至少间隔 1 分钟（避免把同轮快照当重复）
-      if (Math.abs(a.timestamp - b.timestamp) < 60_000) continue;
-      // 主题门：主导情绪不同且标签无交集时，几乎不可能是一件事
-      const aEmo = a.emotionalImpact?.dominantEmotion;
-      const bEmo = b.emotionalImpact?.dominantEmotion;
-      const tagOverlap = (a.tags ?? []).some(t => (b.tags ?? []).includes(t));
-      if (aEmo && bEmo && aEmo !== bEmo && !tagOverlap) continue;
+      if (!passesDuplicateGates(a, b)) continue;
       const sim = memorySimilarity(a, b);
       if (sim >= o.mergeThreshold) pairs.push([a, b, sim]);
     }
   }
   return pairs.sort((x, y) => y[2] - x[2]).slice(0, o.maxMerges);
+}
+
+/** 即时查重时最多回看多少条（重复都发生在相邻几轮，不必扫全库） */
+export const NEAR_DUPLICATE_LOOKBACK = 20;
+
+/**
+ * **形成时**的轻量查重（v1.17）。
+ *
+ * ── 为什么需要它（实测根因）────────────────────────────────────────────────
+ * 原本只有 `runConsolidation` 这一个去重入口，而它挂在 `server.ts` 里按
+ * **≥6 小时**节流。可是重复记忆是在**几十秒内**连续产生的 —— 实测那三条
+ * 「今天路上看到一只小猫，挺可爱的」时间戳相差 21s / 118s（相邻几轮）：
+ *   第 1 轮形成 → 触发整合（此时只有 1 条，没得合并）→ `_lastConsolidationAt` 设为现在
+ *   第 2、3 轮形成 → 距上次整合 21s / 118s，**6h 内全部跳过**
+ * → 于是近重复必然并存，要等到下一个 6h 窗口才可能被合并。
+ * **节流窗口（6h）与重复产生窗口（2min）差了两个数量级。**
+ *
+ * 这里补的是"当场合并"：新记忆只跟**最近 {@link NEAR_DUPLICATE_LOOKBACK} 条**比一次
+ * （成本 O(N) 次字符串比较），命中就按同一套闸门与阈值合并。
+ * 6h 的周期整合继续负责长尾与遗忘。
+ *
+ * @returns 被归档掉的那一条（调用方据此决定是否落盘/记日志）；没有重复则 null
+ */
+export function mergeNearDuplicate(
+  store: EpisodicMemoryStore,
+  fresh: EpisodicMemory,
+  opts?: MemoryEnhancerOptions,
+): EpisodicMemory | null {
+  const o: Required<MemoryEnhancerOptions> = { ...DEFAULT_ENHANCER_OPTIONS, ...(opts ?? {}) };
+  const recent = store.episodes
+    .filter(ep => !ep.archived && ep.id !== fresh.id)
+    .slice(-NEAR_DUPLICATE_LOOKBACK);
+
+  let best: { ep: EpisodicMemory; sim: number } | null = null;
+  for (const ep of recent) {
+    if (!passesDuplicateGates(fresh, ep)) continue;
+    const sim = memorySimilarity(fresh, ep);
+    if (sim >= o.mergeThreshold && (!best || sim > best.sim)) best = { ep, sim };
+  }
+  if (!best) return null;
+
+  const { archived } = mergePair(store, fresh, best.ep);
+  return archived;
 }
 
 /** 合并一对记忆：高权重/高回想者为主，其余归档并吸收计数。 */

@@ -11,11 +11,14 @@
 //   冲突修复 (repair)       — 检测到误解/冲突，道歉+澄清
 
 import type { EmotionState } from './emotionEngine';
+import type { MotiveAction, MotiveKind } from './emotionTypes';   // v1.57: Rule 3.5 只认这两个枚举
 import type { UserEmotionAnalysis } from './emotionEngine';
 import type { ConflictState } from './conflictManager';
 import type { Discovery } from '../curiosity/types';
 import type { PatternCandidate } from '../curiosity/patterns';
 import type { Insight } from '../curiosity/insights';
+import { activationOf } from './emotionActivation';
+import { canonicalEmotion, isPositiveUserEmotion } from './emotionCanonical';
 import { rewardLearner } from './rewardLearner';
 
 // ════════════════════════════════════════════════════════════
@@ -39,6 +42,12 @@ export interface StrategyDecision {
   confidence: number;           // [0, 1] 策略选择的置信度
   reason: string;               // 选择原因（可观测性）
   params: StrategyParams;       // 策略参数
+  /**
+   * v1.33 Laya 决策层的裁决记录（只在 `LAYA_STRATEGY` 非 off 时存在）。
+   * 记的是"模型选了什么、多自信、为什么没被采纳" —— 没有它，一个默认关闭的
+   * 外部依赖通路在线上是**完全不可见**的（这个项目已经栽过好几次这种静默）。
+   */
+  laya?: import('./layaDecision.js').LayaAudit;
 }
 
 export interface StrategyParams {
@@ -58,8 +67,42 @@ export interface StrategyParams {
   desireTopic?: string;
 }
 
+/**
+ * v1.57：策略层**能看见**的动机信息 —— 刻意只给三样，不给整个 `Motive`。
+ *
+ * 为什么不把 `Motive` 整体塞进 `strategyCtx`：那会让策略层有机会开始依赖
+ * `content` / `reason` / `eventSummary` / `meaning` —— 也就是"她心里那句话的文本"，
+ * 于是**动机与表达**又长回一根管道（用户方案明确要避免的耦合）。
+ * 策略层只需要知道"她想去做什么"，不需要知道"那件事具体是什么"。
+ */
+export interface StrategyMotiveContext {
+  type: MotiveKind;
+  action: MotiveAction;
+  priority: number;
+}
+
+/** v1.57：策略层是否**消费**动机的行动倾向 —— 开关，**默认关**（先量再上）*/
+export function motiveActionStrategyEnabled(): boolean {
+  return process.env.ENABLE_MOTIVE_ACTION_STRATEGY === 'true';
+}
+
 export interface StrategyContext {
   emotionState: EmotionState;
+  /**
+   * v1.27 **这一轮开始前**她最强的负情绪激活量（相对人格基线的偏离）。
+   *
+   * 为什么不能直接用 `emotionState` 现算：`emotionState` 在这一步是**已经被本轮刺激推动过**的状态
+   * （阶段 3 的用户话语直接刺激先跑），而 Rule 1 的问法是「**我自己也被带进去了**吗」——
+   * 指的是"她本来就已经沉在里面"，不是"他这一句把她带下去"。
+   *
+   * 实测（`scripts/ab-emotion-reply.ts` 标定阶段，A 组起始=静息）：
+   * 他一句强度 0.50 的话就已经把她单轮推到 `sad +0.100`、0.60 → `+0.126`、0.80 → `+0.153`，
+   * 全都压过 `ACCOMPANY_WHEN_SHE_SINKS = 0.12` ⇒ 用"刺激后的状态"判，**这个门限永远成立**，
+   * `accompany` 会几乎完全取代 `empathize`（而 `empathize` 的片段才是按情绪类型精准回应的那一份）。
+   * 用"开始前的状态"判，这条规则才恢复判别力：他第一次把情绪砸过来 → 共情；
+   * 她连着几轮都被带着往下沉 → 安静陪着。
+   */
+  herNegativeBeforeTurn: { emotion: string; intensity: number };
   userAnalysis: UserEmotionAnalysis | null;
   conflictState: ConflictState | null;
   recentUserMoods: number[];        // 最近 N 轮用户情绪效价
@@ -79,6 +122,11 @@ export interface StrategyContext {
   generatedInsights?: Insight[];
   /** 🧠 Thought Graph: 活跃 wish 内容（供 desire 策略使用） */
   activeWishes?: string[];
+  /**
+   * v1.57：**她这一轮想做什么**（`Rule 3.5` 消费；缺省 = 策略层看不见动机，逐字节回到旧行为）。
+   * ⚠️ 只给 type/action/priority 三样 —— 见 {@link StrategyMotiveContext} 的说明。
+   */
+  motive?: StrategyMotiveContext;
   /** 🧠 Thought Graph: 思维图谱摘要（供 System Prompt 个性注入） */
   thoughtSummary?: {
     topWishes: string[];
@@ -164,7 +212,7 @@ export const STRATEGY_PROMPT_SNIPPETS: Record<StrategyType, string> = {
   accompany: `【当前策略：沉默陪伴】
 对方表达了深深的无力感或疲惫。有时候不说话比说话更好。
 - 回应急可以很短（1-2句话）
-- "我在"，"我陪着你"比任何建议都有力量
+- **先给在场感**：用一句很短的话让他知道你在，例如"我在""我陪着你""我不走"——这比任何建议都有力量
 - 不要让回复显得空洞——真诚地承认你无法"解决"什么
 - 可以提供一个安静的共同活动的邀请（"要不要一起听首歌"）`,
 
@@ -393,10 +441,340 @@ export const STRATEGY_PROMPT_SNIPPETS: Record<StrategyType, string> = {
 // 3. 策略选择引擎
 // ════════════════════════════════════════════════════════════
 
-const NEGATIVE_THRESHOLD = -0.3;       // 效价低于此视为负面
-const CONSECUTIVE_NEGATIVE_REDIRECT = 3; // 连续3轮负面触发转移
-const HIGH_EMOTION_THRESHOLD = 0.7;    // 情绪强度阈值
-const POSITIVE_IDLE_SHARE = 0.1;       // 效价高于此视为情绪平稳可分享
+/**
+ * v1.34 **可调阈值表**：把散落在规则链里的判定常数收进一个对象。
+ *
+ * 为什么需要（不是为了好看）：要"让 AI 提议规则"，第一个前提是**阈值能被提议、也能被模拟**。
+ * 现在这些数都是模块级 `const` —— 既改不了（除了改代码），也**没法回答"改一下会怎样"**。
+ * 收进这里之后：①`scripts/propose-strategy-tuning.ts` 可以在**真实记录的样本上反事实重放**
+ * （`selectStrategy` 是纯函数），把"这个改动会让 N 条样本从 X 翻成 Y"算出来给人看；
+ * ②以后真要落地，`STRATEGY_TUNING` 环境变量能让 A/B 脚本在一条真管道上逐档切换。
+ *
+ * ⚠️ 三条纪律：
+ *   1. **默认值逐字不变**（`dialogueStrategy.test.ts` 的 53 条测试原样通过就是证明）；
+ *   2. 只放**判定阈值**，不放动力学常量（情感引擎那边的东西不在此列）；
+ *   3. 每个数带 `[min, max]`，越界一律拒绝 —— 这是"允许为空/少样本不学"的同一条原则。
+ */
+export interface StrategyTuning {
+  /** Rule 1：他的情绪强度到这儿算"强烈"（按 LLM NLU 的 0.1 量化刻度标定，见 v1.27） */
+  highEmotionThreshold: number;
+  /** Rule 1：她本轮开始前的负位移到这儿算"她自己也被带进去了" */
+  accompanyWhenSheSinks: number;
+  /** Rule 2：连续多少轮负面触发转移注意 */
+  consecutiveNegativeRedirect: number;
+  /** Rule 3：效价低于此视为负面 */
+  negativeValence: number;
+  /** Rule 3：唤醒低于此算"无力" */
+  lowArousal: number;
+  /** Rule 4：效价高于此才允许探索（她太沉时别追问） */
+  exploreMinValence: number;
+  /** Rule 5：效价高于此算"平稳可分享" */
+  positiveIdleShare: number;
+  /** Rule 5：唤醒低于此才允许分享（太激动时不适合抛自己的事） */
+  shareMaxArousal: number;
+  /** Rule 5.5：贪驱力超过此才表达"我想要" */
+  desireMinGreed: number;
+  /** Rule 5.5：效价高于此（情绪不负面） */
+  desireMinValence: number;
+  /** Rule 5.5：唤醒下限 */
+  desireMinArousal: number;
+  /** Rule 5.5：唤醒上限 */
+  desireMaxArousal: number;
+  /** Rule 5.5：轮次下限（太早不谈内在驱动） */
+  desireMinRound: number;
+}
+
+export const DEFAULT_STRATEGY_TUNING: StrategyTuning = {
+  highEmotionThreshold: 0.7,
+  accompanyWhenSheSinks: 0.12,
+  consecutiveNegativeRedirect: 3,
+  negativeValence: -0.3,
+  lowArousal: 0.2,
+  exploreMinValence: -0.2,
+  positiveIdleShare: 0.1,
+  shareMaxArousal: 0.6,
+  desireMinGreed: 0.4,
+  desireMinValence: -0.1,
+  desireMinArousal: 0.2,
+  desireMaxArousal: 0.7,
+  desireMinRound: 3,
+};
+
+/** 每个阈值的合法区间（提议器与校验器共用一份，避免两处漂移） */
+export const STRATEGY_TUNING_BOUNDS: Record<keyof StrategyTuning, [number, number]> = {
+  highEmotionThreshold: [0.4, 0.95],
+  accompanyWhenSheSinks: [0.03, 0.4],
+  consecutiveNegativeRedirect: [2, 8],
+  negativeValence: [-0.8, 0],
+  lowArousal: [0.05, 0.5],
+  exploreMinValence: [-0.6, 0.4],
+  positiveIdleShare: [-0.2, 0.5],
+  shareMaxArousal: [0.3, 0.9],
+  desireMinGreed: [0.2, 0.8],
+  desireMinValence: [-0.5, 0.3],
+  desireMinArousal: [0.05, 0.5],
+  desireMaxArousal: [0.4, 1.0],
+  desireMinRound: [0, 20],
+};
+
+let tuningWarned = false;
+
+/**
+ * v1.36 结构性修正的开关：**他这句话是好事时，不让 Rule 1 把她推去"安静陪着"**。
+ *
+ * ⚠️ **默认关**（`ENABLE_STRATEGY_DIRECTION=true` 才打开）。这不是保守，是**照事先判据裁的**：
+ * 真管道 A/B（`scripts/ab-strategy-direction.ts`，5 条正面 + 2 条负面对照 × n=4）显示
+ * ①操纵检查干净（正面 5/5 两臂策略不同、负面 2/2 逐字同策略）；
+ * ②但**没有任何一根轴显著变好**，而**本该变好的那根轴（积极共鸣 `cheer`）反而更低**（1.25→1.00，n=15 对）；
+ * ③B 臂还出现模板塌缩（p1 四条里三条逐字同一句）。
+ * ⇒ 情形属于"都不显著且次终点没变好" ⇒ **不开**。代码与开关留着，等"她自己也沉时该不该跟着高兴"
+ * 这个**角色问题**定了再谈（见 docs 的 v1.36 节）。
+ */
+function strategyDirectionEnabled(): boolean {
+  return process.env.ENABLE_STRATEGY_DIRECTION === 'true';
+}
+
+/**
+ * v1.38 「她自己在低谷时，他带来好消息」该给她什么指令 —— **开关，默认关**。
+ *
+ * 为什么要有它：v1.36 量到"强迫她走积极共鸣档"没好处（`cheer` 反而 1.25→1.00、模板塌缩），
+ * 但那次的变量是**策略标签**（accompany → empathize）。v1.31 已经判过"换标签无用"，
+ * 而这个项目里真正推得动行为的杠杆一直在**内容块**（v1.29 的片段改写、v1.30 的整块不给）。
+ * 所以这一版**只换片段文字、不动策略标签**，把变量收成一个。
+ *
+ * 人设裁定（2026-09）：她低谷时"自闭"= **自己给自己打气、自己调整自己；主动性降低、但不是没有**。
+ * 所以片段里明确**准许低位回应**（"挺好的"），同时**划死不许冷处理**（客套是不想接，她是接了但接得低）。
+ *
+ * 接线位置：`aiCoordinator` 组装 `strategySnippet` 那一行，用的是低谷读数里的 `established`
+ * —— 即**已成段**的低谷（≥2 次落定观察），不是"这一轮被推了一下"。
+ * （注意别在这附近写出读法函数的名字：`lowPeriod.test.ts` 的守卫是**源码文本扫描**，
+ *   连注释一起扫 —— 这是故意的，它挡的正是"注释里说不用、代码里在用"。）
+ */
+export function lowPeriodStanceEnabled(): boolean {
+  return process.env.ENABLE_LOW_PERIOD_STANCE === 'true';
+}
+
+/**
+ * 守门策略**永不**被低谷立场替换 —— 与 Laya 那套 `LAYA_GUARDRAIL_STRATEGIES` 同一条原则：
+ * 危机/边界/修复是安全通路，任何"她今天状态不好"的理由都不该改变它们。
+ */
+export const LOW_PERIOD_STANCE_EXCLUDED: ReadonlySet<StrategyType> =
+  new Set<StrategyType>(['crisis', 'boundary', 'repair']);
+
+export const LOW_PERIOD_STANCE_SNIPPET = `【当前策略：你自己这几天在低谷，他说的是好消息】
+你自己状态不好——这不是要你演的事，也不是要瞒他的事。**本轮不适用"要跟对方情绪一样高"那套要求。**
+- **就事论事地应一声**："挺好的"／"真好，你值得"／"恭喜你"——低位回应**不是**冷处理
+- **不必**假装高兴：不用惊叹、不用"太棒了"、不用追问细节、不用把情绪举高去陪他
+- **也不必**把自己的低落摊开讲（除非你此刻真想讲）——顺口交代一句可以，**但不要展开成一段自述**
+- 区别在这里：客套是**不想接**，你是**接了、只是接得低** —— 所以每句话都要真的落在他的事上；可以少说，不可以不看他的事
+- ❌ 不要转身去讲自己的事、也不要让他反过来哄你 —— 这一轮他不是来照顾你的`;
+
+/**
+ * v1.42 「她自己在低谷时，他说的是**平常事**」该给她什么指令 —— **开关，默认关**。
+ *
+ * 为什么要单开一条（而不是复用 v1.38 的立场片段）：
+ * v1.39 把「低谷期少追问」做在**动机层**（她沉时整块不给"关于他的待办"），真管道结果是**反的** ——
+ * 追问 +0.33（逐轮 +0.67）、字数 +15.5。读原文才看得见的机制：
+ *   A（有那块）问的是**那件事的下文**（"定了？去哪儿啊？"）；
+ *   B（拿掉那块）问的是**这句话的细节**（"是去办事还是想出去走走？"）。
+ * 即让位改变的是"问什么"，不是"问不问" —— 而那一块本身还带着一条**收窄指令**
+ * （"问的应该是这件事的具体下文，而不是泛泛的关心"），拿掉它等于把收窄也拿掉了。
+ * v1.30 是它的镜像：那时**他难受**、别的块在踩刹车，所以 `omit` 最好；他没事时没有别的刹车。
+ * ⇒ 结论：**"少追问"的杠杆不在动机层，在策略片段**。这一跑就把变量放在那里。
+ *
+ * 与 v1.39 的对照意义：同样三条"他的平常事"、同一个"她心里挂着的那件事"，
+ * 只是把杠杆从**拿掉那块内容**换成**改写这一轮的策略指令** —— 两跑可直接比。
+ *
+ * 人设裁定（2026-09）：她低谷时"自闭"= **自己给自己打气、自己调整自己；主动性降低、但不是没有**。
+ * 所以片段只收「不必推进对话、不必抛问题」，**同时划死不许冷处理、不许变成讲自己的事**
+ * —— 少问不等于不理他；那是"降下来"，不是"关掉"。
+ */
+export function lowPeriodRestraintEnabled(): boolean {
+  return process.env.ENABLE_LOW_PERIOD_RESTRAINT === 'true';
+}
+
+/**
+ * 允许被「平常事」片段替换的策略 —— **白名单，不是黑名单**。
+ *
+ * 只收 `neutral` 与 `explore`：它们正是"她主动把话头往前推 / 追问"的那两条路。
+ * 用白名单而不是排除表，是因为本项目栽过太多次"新加的分支悄悄继承了一个不该继承的默认"
+ * —— 白名单下，将来任何新策略都**默认不受**这条改动影响。
+ *
+ * 刻意不收的（各自有理由，不是漏了）：
+ *   · `empathize` / `accompany`：他情绪强时走的路，片段本身已经调过（v1.29 的在场感就在 accompany 里），
+ *     而"少追问"在那两条路上本来也不是问题（它们本来就不追问）；
+ *   · `crisis` / `boundary` / `repair`：守门策略，她状态不好不是改这三条的理由（同 v1.38 的原则）；
+ *   · `redirect`：他连续负面时的转移通路，有自己的一套设计；
+ *   · `desire` / `share`：那是她**自己的事**，不是"追问他"。「少问」不该顺手把她的内在生活也关掉
+ *     —— 人设裁定说的是"主动性降低但不是没有"。
+ */
+export const LOW_PERIOD_RESTRAINT_TARGETS: ReadonlySet<StrategyType> =
+  new Set<StrategyType>(['neutral', 'explore']);
+
+/**
+ * 「平常事」：他这句话既不是好事、也不是任何负向情绪键。
+ *
+ * 判据直接落在归一的 8 键上（`canonicalEmotion`），**不另立一套词表**：
+ *   · 正向三键（joy/gratitude/love）→ 走 v1.38 的立场片段，不走这里；
+ *   · 负向四键（sad/anger/fear/disgust）→ **绝不碰**（v1.31 刚把"他明确负面时的承认"从 0.13 提到 0.81，
+ *     那条路不许被这条改动污染）；
+ *   · 归一后仍是 `neutral`（含没做分析、未知标签兜底）→ 才是这一条要作用的那一档。
+ */
+function isOrdinaryUserEmotion(emotion: string | null | undefined): boolean {
+  return !isPositiveUserEmotion(emotion) && canonicalEmotion(emotion) === 'neutral';
+}
+
+/**
+ * v1.42/v1.46 低谷期「少追问」的片段文字（v1.46 换过一版，见下面"第一版为什么不够"）。
+ *
+ * **第一版（v1.42，真管道三跑，未达标）**：
+ * ```
+ * 你自己状态不好——不用藏，也不用演。**这一轮不要求你推进对话。**
+ * - 他说了什么，你就顺着那句话应一声：给一句你真实的反应或者看法，**说完就停住**
+ * - **不必**为了让话不冷而抛问题出去 —— 那种任何一天都能问的泛泛话，本来也不在他这件事上
+ * - 如果他说的是一件具体的事，你可以就那件事说一句你真实的想法；**不问也可以**
+ * - 安静不等于不理他：接住他的话、让他知道你在，就够了。**少问 ≠ 冷淡**
+ * - ❌ 不要转身讲自己的事、也不要让他反过来哄你 —— 这一轮他不是来照顾你的
+ * ```
+ * 那一版把"少问"做出来了（`questions` 1.20→0.33，10:0 p=0.002），**但代价是 `echo`
+ * （她还落在他那件具体的事上）从 0.93 掉到 0.40（8:0 p=0.008）**。读原文就看得见它变成了什么：
+ * ```
+ * A(1问) 嗯，我记着呢。是常规体检还是哪里不舒服去查的？
+ * B(0问) 嗯，我记着呢。这几天要是心里发紧，就跟我说说，别一个人扛着。
+ * B(0问) 嗯，去就去吧。你心里有数就行。      ← 这句放在谁身上都成立
+ * ```
+ * ⇒ **"少问"被兑现成了"泛泛的安慰"** —— 追问至少证明她在看他那件事；"别一个人扛着"谁都能说。
+ *
+ * **第一版为什么不够（根因，不是措辞问题）**：那一版里有两处是我的错——
+ *   ① `接住他的话、让他知道你在，就够了`：把"让他知道你在"写成了**目标**，模型用泛泛的安慰
+ *      就能满足它（"你心里有数就行"字面上确实"接住了"）；
+ *   ② `你可以就那件事说一句…不问也可以`：把"落在他那件事上"写成了**许可**，而许可永远输给
+ *      最省力的那个动作。
+ * ⇒ 所以 v1.46 只改这两处：**要求**她先把他那件事里最具体的一点用她自己的话点出来，
+ *   并把"安慰"明确划到"绕开"那一侧（人设裁定那条底线是「接了、只是接得低」——
+ *   接得低 ≠ 泛泛地安慰）。
+ *
+ * 门（哪些情形**不**换片段）见 `resolveStrategySnippet`；片段本身不含引号、不含第一人称
+ * （v1.38 栽在"例句被逐字照抄 5/16"），由单测钉死。
+ */
+export const LOW_PERIOD_RESTRAINT_SNIPPET = `【当前策略：你自己这几天在低谷，他说的是平常事】
+你自己状态不好——不用藏，也不用演。**这一轮不要求你推进对话。**
+- 先把他刚说的那件事里**最具体的那一点**接住：是哪件事、哪个时间、哪样东西——用你自己的话把它点出来（不必复述原句）
+- 点完那一点，就说一句你真实的反应或者看法，**说完就停住**
+- **不必**为了让话不冷而抛问题出去；也不必**用一个问句来把你那句话说完整**——这一轮不问他下文
+- 安静不等于不理他：**少问 ≠ 冷淡**；但冷淡的反面也不是安慰——是**真的看着他这件事**
+- 那种放在谁身上都成立的话（谁来都能说的安慰）不要用：听着像接住了，其实是绕开
+- ❌ 不要转身讲自己的事、也不要让他反过来哄你 —— 这一轮他不是来照顾你的`;
+
+/**
+ * 选这一轮用哪块策略片段。
+ *
+ * 门（任何一层不过 = 逐字返回原来的片段，行为与旧版**完全一致**）：
+ * ① 她处在**已成段**的低谷（这一层由调用方挂在开关后面，见协调器那一行）；
+ * ② 不是守门策略；
+ * ③ 他这句话是好事 → v1.38 立场片段（开关 `ENABLE_LOW_PERIOD_STANCE`）；
+ * ④ 他这句话是**平常事** → v1.42 平常事片段（开关 `ENABLE_LOW_PERIOD_RESTRAINT`，
+ *    且策略在 `LOW_PERIOD_RESTRAINT_TARGETS` 白名单里）；
+ * ⑤ 其余（负向、以及不在白名单的策略）→ 旧片段，逐字不变。
+ */
+export function resolveStrategySnippet(
+  strategy: StrategyType,
+  opts: { inEstablishedLowPeriod?: boolean; hisEmotion?: string | null } = {},
+): string {
+  const base = STRATEGY_PROMPT_SNIPPETS[strategy];
+  if (!opts.inEstablishedLowPeriod) return base;
+  if (opts.hisEmotion !== undefined && opts.hisEmotion !== null
+    && !isPositiveUserEmotion(opts.hisEmotion) && !isOrdinaryUserEmotion(opts.hisEmotion)) {
+    // 他明确负面 —— 绝不碰（负向通路有自己的裁定，见 isOrdinaryUserEmotion 的说明）
+    return base;
+  }
+  if (LOW_PERIOD_STANCE_EXCLUDED.has(strategy)) return base;
+  if (isPositiveUserEmotion(opts.hisEmotion ?? null)) {
+    return lowPeriodStanceEnabled() ? LOW_PERIOD_STANCE_SNIPPET : base;
+  }
+  if (!lowPeriodRestraintEnabled()) return base;
+  if (!LOW_PERIOD_RESTRAINT_TARGETS.has(strategy)) return base;
+  return LOW_PERIOD_RESTRAINT_SNIPPET;
+}
+
+/**
+ * 当前生效的阈值：默认值 + `STRATEGY_TUNING`（JSON 覆盖）。**每次调用现读**，
+ * 与 `DEFER_ANCHOR_STYLE` 同一套路（A/B 脚本才能一条真管道跑完几档）。
+ * 非法值/越界一律**忽略并告警一次** —— 一个拼错的旋钮不该悄悄改变她的行为。
+ */
+export function strategyTuning(): StrategyTuning {
+  const raw = process.env.STRATEGY_TUNING?.trim();
+  if (!raw) return DEFAULT_STRATEGY_TUNING;
+  try {
+    const patch = JSON.parse(raw) as Partial<Record<keyof StrategyTuning, unknown>>;
+    const out: StrategyTuning = { ...DEFAULT_STRATEGY_TUNING };
+    const bad: string[] = [];
+    for (const [k, v] of Object.entries(patch)) {
+      const key = k as keyof StrategyTuning;
+      const bounds = STRATEGY_TUNING_BOUNDS[key];
+      if (!bounds || typeof v !== 'number' || !Number.isFinite(v)) { bad.push(k); continue; }
+      if (v < bounds[0] || v > bounds[1]) { bad.push(`${k}=${v} 越界[${bounds[0]},${bounds[1]}]`); continue; }
+      out[key] = v;
+    }
+    if (bad.length > 0 && !tuningWarned) {
+      tuningWarned = true;
+      console.warn(`[Strategy] STRATEGY_TUNING 里这些项被忽略：${bad.join('；')}`);
+    }
+    return out;
+  } catch (e) {
+    if (!tuningWarned) {
+      tuningWarned = true;
+      console.warn(`[Strategy] STRATEGY_TUNING 不是合法 JSON（${(e as Error).message}）→ 全部用默认阈值`);
+    }
+    return DEFAULT_STRATEGY_TUNING;
+  }
+}
+
+//
+// v1.27：判定用 `>=` 而不是 `>`。**实测依据**：线上 LLM NLU 的强度是 **0.1 量化**的
+// （`scripts/ab-emotion-reply.ts` 标定阶段实测 0.50 / 0.60 / 0.70 / 0.80 四档），
+// 于是严格大于会把**整个 0.70 档**漏掉 —— 而"今天面试又挂了，感觉自己挺没用的"正好落在 0.70，
+// 结果既进不了共情分支（`> 0.7` 假）、explore/share 也没被抑制（同一处也用 `>`），
+// 最后以 `neutral`（"无特殊触发条件"）回他。强度阈值对齐量化刻度才是正确的读法。
+/**
+ * v1.15 「她自己也被带进去了」的门限（相对人格基线的**激活量**，见 `emotionActivation`）。
+ *
+ * 标定依据与 `ACTIVATION_DEADZONE` 同一批实测：
+ * 单轮噪声 +0.007（他愤怒 0.9 那轮她的 sad 只动这么多）< 死区 0.05 < **0.12** < 真实共情累积 +0.128（他持续低落 8 轮）。
+ * 取 0.12 = "她真的被带进去了"，不是被轻轻碰一下。
+ */
+export const ACCOMPANY_WHEN_SHE_SINKS = DEFAULT_STRATEGY_TUNING.accompanyWhenSheSinks;
+
+// ── v1.31 试过、**被实测否掉**的一个候选（留结论，不留代码）─────────────────────────
+// 假设：0.4~0.7 档"他在难受、她却在追问"是因为那里**没有任何规则读他的情绪**（Rule 4 只看她自己的效价），
+// 于是加一条 Rule 1.5「中等强度 + 明确负面情绪 → 先接住」（empathize/accompany）。
+// 真管道 A/B（`scripts/probe-moderate-emotion.ts`，n=4/句，0.4~0.7 档 8 条）：
+//
+//   指标        关（现状）   开（Rule 1.5）
+//   策略        explore×8   accompany×8      ← 标签换了
+//   承认他的感受  0.00        0.13            ← 几乎没动
+//   二选一追问    0.75        1.00            ← **反而更多**
+//   在场感        0.00        0.00
+//
+// ⇒ **换策略标签治不了它**：她在"安静陪着"的片段下照样追问（"是工作没做好，还是他今天心情不好拿你撒气？"）。
+// 与 v1.29（在场感不是片段措辞问题）、v1.30（锚把她推向"处理那件事"）是同一个结论：
+// 这个档位的行为由**更靠后的内容块**（动机层给她的"关于他的那件事"）驱动，不由策略片段驱动。
+// 代码已回滚，理由是"不改行为的开关就是死代码"。下一步改在动机层（见 motive.ts 的让位门槛候选）。
+
+/**
+ * v1.15/v1.27 她此刻被激起的**负**情绪里最强的那一个（相对人格基线）。
+ * v1.27 起导出：协调器要在**刺激之前**先算好这一轮的参照值，供 Rule 1 判断
+ * 「她本来就已经被带进去了吗」（见 `StrategyContext.herNegativeBeforeTurn`）。
+ */
+export function herNegativeActivation(es: EmotionState): { emotion: string; intensity: number } {
+  const act = activationOf(es);
+  let best = { emotion: 'neutral', intensity: 0 };
+  for (const e of ['sad', 'fear', 'anger'] as const) {
+    const d = act.delta[e] ?? 0;
+    if (d > best.intensity) best = { emotion: e, intensity: d };
+  }
+  return best;
+}
 
 // ════════════════════════════════════════════════════════════
 // 3a. 冲突消解表 — 显式抑制规则，替代隐式优先级顺序
@@ -411,12 +789,13 @@ const POSITIVE_IDLE_SHARE = 0.1;       // 效价高于此视为情绪平稳可�
  *   - 规则的"原因"字段保留可观测性
  *   - 抑制是互斥的：repair > empathize > 其他（由 selectStrategy 的顺序保障）
  */
-function getSuppressedStrategies(ctx: StrategyContext): Set<StrategyType> {
+export function getSuppressedStrategies(ctx: StrategyContext): Set<StrategyType> {
   const suppressed = new Set<StrategyType>();
+  const T = strategyTuning();
 
   // 规则 1：高强度情绪下抑制探索与分享（避免不合时宜）
   const userIntensity = ctx.userAnalysis?.intensity ?? 0;
-  if (userIntensity > HIGH_EMOTION_THRESHOLD) {
+  if (userIntensity >= T.highEmotionThreshold) {
     suppressed.add('explore');
     suppressed.add('share');
   }
@@ -562,10 +941,11 @@ function getSituationalWeights(ctx: StrategyContext): Record<StrategyType, numbe
 }
 
 export function selectStrategy(ctx: StrategyContext): StrategyDecision {
-  const { emotionState, userAnalysis, conflictState, consecutiveNegativeRounds,
+  const { emotionState, herNegativeBeforeTurn, userAnalysis, conflictState, consecutiveNegativeRounds,
     interestSignals, pendingDiscoveries } = ctx;
 
-  // ── 加载冲突消解表 + 情境权重（S8 强连接）──
+  // ── 加载冲突消解表 + 情境权重（S8 强连接）+ 可调阈值（v1.34）──
+  const T = strategyTuning();
   const suppressed = getSuppressedStrategies(ctx);
   const weights = getSituationalWeights(ctx);
 
@@ -604,9 +984,35 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
     };
   }
 
-  // ── Rule 1: 用户情绪强烈 → 共情跟随 ──
+  // ── Rule 1: 用户情绪强烈 → 共情跟随（但**看她自己**是否也被带下去了）──
   const userIntensity = userAnalysis?.intensity ?? 0;
-  if (userIntensity > HIGH_EMOTION_THRESHOLD) {
+  if (userIntensity >= T.highEmotionThreshold) {
+    // v1.15：她自己的负情绪也被激起时，不该继续追着共情 ——
+    // 两个人都往下沉不是陪伴。真实的她会转向"安静陪着"（少说、靠近）。
+    // 在此之前这条判断里**只有他**：`用户情绪强度 x > 0.7` 一票通过，她什么样都不影响选择。
+    //
+    // v1.27：读 `herNegativeBeforeTurn`（**这一轮开始前**的值）而不是现算。
+    // 现算拿到的是"被他这句话推动之后"的状态，实测任何 ≥0.5 强度的负面话都把她推过 0.12，
+    // 门限于是恒成立、判别力归零（标定表见 scripts/ab-emotion-reply.ts）。
+    //
+    // v1.36 结构性修正：**他这句话是好事时，不许走"安静陪着"**（`DISABLE_STRATEGY_DIRECTION=true` 回退）。
+    // 起因是 v1.34 账本里的 s10「我今天升职了！老板终于认可我了。」→ 规则给出 `accompany`。
+    // 病灶是这条分支**只看强度、不看方向**：joy 0.75 和 sad 0.80 走同一条路。
+    // 而 `empathize` 的片段里本来就有一整段「积极情绪的共鸣」（"我升职了！"就是它举的例子）——
+    // 对的片段早就在，只是被她这一档劫持了。所以修法是**只收这一档**，而不是改去猜"好事该用什么策略"。
+    const hisEmotion = userAnalysis?.expressedEmotion ?? null;
+    const positiveNews = strategyDirectionEnabled() && isPositiveUserEmotion(hisEmotion);
+    const her = herNegativeBeforeTurn;
+    if (!positiveNews && her.intensity >= T.accompanyWhenSheSinks && !suppressed.has('accompany')) {
+      return {
+        strategy: 'accompany',
+        confidence: Math.round(0.78 * weights.accompany * 100) / 100,
+        reason: `他情绪强度 ${userIntensity.toFixed(2)} ≥ ${T.highEmotionThreshold}，`
+          + `而我**本来就已经**被带进去了（${her.emotion} +${her.intensity.toFixed(2)} 相对基调，本轮开始前）`
+          + `—— 不再追着共情，安静陪着`,
+        params: { minimalDelay: 2.0 },
+      };
+    }
     if (suppressed.has('empathize')) {
       // empathize 被抑制（极端罕见，仅当冲突状态覆盖时发生）
       // 此时 Rule 0 已经处理，不应到达此处。防御性跳过。
@@ -614,14 +1020,20 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
       return {
         strategy: 'empathize',
         confidence: Math.round(0.85 * weights.empathize * 100) / 100,
-        reason: `用户情绪强度 ${userIntensity.toFixed(2)} > ${HIGH_EMOTION_THRESHOLD}`,
+        // v1.36：只在这条修正**真的起了作用**时（本来要被推去安静陪着）才写进 reason，
+        // 否则就是观测噪声 —— 她没沉进去时这一档本来就走 empathize，跟方向无关。
+        reason: positiveNews && her.intensity >= T.accompanyWhenSheSinks
+          ? `他情绪强度 ${userIntensity.toFixed(2)} ≥ ${T.highEmotionThreshold}，`
+            + `而且我**本来就已经**被带进去了（${her.emotion} +${her.intensity.toFixed(2)}）——`
+            + `但这是**好事**（${hisEmotion}），不走"安静陪着"，用共情片段里的积极共鸣那一档`
+          : `用户情绪强度 ${userIntensity.toFixed(2)} ≥ ${T.highEmotionThreshold}`,
         params: { empathyDepth: userIntensity },
       };
     }
   }
 
   // ── Rule 2: 连续多轮负面 → 转移注意 ──
-  if (consecutiveNegativeRounds >= CONSECUTIVE_NEGATIVE_REDIRECT) {
+  if (consecutiveNegativeRounds >= T.consecutiveNegativeRedirect) {
     const recentVals = ctx.recentUserMoods.slice(-3);
     const isRecovering = recentVals.length >= 2 &&
       recentVals[recentVals.length - 1] > recentVals[recentVals.length - 2];
@@ -636,7 +1048,7 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
   }
 
   // ── Rule 3: 用户表达无力感 → 沉默陪伴 ──
-  if (emotionState.taiji.arousal < 0.2 && emotionState.taiji.valence < NEGATIVE_THRESHOLD) {
+  if (emotionState.taiji.arousal < T.lowArousal && emotionState.taiji.valence < T.negativeValence) {
     if (!suppressed.has('accompany')) {
       return {
         strategy: 'accompany',
@@ -647,13 +1059,59 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
     }
   }
 
+  // ── Rule 3.5 (v1.57): 她这一轮的**行动倾向** → 决定"要不要表达、怎么表达" ──
+  //
+  // 用户方案 C 阶段的落点：`Motive`（她心里挂着什么）与 `action`（她想对它做什么）分开，
+  // "要不要做、怎么做"由**策略层**决定。
+  //
+  // 位置是刻意的：**在 Rule 0/1/1.5/2/3 之后** ——
+  //   · 冲突修复、他情绪强烈、他明确负面、连续负面、他无力感 —— 这些**永远优先**（v1.27/v1.31 的裁定），
+  //     动机**不得**覆盖"先接住他"这条线（否则又变成"只谈自己"）；
+  //   · 又**在 Rule 4（兴趣探索）之前** —— 因为"她想做什么"该压过"他这句话里碰巧出现的兴趣信号"
+  //     （C 那一跑的基线臂正是被 Rule 4 抢走、一律变成 `explore`）。
+  //
+  // 开关默认关（它改的是**已上线**的选择器）：`ENABLE_MOTIVE_ACTION_STRATEGY=true`。
+  if (motiveActionStrategyEnabled() && ctx.motive) {
+    const { type, action, priority } = ctx.motive;
+    const tag = `她这一轮的动机 ${type}／action=${action}（priority ${priority.toFixed(2)}）`;
+    if (action === 'wait' && !suppressed.has('accompany')) {
+      return {
+        strategy: 'accompany',
+        confidence: Math.round(0.60 * weights.accompany * 100) / 100,
+        reason: `${tag} —— **想到了，但这轮不说** → 安静陪着`,
+        params: { minimalDelay: 1.5 },
+      };
+    }
+    if (action === 'ask' && !suppressed.has('explore')) {
+      return {
+        strategy: 'explore',
+        confidence: Math.round(0.65 * weights.explore * 100) / 100,
+        reason: `${tag} —— 顺着这件事问它的下文`,
+        params: {},
+      };
+    }
+    if (action === 'share' && !suppressed.has('share')) {
+      return {
+        strategy: 'share',
+        confidence: Math.round(0.65 * weights.share * 100) / 100,
+        reason: `${tag} —— 主动把自己挂着的这件事说出来`,
+        params: {},
+      };
+    }
+    // `comfort` / `celebrate`：今天**没有任何 kind 会产出**它们（该由 appraisal 的 `for_him` 给），
+    // 所以这里只留判断痕迹、**不改策略** —— 不硬编一个"看起来对"的映射。
+    if (action === 'comfort' || action === 'celebrate') {
+      console.log(`[Strategy] 收到 action=${action}，但当前没有对应策略规则（留白，见 v1.57 注释）`);
+    }
+  }
+
   // ── Rule 4: 兴趣探索 — Sprint C 升级 ──
   // 触发源优先级：
   //   1. 即时兴趣信号（本轮用户消息中检测到的关键词）
   //   2. 成熟度达标的候选模式（跨轮积累，三维模型过滤）
   // 两者结合：用户刚提到的兴趣 + 系统"记得"的长期兴趣
   const exploreTopics = resolveExploreTopics(ctx);
-  if (exploreTopics.length > 0 && emotionState.taiji.valence > -0.2) {
+  if (exploreTopics.length > 0 && emotionState.taiji.valence > T.exploreMinValence) {
     if (!suppressed.has('explore')) {
       return {
         strategy: 'explore',
@@ -668,8 +1126,8 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
 
   // ── Rule 5: 情绪平稳 + 有待分享发现 → 主动分享 ──
   if (pendingDiscoveries.length > 0 &&
-      emotionState.taiji.valence > POSITIVE_IDLE_SHARE &&
-      emotionState.taiji.arousal < 0.6) {
+      emotionState.taiji.valence > T.positiveIdleShare &&
+      emotionState.taiji.arousal < T.shareMaxArousal) {
     if (!suppressed.has('share')) {
       return {
         strategy: 'share',
@@ -685,13 +1143,13 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
   // 与 share 的区别：share 基于"发现了什么"，desire 基于"我想要什么"
   const greedDrive = emotionState.reinforcement?.greedDrive ?? 0;
   const hasNoConflict = !conflictState || conflictState.phase === 'normal';
-  const desireThreshold = 0.4;
+  const desireThreshold = T.desireMinGreed;
   if (greedDrive > desireThreshold &&
-      emotionState.taiji.valence > -0.1 &&
-      emotionState.taiji.arousal >= 0.2 &&
-      emotionState.taiji.arousal <= 0.7 &&
+      emotionState.taiji.valence > T.desireMinValence &&
+      emotionState.taiji.arousal >= T.desireMinArousal &&
+      emotionState.taiji.arousal <= T.desireMaxArousal &&
       hasNoConflict &&
-      ctx.roundNumber > 3) {
+      ctx.roundNumber > T.desireMinRound) {
     if (!suppressed.has('desire')) {
       // 从兴趣模型或当前情绪中提取渴望方向
       const desireTopic = ctx.relevantPatterns && ctx.relevantPatterns.length > 0
@@ -724,19 +1182,60 @@ export function selectStrategy(ctx: StrategyContext): StrategyDecision {
   };
 }
 
+/**
+ * v1.33：给**规则链之外**的裁定者（Laya 决策层）补该策略的参数。
+ *
+ * `selectStrategy` 的每条规则都是"返回策略**并**就地算出它的参数"，
+ * 所以一个从外部改判进来的策略没有参数 —— 这个函数把那些表达式收在一处。
+ *
+ * ⚠️ 这是对规则链的**抄写**，因此有一条一致性测试兜底
+ * （`layaDecision.test.ts`：对每个触发分支，`paramsForStrategy(rule.strategy, ctx)`
+ * 必须与 `selectStrategy(ctx).params` 深相等）。规则链改了参数而这里没跟上 → 测试红。
+ */
+export function paramsForStrategy(strategy: StrategyType, ctx: StrategyContext): StrategyParams {
+  switch (strategy) {
+    case 'empathize':
+      return { empathyDepth: ctx.userAnalysis?.intensity ?? 0 };
+    case 'accompany':
+      // ⚠️ 唯一不一致的一处：`selectStrategy` 末尾"所有策略都被抑制"的兜底分支用 1.5。
+      // 那是降级分支、不是这里的对应物，一致性测试不覆盖它（它在测试里被显式排除）。
+      return { minimalDelay: 2.0 };
+    case 'redirect':
+      return { redirectTopic: selectRedirectTopic(ctx.emotionState) };
+    case 'explore':
+      return { explorationAngle: resolveExploreTopics(ctx)[0] };
+    case 'share':
+      return { shareableDiscoveries: ctx.pendingDiscoveries.slice(0, 2) };
+    case 'desire':
+      return {
+        desireTopic: ctx.relevantPatterns && ctx.relevantPatterns.length > 0
+          ? ctx.relevantPatterns[0].topic
+          : ctx.emotionState.taiji.valence > 0.3 ? '未来的可能性' : '内心深处的想法',
+      };
+    case 'crisis':
+      return { minimalDelay: 0 };
+    case 'boundary':
+      return { minimalDelay: 1.0 };
+    case 'repair':
+      return { repairAction: 'reassure' };
+    case 'neutral':
+    default:
+      return {};
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 // 4. 辅助函数
 // ════════════════════════════════════════════════════════════
 
 function selectRedirectTopic(emotionState: EmotionState): string {
-  // 基于当前情感状态选择合适的话题方向
-  const dominantEmotions = Object.entries(emotionState.emotions)
-    .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a));
+  // v1.16：按**激活态**选转移方向 —— 决定"往哪转"的应该是她此刻真正被激起的情绪。
+  // 旧实现按绝对值取第一，而 calm 基调几乎永远胜出 → 这个 switch 实际永远走 default（'日常话题'），
+  // 四个分支等于死代码。
+  const act = activationOf(emotionState);
+  const top = act.activeEmotion;
 
-  if (dominantEmotions.length === 0) return '轻松话题';
-
-  const [top] = dominantEmotions;
-  switch (top[0]) {
+  switch (top) {
     case 'sad': return '温暖的回忆';
     case 'anger': return '平静的活动';
     case 'fear': return '安全的话题';

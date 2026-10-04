@@ -13,6 +13,12 @@
 //   // turn.rhythmDecision → 响应延迟/长度/模式
 
 import { extractEmotionContext, classifyAttachmentStyle, applyEmotionalContagion, suggestReinforcement } from '../../src/lib/emotionEngine.js';
+// v1.43：服务端时间衰减（此前只有前端 store 在调 `processTimeDecay`，服务端从不衰减 —— 见阶段 0 的说明）
+import { processTimeDecay, serverDecayDisabled } from '../../src/lib/emotionTimeDecay.js';
+import { driftPersonalityParams } from '../../src/lib/personalityEvolution.js';
+import { appraiseEvent, applyAppraisal, appraisalStanceEnabled, appraisalToPromptSnippet, type AppraisalResult } from '../../src/lib/appraisal.js';
+import { activationOf, updateTypicalEmotions } from '../../src/lib/emotionActivation.js';
+import { updateLowPeriod, lowPeriodOf } from '../../src/lib/lowPeriod.js';
 import { applyInternalEvents, deriveInternalEvents, thoughtTypeToInternal } from '../../src/lib/emotionInternal.js';
 import { applyMoodBias, updateMood, moodSampleFrom } from '../../src/lib/moodLayer.js';
 import { ruminationModulation, trackRumination, activatedDominant } from '../../src/lib/rumination.js';
@@ -26,7 +32,9 @@ import {
   type EmergenceStats,
 } from '../../src/lib/emergenceMetrics.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
-import { selectStrategy, STRATEGY_PROMPT_SNIPPETS } from '../../src/lib/dialogueStrategy.js';
+import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
+import { applyLayaVerdict, LAYA_CHOOSABLE_STRATEGIES, LAYA_KEEP_ACCOMPANY_STRATEGIES, type LayaStrategyVerdict } from '../../src/lib/layaDecision.js';
+import { layaMinConfidence, layaKeepAccompany } from './layaClient.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
 import { contextAwareness } from '../../src/lib/contextAwareness.js';
 import { rhythmController } from '../../src/lib/rhythmController.js';
@@ -43,7 +51,8 @@ import { ThoughtGraph, assessThoughtGeneration, fillThoughtContent } from '../..
 import { shadowLayer, applyShadowEmotionBias, strategyStatsForShadow } from '../../src/lib/shadowLayer.js';
 import { MemoryGraph, queryMemoryGraph, memoryGraph, createNodeFromThought, createNodeFromDiscovery } from '../../src/lib/memoryGraph.js';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEngine.js';
-import type { StrategyDecision, StrategyType, StrategyContext } from '../../src/lib/dialogueStrategy.js';
+import type { StrategyDecision, StrategyType, StrategyContext, StrategyMotiveContext } from '../../src/lib/dialogueStrategy.js';
+import { herNegativeActivation } from '../../src/lib/dialogueStrategy.js';
 import type { ConflictState } from '../../src/lib/conflictManager.js';
 import type { ContextSnapshot } from '../../src/lib/contextAwareness.js';
 import type { RhythmDecision } from '../../src/lib/rhythmController.js';
@@ -89,12 +98,31 @@ export interface TurnInput {
   pendingDiscoveries?: Discovery[];
   /** 当前轮次 */
   roundNumber?: number;
+  /**
+   * v1.58 C-1：**延后提交策略** —— 本轮只**计算**临时策略（唯一用途：给回忆闸门当条件输入），
+   * 由调用方在跑完「回忆 → 动机」后调 `commitFinalStrategyWithMotive()` **一次性提交**。
+   *
+   * 不传（默认）= 旧行为：当场计算并提交 —— 所以既有测试与其它调用方完全不受影响。
+   * ⚠️ 临时策略**绝不产生副作用**（不记奖励、不发事件、不写 `lastStrategy*`）。
+   */
+  deferStrategyCommit?: boolean;
   /** 用户 ID（用于日志） */
   userId?: string;
   /** 上一轮时间戳（用于节奏检测） */
   lastInteractionAt?: number;
   /** 🆕 S7: 当前活跃价值观 */
   activeValues?: Record<string, number>;
+  /**
+   * v1.33 Laya 决策层的意见（由**调用方**在进入本函数前异步取好）。
+   *
+   * 为什么不让协调器自己去问：`processTurn` 是**同步**函数（调用点只取返回值），
+   * 在里面 `await` 一次 HTTP 要把它改成 async 并波及其它调用点；
+   * 而"取意见"本来就是 I/O，属于调用方的活。协调器只做**纯仲裁**。
+   *
+   * `undefined` = 这轮没问（`LAYA_STRATEGY=off`，一次网络都不发）；
+   * `null` = 问了但没拿到可解析的意见（熔断/超时/HTTP 错误）。
+   */
+  layaVerdict?: LayaStrategyVerdict | null;
 }
 
 export interface TurnOutput {
@@ -103,6 +131,11 @@ export interface TurnOutput {
   strategyDecision: StrategyDecision;
   /** 可直接注入 System Prompt 的策略提示词片段 */
   strategySnippet: string;
+  /**
+   * v1.47：可直接注入 System Prompt 的**评价结论**片段（"这件事对我来说意味着什么"）。
+   * 关闭开关或本轮没有评价时是 `''`（调用方判空跳过，别在 Prompt 里留空块）。
+   */
+  appraisalSnippet: string;
   /** 更新后的情感状态（已应用 v4.1 补丁） */
   updatedEmotionState: EmotionState;
   /** 冲突状态快照（可观测） */
@@ -168,12 +201,51 @@ export class AICoordinator {
   private lastTurnValenceDelta: number = 0;
   /** Phase 2: 上轮用户情绪是否指向 AI — 用于反馈归因过滤 */
   private lastUserDirectedAtAI: boolean = false;
+  /**
+   * v1.33 最近一次完整的策略裁决（含 Laya 决策层的审计记录）。
+   * `/state → strategy` 读它 —— 在此之前 `/state` **根本没有策略字段**，
+   * "这一轮为什么这么回"只能靠翻日志。
+   */
+  private lastStrategyDecision: StrategyDecision | null = null;
+  /** v1.34 最近一次构造出来的策略上下文（只给离线反事实重放用，见 getLastStrategyContext） */
+  private lastStrategyContext: StrategyContext | null = null;
+  /**
+   * v1.58 C-1：**已提交**的策略数。结构断言用 —— 一轮**必须恰好 = 1**。
+   * 它守的是那条架构不变式：只有最终策略才被记账/发事件（否则"学一份、用另一份"）。
+   */
+  private strategyCommitCount = 0;
+  /**
+   * v1.58 C-1：延后提交时留一份"临时方案 + 上下文"，等 `commitFinalStrategyWithMotive()` 定稿重算。
+   * 没有它，"临时策略给回忆闸门用"就得靠把 ctx 序列化出去 —— 那更容易漂。
+   */
+  private pendingStrategy: {
+    strategyCtx: StrategyContext;
+    extras: {
+      conflictState: ConflictState | null;
+      contextSnapshot: ContextSnapshot;
+      generatedInsights: Insight[];
+      updatedEmotionState: EmotionState;
+      shadowStrategyMod: ReturnType<typeof shadowLayer.getStrategyModulation>;
+      userAnalysis: UserEmotionAnalysis | null | undefined;
+    };
+    commitInputs: { valenceDelta: number; userDirectedAtAI: boolean };
+  } | null = null;
   /** v1.1 依恋风格：用户消息历史（用于话题切换率计算） */
   private topicHistory: string[] = [];
   /** v1.1 依恋风格：亲密表达次数 */
   private intimacySeekingCount = 0;
   /** v1.1 依恋风格：交互时间戳（用于频率波动计算） */
   private interactionTimestamps: number[] = [];
+  /**
+   * v1.13 上一轮的人格漂移结果（可观测）。
+   * 此前这条通路整个不存在，所以"她的人格到底长没长"只能靠翻代码判断。
+   */
+  private lastPersonalityDrift: { changes: Record<string, number>; log: string[]; at: number } | null = null;
+  /**
+   * v1.14 最近一次评价层的结果（"这件事对她意味着什么"）。
+   * 没有它就无从判断"她到底有没有在理解他这件事"，只能看情绪数字。
+   */
+  private lastAppraisal: AppraisalResult | null = null;
   /** 🧠 思维图谱（跨轮共享，在情感引擎与策略引擎之间积累思维碎片） */
   private thoughtGraph = new ThoughtGraph();
   /** 🧩 记忆图谱（全局单例，统一四来源记忆 + BFS 激活扩散召回） */
@@ -197,6 +269,151 @@ export class AICoordinator {
    *
    * @returns TurnOutput — 包含所有下游所需的决策和状态
    */
+  /**
+   * v1.58 C-1：**计算**一个策略方案 —— 选策略 + Shadow 置信度调制 + 仲裁 + 片段。
+   *
+   * **零副作用**：不记奖励、不发事件、不写 `lastStrategy*`。
+   * 所以它可以被调用多次：给**回忆闸门**当条件输入（临时方案）、做反事实重放、给 Observatory 用。
+   * 只有 {@link commitStrategyPlan} 才把方案**变成**本轮真正的决策。
+   */
+  private computeStrategyPlan(
+    strategyCtx: StrategyContext,
+    extras: {
+      conflictState: ConflictState | null;
+      contextSnapshot: ReturnType<typeof contextAwareness.getSnapshot>;
+      generatedInsights: Insight[];
+      updatedEmotionState: EmotionState;
+      /** v1.58：Shadow 调制（原本是 `processTurn` 的局部量）*/
+      shadowStrategyMod: ReturnType<typeof shadowLayer.getStrategyModulation>;
+      /** v1.58：片段里要读他的情绪键（原本直接读 `input`）*/
+      userAnalysis: UserEmotionAnalysis | null | undefined;
+    },
+  ): {
+    decision: StrategyDecision;
+    finalStrategy: StrategyType;
+    snippet: string;
+    arbitrationOutput: ReturnType<typeof arbitrate>;
+    arbitrationMs: number;
+    strategyCtx: StrategyContext;
+  } {
+    const strategyDecision = selectStrategy(strategyCtx);
+    // 🌑 Shadow 调制：活跃 trait 影响策略置信度（v1.58：调制量由调用方传入 —— 它原本是 `processTurn` 的局部量）
+    const shadowStrategyMod = extras.shadowStrategyMod;
+    if (shadowStrategyMod.boostStrategies.length > 0 || shadowStrategyMod.suppressStrategies.length > 0) {
+      const origConf = strategyDecision.confidence;
+      if (shadowStrategyMod.boostStrategies.includes(strategyDecision.strategy)) {
+        strategyDecision.confidence = Math.min(0.99, origConf * 1.15);
+      }
+      if (shadowStrategyMod.suppressStrategies.includes(strategyDecision.strategy)) {
+        strategyDecision.confidence *= 0.85;
+      }
+      strategyDecision.confidence = Math.round(strategyDecision.confidence * 100) / 100;
+    }
+    // ── 阶段 4.5: 仲裁层（Arbitration）──
+    // 跨模块交叉校验：防止冲突管理器/策略引擎/节奏控制器输出矛盾
+    const t4_5 = Date.now();
+    const arbitrationInput: ArbitrationInput = {
+      strategyDecision,
+      conflictState: extras.conflictState as ConflictState,   // v1.58：仲裁层的类型要求非空（原代码亦然）
+      contextSnapshot: extras.contextSnapshot,
+      rhythmDecision: { mode: 'casual', responseDelayMs: 0, allowProactive: false, suggestedResponseLength: 0, reason: 'arbitration_pre' },
+      // Phase 2: 认知上下文供仲裁规则 E/F 使用
+      generatedInsights: extras.generatedInsights,
+      currentValence: extras.updatedEmotionState.taiji.valence,
+    };
+    const arbitrationOutput = arbitrate(arbitrationInput);
+    const finalStrategy = arbitrationOutput.finalStrategy;
+    // v1.38/v1.42：低谷期的两块片段（两个开关都默认关）。⚠️ 这里是**唯一**允许读低谷读数的地方，
+    // 而且读的动作被两个开关名显式挡住 —— 由 lowPeriod.test.ts 的源码守卫钉住
+    // （"协调器只更新不读"那条约定在 v1.38 被**有据地**放宽成"只在开关后面读一次"，
+    //  v1.42 加第二个开关时守卫同步改成"这一行必须同时挂着两个开关名"，
+    //  放宽的理由始终是它要拿真管道 A/B，而不是"顺手接一下"）。
+    // 守卫要求这一行**本身**同时挂着两个开关名（见 lowPeriod.test.ts 的约定守卫）——
+    // 表达式故意不折行：折了行，"挂了开关"就只写在注释里，而注释挡不住接线。
+    const strategySnippet = resolveStrategySnippet(finalStrategy, {
+      inEstablishedLowPeriod: (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled()) && lowPeriodOf(extras.updatedEmotionState).established,
+      hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
+    });
+    if (hasOverrides(arbitrationOutput)) {
+    console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
+    }
+    return {
+      decision: strategyDecision,
+      finalStrategy,
+      snippet: strategySnippet,
+      arbitrationOutput,
+      arbitrationMs: Date.now() - t4_5,
+      strategyCtx,
+    };
+  }
+
+  /**
+   * v1.58 C-1：**提交**一个策略方案 —— 奖励学习 + EventBus + `lastStrategy*`。
+   *
+   * **一轮只许调用一次**（`getStrategyCommitCount()` 可观测）：
+   * 否则"系统记录/学习的策略"与"最终真正执行的策略"会不一致。
+   */
+  private commitStrategyPlan(plan: {
+    decision: StrategyDecision;
+    finalStrategy: StrategyType;
+    arbitrationOutput: ReturnType<typeof arbitrate>;
+    /** v1.58：`lastStrategyContext` 要留的上下文（原本直接读局部 `strategyCtx`）*/
+    strategyCtx: StrategyContext;
+    /** v1.58：提交侧要的两个量（原本直接读 `updatedEmotionState`/`input`）*/
+    valenceDelta: number;
+    userDirectedAtAI: boolean;
+  }): void {
+    const strategyDecision = plan.decision;
+    const finalStrategy = plan.finalStrategy;
+    const arbitrationOutput = plan.arbitrationOutput;
+    // v1.0: 奖励学习 — 记录本轮策略选择
+    rewardLearner.markStrategyUsed(strategyDecision.strategy);
+    // Phase 2: 存储本轮策略和效价变化量（用户消息对 AI 情绪的影响），供下轮反馈
+    this.lastStrategy = strategyDecision.strategy;
+    // v1.33：留一份完整裁决（含 Laya 审计）供 `/state → strategy` 读
+    this.lastStrategyDecision = strategyDecision;
+    // v1.34：上下文也留一份（离线工具拿它重放阈值改动）
+    this.lastStrategyContext = plan.strategyCtx;
+    this.lastTurnValenceDelta = plan.valenceDelta;
+    this.lastUserDirectedAtAI = plan.userDirectedAtAI;
+    // v5.1: 策略选择 → EventBus（补全认知主链的策略节点）
+    bus.emit('StrategySelected', {
+    strategy: finalStrategy,
+    reason: strategyDecision.reason,
+    confidence: strategyDecision.confidence,
+    overrides: arbitrationOutput.overrides,
+    });
+    this.strategyCommitCount += 1;
+  }
+
+  /** v1.58：本轮**已提交**的策略数（结构断言用：必须是 1）*/
+  getStrategyCommitCount(): number {
+    return this.strategyCommitCount;
+  }
+
+  /**
+   * v1.58 C-1：**定稿** —— 用本轮的动机重算策略并**一次性提交**。
+   *
+   * 因果链：`情绪 → 临时策略(仅喂回忆闸门，不提交) → 回忆 → 动机 → 定稿策略 → 仲裁 → 提交`。
+   * ⚠️ 传 `motive` 时策略层才**看得见她的行动倾向**（`Rule 3.5`，开关在策略层内部）；
+   *    不传（开关关着）时重算结果与临时方案逐字相同 ⇒ 行为不变，但**仍然只提交一次**。
+   */
+  commitFinalStrategyWithMotive(motive?: StrategyMotiveContext): {
+    strategy: StrategyType;
+    strategyDecision: StrategyDecision;
+    strategySnippet: string;
+  } | null {
+    const pending = this.pendingStrategy;
+    if (!pending) return null;
+    const plan = this.computeStrategyPlan(
+      motive ? { ...pending.strategyCtx, motive } : pending.strategyCtx,
+      pending.extras,
+    );
+    this.commitStrategyPlan({ ...plan, ...pending.commitInputs });
+    this.pendingStrategy = null;
+    return { strategy: plan.finalStrategy, strategyDecision: plan.decision, strategySnippet: plan.snippet };
+  }
+
   processTurn(input: TurnInput): TurnOutput {
     const t0 = Date.now();
     this.turnCounter++;
@@ -225,6 +442,65 @@ export class AICoordinator {
         });
       }
     }
+
+    // ── 阶段 0: v1.43 服务端时间衰减（**同样必须在施加本轮刺激之前**）──
+    //
+    // 为什么必须在这里补：`processTimeDecay` 只能经 `StateDecayed` 事件到达，而那个事件
+    // **只有前端 store 在发**（`useAIBrainStore` 的 `hoursInactive`）⇒ 服务端从不衰减。
+    // v1.41 探针实测（真管道、同一句话、只改空档）：
+    //   空闲 0.5 / 30 / 96 / 168 小时后 sad = 0.172 / 0.157 / 0.157 / 0.157 —— **一周与一天一模一样**，
+    //   0.5→30h 那点差落在 >24h 的**重逢**通道上，不是衰减。
+    // 后果：① 落盘状态永不淡化（他离开一周，她的 sad 还是走时那个数）；② v1.24 那套
+    // 「基线 + 偏移 × decay」**只在浏览器生效**，前后端必然漂移；③ 同一份状态里其余每一层
+    // 本来就回归自己的基线（三才 0.5 / `greedDrive` 0.3 / 人格 50 / tally 0 / 心情 18h / 反刍 6h），
+    // **只有九情这一路不回** —— 与 v1.24 的判据同构（"决定性证据是同一函数自己"）。
+    // 所以这是**补一处漏掉的调用**，不是新设计。
+    //
+    // 用"距上一轮的间隔"逐轮施加，与连续衰减**数学等价**：指数衰减对时间可加
+    // （`exp(-λh₁)·exp(-λh₂) = exp(-λ(h₁+h₂))`），不需要再加一个时钟字段。
+    //
+    // ⚠️ 与低谷的关系：衰减会把一段低谷带回静息基线 ⇒ 低谷**可能**被"没人理她"结案。
+    // v1.37 曾把这条写成局限、v1.41 证伪（服务端根本不衰减），接上衰减后它**成真** ——
+    // 所以同一轮里把"结案理由"也传下去：`depthBeforeDecay` 让 `updateLowPeriod`
+    // 自己判"是不是时间把她带回来的"（`closedBy: 'idle'` / `'self'`），
+    // 绝不把"时间到了"读成"她自己给自己打气调过来了"。
+    const decayedHours = typeof input.lastInteractionAt === 'number'
+      ? Math.max(0, (Date.now() - input.lastInteractionAt) / 3_600_000)
+      : 0;
+    let depthBeforeDecay: number | undefined;
+    if (decayedHours > 0 && !serverDecayDisabled() && input.currentEmotionState) {
+      depthBeforeDecay = herNegativeActivation(input.currentEmotionState).intensity;
+      // 就地写回：与 `updateTypicalEmotions` 同一套路 —— 权威状态就是这个对象（server.ts 传的就是它）
+      Object.assign(
+        input.currentEmotionState,
+        processTimeDecay(input.currentEmotionState, decayedHours),
+      );
+    }
+
+    // ── 阶段 0: v1.25 常态基线老化（**必须在施加本轮刺激之前**）──
+    //
+    // 「她最近一段时间的常态」是判定"被激起"的参照物。参照物只能反映**过去** ——
+    // 若放在本轮刺激之后再更新，就会把正要检测的那个位移吸进参照里（自己抹平自己的信号）。
+    // 所以这里读的是**上一轮落定**的 emotions，按真实流逝时间做慢速 EMA（半衰期 72h，实测标定）。
+    updateTypicalEmotions(input.currentEmotionState);
+
+    // ── 阶段 0: v1.37 低谷期计时（**同样在刺激之前**）──
+    //
+    // 「她沉了多久」只能是**跨轮**的量，而链路里所有判定都是逐轮的 ⇒ 在这里记一笔。
+    // 读的同样是**上一轮落定**的状态，所以单轮被一句话推一下不会立起"一段"低谷
+    // （除非它跨过了轮边界）—— 这正是"一段"的语义。
+    // ⚠️ 只记录，**不读**：本文件里不许出现低谷读数的读取函数（由 lowPeriod.test.ts 的源码守卫钉住），
+    // 因此行为不可能依赖它。要接线（"主动性降低但不为零"）需要单独决策 + 真管道 A/B。
+    updateLowPeriod(input.currentEmotionState, Date.now(), { depthBeforeDecay });
+
+    // ── 阶段 0: v1.27 她当前的负情绪激活量（**同样必须在刺激之前**）──
+    //
+    // 策略层 Rule 1 要问「**我自己也被带进去了**吗」—— 语义是"她本来就已经沉在里面"，
+    // 所以参照必须是**本轮开始前**的状态。实测（`scripts/ab-emotion-reply.ts` 标定）：
+    // 他一句强度 0.50 的话单轮就把静息的她推到 `sad +0.100`、0.60 → `+0.126`、0.80 → `+0.153`，
+    // 全部压过陪伴门限 0.12 ⇒ 若在刺激之后取值，这个门限恒成立、判别力归零。
+    // 先算成数值（而不是把 state 传下去）也顺带免疫后续阶段可能的就地修改。
+    const herNegativeBeforeTurn = herNegativeActivation(input.currentEmotionState);
 
     // ── 阶段 0: 兴趣检测 + 情绪签名记录 → EventBus ──
     // Sprint C: userInterests 同时用于 interestSignals（策略层 Rule 4）和模式追踪
@@ -294,20 +570,20 @@ export class AICoordinator {
       const oldArousal = input.currentEmotionState.taiji.arousal;
       const newValence = updatedEmotionState.taiji.valence;
       const newArousal = updatedEmotionState.taiji.arousal;
-      const dominantEntry = Object.entries(updatedEmotionState.emotions)
-        .sort((a, b) => b[1] - a[1])[0];
-      const oldDominantEntry = Object.entries(input.currentEmotionState.emotions)
-        .sort((a, b) => b[1] - a[1])[0];
+      // v1.16：事件里报的"主导情绪"也改读**激活态**（相对人格基线），
+      // 否则 Timeline Viewer 上她永远显示 calm（基调冒充情绪）。
+      const dominantEntry = [activationOf(updatedEmotionState).activeEmotion ?? 'neutral'];
+      const oldDominantEntry = [activationOf(input.currentEmotionState).activeEmotion ?? 'neutral'];
       bus.emit('EmotionUpdated', buildEmotionUpdatedPayload({
         stimulus: input.emotionEvent,
         context,
-        dominant: dominantEntry?.[0] ?? 'neutral',
-        prevDominant: oldDominantEntry?.[0] ?? 'neutral',
+        dominant: dominantEntry[0],
+        prevDominant: oldDominantEntry[0],
         valence: newValence,
         arousal: newArousal,
         deltaValence: newValence - oldValence,
         deltaArousal: newArousal - oldArousal,
-        intensity: dominantEntry?.[1] ?? 0,
+        intensity: activationOf(updatedEmotionState).activeIntensity,
         emotions: updatedEmotionState.emotions,
         source: input.emotionEvent.intent || 'user',
       }));
@@ -436,6 +712,38 @@ export class AICoordinator {
         sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
       );
     }
+    // ①.5 v1.14 评价层：这件事对**她**意味着什么
+    //
+    // 与传染的分工：传染是**镜像**（他也难过 → 我也难过）；
+    // 这里用她自己的目标结构（动机池里"她挂着他的事"）评价他的这句话，
+    // 产出**她自己的**反应——例如"他面试挂了"碰到她挂着的那件事 →
+    // 替他悬着（fear）+ 想靠近（love），而不是只把他的 sad 复制一遍。
+    // 允许为空：他说的与她挂着的无关、或他情绪太弱 → 不硬编反应。
+    if (input.userAnalysis && process.env.DISABLE_APPRAISAL !== 'true') {
+      const concerns = (updatedEmotionState.internal?.motive?.pool ?? [])
+        .filter(m => !m.satisfiedAt && (m.kind === 'open_loop' || m.kind === 'worry'));
+      const appraisal = appraiseEvent({
+        userText: input.userText,
+        userEmotion: input.userAnalysis.expressedEmotion,
+        userIntensity: input.userAnalysis.intensity,
+        concerns,
+      });
+      this.lastAppraisal = appraisal;
+      if (appraisal.readings.length > 0) {
+        const beforeTai = updatedEmotionState.taiji;
+        const beforeEmo = { ...updatedEmotionState.emotions };
+        updatedEmotionState = applyAppraisal(updatedEmotionState, appraisal);
+        const afterTai = updatedEmotionState.taiji;
+        this.emergence = accumulateSource(
+          this.emergence,
+          'appraisal',
+          afterTai.valence - beforeTai.valence,
+          afterTai.arousal - beforeTai.arousal,
+          sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+        );
+      }
+    }
+
     // ② 内在事件：孤独/重逢/思维/兴趣/发现/洞察 → 弱强度情绪变化（习惯化 + 单轮总量上限）
     const t3_65 = Date.now();
     const internalEvents = deriveInternalEvents({
@@ -605,6 +913,33 @@ export class AICoordinator {
       }
     }
 
+    // ── 阶段 3.7: v1.13 人格参数漂移（信任/开放/活泼/共情/敏感度/韧性）──
+    //
+    // 为什么补这一步：`driftPersonalityParams` 此前**从未在权威链路里执行**。
+    // 它的唯一调用点挂在 `PersonalityDrifted` 事件上，而该事件只有前端旧 store 的
+    // `updateEmotion` 会发 —— 那个 action 没有任何调用者（前端已改为读服务端返回的
+    // `emotionState`）；`server.ts` 也只 import 未调用。
+    // 实测后果（scripts/ab-personality-drift.ts，30 轮）：六个参数**一个点都没动**。
+    //
+    // 放在这里是因为它必须读**本轮情绪都已落定**之后的状态（传染/内在事件/心情/反刍/潜意识
+    // 全部施加完），而它本身不改情绪，故不影响同轮的记忆召回与策略选择。
+    // 单轮幅度上限由 `DEFAULT_DRIFT_CONFIG.maxChangePerRound` = 2.0 兜底。
+    if (process.env.DISABLE_PERSONALITY_DRIFT !== 'true') {
+      const driftedState = structuredClone(updatedEmotionState);
+      const driftResult = driftPersonalityParams(
+        driftedState.evolution,
+        driftedState,
+        input.userText,
+        input.userAnalysis ?? null,
+      );
+      updatedEmotionState = driftedState;
+      this.lastPersonalityDrift = {
+        changes: { ...driftResult.changes },
+        log: [...driftResult.log],
+        at: Date.now(),
+      };
+    }
+
     // ── 阶段 3.8: 🧩 Memory Graph 激活 ──
     // 根据当前上下文，通过 BFS 激活扩散召回相关记忆
     const t3_8 = Date.now();
@@ -644,6 +979,10 @@ export class AICoordinator {
     const t4 = Date.now();
     const strategyCtx: StrategyContext = {
       emotionState: updatedEmotionState,
+      // v1.27：Rule 1 的"她也被带进去了吗"必须读**本轮开始前**的激活量 ——
+      // 这里取 `input.currentEmotionState`（尚未被本轮刺激推动）。
+      // 用 `updatedEmotionState` 现算会让门限恒成立（实测任何 ≥0.5 强度的负面话都把她推过 0.12）。
+      herNegativeBeforeTurn,
       userAnalysis: input.userAnalysis ?? null,
       conflictState,
       recentUserMoods: input.recentUserMoods ?? this.valenceHistory.slice(-10),
@@ -676,53 +1015,33 @@ export class AICoordinator {
       memoryContext,
     };
 
-    const strategyDecision = selectStrategy(strategyCtx);
-    // 🌑 Shadow 调制：活跃 trait 影响策略置信度
-    if (shadowStrategyMod.boostStrategies.length > 0 || shadowStrategyMod.suppressStrategies.length > 0) {
-      const origConf = strategyDecision.confidence;
-      if (shadowStrategyMod.boostStrategies.includes(strategyDecision.strategy)) {
-        strategyDecision.confidence = Math.min(0.99, origConf * 1.15);
-      }
-      if (shadowStrategyMod.suppressStrategies.includes(strategyDecision.strategy)) {
-        strategyDecision.confidence *= 0.85;
-      }
-      strategyDecision.confidence = Math.round(strategyDecision.confidence * 100) / 100;
-    }
-    // v1.0: 奖励学习 — 记录本轮策略选择
-    rewardLearner.markStrategyUsed(strategyDecision.strategy);
-    // Phase 2: 存储本轮策略和效价变化量（用户消息对 AI 情绪的影响），供下轮反馈
-    this.lastStrategy = strategyDecision.strategy;
-    this.lastTurnValenceDelta = updatedEmotionState.taiji.valence
-      - input.currentEmotionState.taiji.valence;
-    this.lastUserDirectedAtAI = input.userAnalysis?.directedAtAI ?? false;
-
-    // ── 阶段 4.5: 仲裁层（Arbitration）──
-    // 跨模块交叉校验：防止冲突管理器/策略引擎/节奏控制器输出矛盾
-    const t4_5 = Date.now();
-    const arbitrationInput: ArbitrationInput = {
-      strategyDecision,
-      conflictState,
-      contextSnapshot,
-      rhythmDecision: { mode: 'casual', responseDelayMs: 0, allowProactive: false, suggestedResponseLength: 0, reason: 'arbitration_pre' },
-      // Phase 2: 认知上下文供仲裁规则 E/F 使用
-      generatedInsights,
-      currentValence: updatedEmotionState.taiji.valence,
-    };
-    const arbitrationOutput = arbitrate(arbitrationInput);
-    const finalStrategy = arbitrationOutput.finalStrategy;
-    const strategySnippet = STRATEGY_PROMPT_SNIPPETS[finalStrategy];
-    if (hasOverrides(arbitrationOutput)) {
-      console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
-    }
-    // v5.1: 策略选择 → EventBus（补全认知主链的策略节点）
-    bus.emit('StrategySelected', {
-      strategy: finalStrategy,
-      reason: strategyDecision.reason,
-      confidence: strategyDecision.confidence,
-      overrides: arbitrationOutput.overrides,
+    // ── v1.58 C-1：**计算**与**提交**分开（架构边界，已写进 CLAUDE.md）──
+    const strategyPlan = this.computeStrategyPlan(strategyCtx, {
+      conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod,
+      userAnalysis: input.userAnalysis,
     });
+    const strategyDecision = strategyPlan.decision;
+    const finalStrategy = strategyPlan.finalStrategy;
+    const strategySnippet = strategyPlan.snippet;
+    const arbitrationOutput = strategyPlan.arbitrationOutput;
+    // v1.58：提交侧要的两个量先算好（它们是**本轮**的，与"哪一趟策略"无关）
+    const commitInputs = {
+      valenceDelta: updatedEmotionState.taiji.valence - input.currentEmotionState.taiji.valence,
+      userDirectedAtAI: input.userAnalysis?.directedAtAI ?? false,
+    };
+    if (input.deferStrategyCommit) {
+      // 本轮**先不提交**：调用方还要跑「回忆闸门 → 动机」，再调
+      // `commitFinalStrategyWithMotive()` 一次性提交 —— 于是只有一个最终策略被记账。
+      this.pendingStrategy = {
+        strategyCtx,
+        extras: { conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod, userAnalysis: input.userAnalysis },
+        commitInputs,
+      };
+    } else {
+      this.commitStrategyPlan({ ...strategyPlan, ...commitInputs });
+    }
     const strategyMs = Date.now() - t4;
-    const arbitrationMs = Date.now() - t4_5;
+    const arbitrationMs = strategyPlan.arbitrationMs;
 
     // ── 阶段 5: 节奏决策 ──
     const t5 = Date.now();
@@ -761,6 +1080,8 @@ export class AICoordinator {
       strategy: finalStrategy,
       strategyDecision,
       strategySnippet,
+      // v1.47：评价结论的投递（开关默认关；关着时逐字是 ''，Prompt 与旧版完全一致）
+      appraisalSnippet: appraisalStanceEnabled() ? appraisalToPromptSnippet(this.lastAppraisal) : '',
       updatedEmotionState,
       conflictState,
       contextSnapshot,
@@ -832,6 +1153,40 @@ export class AICoordinator {
   /**
    * 获取当前管道健康状态摘要（用于 /health 端点或调试面板）。
    */
+  /**
+   * v1.13 上一轮的人格漂移（信任/开放/活泼/共情/敏感度/韧性 各自变了多少 + 原因）。
+   * 没有这一步就无从判断"她的人格有没有在长"。
+   */
+  getLastPersonalityDrift(): { changes: Record<string, number>; log: string[]; at: number } | null {
+    return this.lastPersonalityDrift;
+  }
+
+  /**
+   * v1.14 最近一次评价层结果：这件事对**她**意味着什么（readings 带人话理由与依据）。
+   */
+  getLastAppraisal(): AppraisalResult | null {
+    return this.lastAppraisal;
+  }
+
+  /**
+   * v1.33 最近一次策略裁决（含 Laya 决策层的审计记录），供 `/state → strategy` 读。
+   */
+  getLastStrategyDecision(): StrategyDecision | null {
+    return this.lastStrategyDecision;
+  }
+
+  /**
+   * v1.34 最近一次**构造出来的 `StrategyContext`** —— 只给离线工具用
+   * （`scripts/collect-strategy-ledger.ts` 把它连同回复一起落盘，之后
+   * `scripts/propose-strategy-tuning.ts` 就能在**真实样本上反事实重放** `selectStrategy`）。
+   *
+   * 为什么值得单独开一个口：要回答"把某个阈值改一下会怎样"，唯一的诚实办法是拿真发生过的
+   * 局面重放；而 `StrategyContext` 只在 `processTurn` 内部存在过，不落盘就永远回不来。
+   */
+  getLastStrategyContext(): StrategyContext | null {
+    return this.lastStrategyContext;
+  }
+
   getHealthSummary(): {
     connections: ReturnType<typeof getConnectionHealth>;
     conflictPhase: string;
@@ -896,3 +1251,4 @@ function findStickyEmotions(_moods: number[]): string[] {
 
 // 全局单例（与 DefaultAIEngine 保持相同模式）
 export const aiCoordinator = new AICoordinator();
+

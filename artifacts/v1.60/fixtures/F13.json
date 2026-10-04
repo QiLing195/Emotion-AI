@@ -1,0 +1,62 @@
+{
+  "case_id": "F13",
+  "category": "F4_experience",
+  "user_input": "上个月去爬了次山，回来腿疼了三天。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m13",
+        "kind": "memory_echo",
+        "content": "他说上个月去爬山，回来腿疼了三天",
+        "source": {
+          "memoryId": "m13"
+        },
+        "memoryId": "m13",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m13",
+          "anchors": [
+            "爬山",
+            "腿疼"
+          ]
+        },
+        "salience": 0.62,
+        "base": 0.62,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.62,
+    "content": "他说上个月去爬山，回来腿疼了三天",
+    "memoryId": "m13"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m13",
+    "anchors": [
+      "爬山",
+      "腿疼"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

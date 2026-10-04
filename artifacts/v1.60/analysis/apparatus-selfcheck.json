@@ -1,0 +1,15 @@
+{
+  "assertions": 26,
+  "failed": [],
+  "pass": true,
+  "regime": {
+    "ENABLE_MOTIVE_ACTION_STRATEGY": true,
+    "DISABLE_PROACTIVE_LOOP": true,
+    "DISABLE_LONG_TERM_DRIFT": true,
+    "DISABLE_MEMORY_NARRATIVE_LLM": true,
+    "LAYA_STRATEGY": "off",
+    "model": "stub",
+    "temperature": 0
+  },
+  "blindSeed": 20261004
+}

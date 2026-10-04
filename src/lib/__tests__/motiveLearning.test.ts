@@ -106,12 +106,12 @@ describe('学习结果真的影响竞选', () => {
 
   it('权重高的类型更容易被选中', () => {
     const base = selectMotive({
-      state: { pool }, candidates: [], userText: '嗯', emotionState: state(), now: T0,
+      state: { pool }, candidates: [], userText: '嗯', herNegativeBeforeTurn: { emotion: 'neutral', intensity: 0 }, now: T0,
     });
     // 默认先验：两者接近 → 提升 curiosity 权重后它应当胜出
     const boosted = record('curiosity', ['landed', 'landed', 'landed']);
     const after = selectMotive({
-      state: { pool }, candidates: [], userText: '嗯', emotionState: state(), learning: boosted, now: T0,
+      state: { pool }, candidates: [], userText: '嗯', herNegativeBeforeTurn: { emotion: 'neutral', intensity: 0 }, learning: boosted, now: T0,
     });
     expect(base.selected).not.toBeNull();
     // curiosity 权重 1.5 后，其有效紧迫度应超过未加权的 wish
@@ -125,7 +125,7 @@ describe('学习结果真的影响竞选', () => {
       state: { pool: topics },
       candidates: [],
       userText: '量子计算到底是什么，你给我讲讲',
-      emotionState: state(),
+      herNegativeBeforeTurn: { emotion: 'neutral', intensity: 0 },
       learning: suppressed,
       now: T0,
     });

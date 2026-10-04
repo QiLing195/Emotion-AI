@@ -8,7 +8,6 @@ import { describe, it, expect } from 'vitest';
 import {
   canonicalEmotion,
   canonicalizeWithLabel,
-  isCanonicalEmotion,
   CANONICAL_EMOTIONS,
 } from '../emotionCanonical';
 import { applyEmotionalContagion, suggestReinforcement } from '../emotionReinforcement';
@@ -98,17 +97,40 @@ describe('canonicalEmotion — 边界', () => {
   });
 });
 
-describe('isCanonicalEmotion / canonicalizeWithLabel', () => {
-  it('校验规范键', () => {
-    expect(isCanonicalEmotion('sad')).toBe(true);
-    expect(isCanonicalEmotion('难过')).toBe(false);
-    expect(isCanonicalEmotion(undefined)).toBe(false);
-  });
-
+describe('canonicalizeWithLabel', () => {
   it('保留可读标签：正文与键不同时给出 label', () => {
     expect(canonicalizeWithLabel('疲惫、委屈')).toEqual({ emotion: 'sad', label: '疲惫、委屈' });
     expect(canonicalizeWithLabel('sad')).toEqual({ emotion: 'sad', label: undefined });
     expect(canonicalizeWithLabel('')).toEqual({ emotion: 'neutral', label: undefined });
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+// 1b. 外部锁定 CONTAGION_MAP 的**键可达性**
+//     历史故障是"标签不是规范键 → 通路静默失效"；同一类病的另一面是
+//     "CONTAGION_MAP 里有一个 canonicalEmotion 永远不会产出的键 → 那条支路是死的"。
+//     这里不导出内部表，改为从**行为**上锁：每个非 neutral 的规范键都必须让某个情绪上升。
+//     新增规范键却忘了补表 → 这条用例会红。
+// ════════════════════════════════════════════════════════════
+
+describe('回归：每个规范键在传染表里都必须可达', () => {
+  const EXPECTED_TARGET: Record<string, string> = {
+    joy: 'joy', sad: 'sad', anger: 'anger', fear: 'fear',
+    love: 'love', disgust: 'disgust', gratitude: 'love',
+  };
+
+  it('7 个非 neutral 规范键各自触发对应情绪上升', () => {
+    for (const [key, target] of Object.entries(EXPECTED_TARGET)) {
+      const s = baseState();
+      const out = applyEmotionalContagion(s, key, 0.8, 60);
+      expect(out, `${key} 未触发传染（表里缺键或 effects 为空）`).not.toBe(s);
+      expect(out.emotions[target], `${key} 未抬高 ${target}`).toBeGreaterThan(s.emotions[target]);
+    }
+  });
+
+  it('规范键集合与上表一致（新增键必须同时补上期望目标）', () => {
+    const declared = [...CANONICAL_EMOTIONS].filter(k => k !== 'neutral').sort();
+    expect(declared).toEqual(Object.keys(EXPECTED_TARGET).sort());
   });
 });
 
@@ -168,5 +190,36 @@ describe('回归：LLM 中文标签不再让通路静默失效', () => {
     const out = applyReinforcement(s, signal);
     expect(out.emotions.joy).toBeGreaterThan(s.emotions.joy);
     expect(out.intimacyFromUser).toBeGreaterThanOrEqual(s.intimacyFromUser);
+  });
+});
+
+// ── v1.36：情绪方向的单一真源 ──
+// 两条不变量：①正/负集合不重叠（两边各自演进时最容易出的错就是同一个键两边都收）
+//            ②未知键/空值一律 false（保持旧行为，不猜）
+import { POSITIVE_USER_EMOTIONS, isPositiveUserEmotion } from '../emotionCanonical';
+import { NEGATIVE_USER_EMOTIONS } from '../motive';
+
+describe('POSITIVE_USER_EMOTIONS / isPositiveUserEmotion', () => {
+  it('正负集合不重叠（防两边各自漂移）', () => {
+    const overlap = [...POSITIVE_USER_EMOTIONS].filter(e => NEGATIVE_USER_EMOTIONS.has(e));
+    expect(overlap).toEqual([]);
+  });
+
+  it('两个集合里的键都在规范键表内（防写错键名而静默失效）', () => {
+    for (const e of [...POSITIVE_USER_EMOTIONS, ...NEGATIVE_USER_EMOTIONS]) {
+      expect(CANONICAL_EMOTIONS as readonly string[]).toContain(e);
+    }
+  });
+
+  it('neutral 不算正面（不去猜他到底高兴还是难受）', () => {
+    expect(isPositiveUserEmotion('neutral')).toBe(false);
+    expect(isPositiveUserEmotion('confused')).toBe(false);
+    expect(isPositiveUserEmotion(null)).toBe(false);
+    expect(isPositiveUserEmotion(undefined)).toBe(false);
+    expect(isPositiveUserEmotion('')).toBe(false);
+  });
+
+  it('joy / gratitude / love 算正面', () => {
+    for (const e of ['joy', 'gratitude', 'love']) expect(isPositiveUserEmotion(e), e).toBe(true);
   });
 });

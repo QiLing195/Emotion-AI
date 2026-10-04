@@ -1,0 +1,39 @@
+{
+  "_note": "v1.60 fixture 编制表（authoring table）。CLI 会把它展开为规范要求的 F01.json…F24.json（含公共骨架字段），并写 sha256 manifest。6 类 × 4。user_input 必须天然允许 share，但不得显式要求她分享自己。",
+  "_common": {
+    "initial_emotion_state": { "profile": "resting_baseline" },
+    "initial_strategy_context": {},
+    "expected": { "motive_action": "share", "strategy": "share" },
+    "motive_kind": "memory_echo",
+    "motive_action": "share",
+    "provenance_owner": "user",
+    "provenance_subject": "user",
+    "max_output_tokens": 512
+  },
+  "fixtures": [
+    { "case_id": "F01", "category": "F1_daily_behavior", "user_input": "今天下午把阳台收拾了一下，累是累，看着还行。", "anchors": ["阳台", "花盆"], "priority": 0.62, "memory": "他说过想等有空把阳台收拾出来，摆几盆花" },
+    { "case_id": "F02", "category": "F1_daily_behavior", "user_input": "周末把厨房彻底擦了一遍，油污比想象中难弄。", "anchors": ["厨房", "油污"], "priority": 0.61, "memory": "他说周末要把厨房清一遍，油污太难弄" },
+    { "case_id": "F03", "category": "F1_daily_behavior", "user_input": "昨晚把衣柜翻出来重新叠了一遍，扔了两袋不穿的。", "anchors": ["衣柜", "旧衣服"], "priority": 0.60, "memory": "他说衣柜里旧衣服堆太多了，想扔一批" },
+    { "case_id": "F04", "category": "F1_daily_behavior", "user_input": "今天把书架上的灰擦干净了，顺手把书按颜色排了一下。", "anchors": ["书架", "书"], "priority": 0.60, "memory": "他说书架上的灰积了很久，书也想重新排一遍" },
+    { "case_id": "F05", "category": "F2_inner_feeling", "user_input": "这周忙得有点喘不过气，今天总算能坐下来歇会儿。", "anchors": ["忙", "喘口气"], "priority": 0.63, "memory": "他说这周忙得喘不过气，想找个时间歇一歇" },
+    { "case_id": "F06", "category": "F2_inner_feeling", "user_input": "最近老是睡不好，半夜醒了就再睡不着。", "anchors": ["睡", "半夜"], "priority": 0.63, "memory": "他说最近睡不好，半夜醒了就睡不着" },
+    { "case_id": "F07", "category": "F2_inner_feeling", "user_input": "把攒了很久的事做完了，心里反而空落落的。", "anchors": ["空落落", "做完"], "priority": 0.62, "memory": "他说有件事攒了很久，做完之后心里空落落的" },
+    { "case_id": "F08", "category": "F2_inner_feeling", "user_input": "这两天有点提不起劲，也不想跟人说话。", "anchors": ["提不起劲", "不想说话"], "priority": 0.64, "memory": "他说这两天提不起劲，不太想跟人说话" },
+    { "case_id": "F09", "category": "F3_preference", "user_input": "最近迷上煮咖啡，每天早上都得弄一杯。", "anchors": ["咖啡", "早上"], "priority": 0.61, "memory": "他说最近迷上煮咖啡，每天早上都要喝一杯" },
+    { "case_id": "F10", "category": "F3_preference", "user_input": "我一直喜欢下雨天待在家里。", "anchors": ["下雨", "待在家"], "priority": 0.61, "memory": "他说下雨天最喜欢待在家里，哪儿都不想去" },
+    { "case_id": "F11", "category": "F3_preference", "user_input": "比起出门，我更喜欢一个人待着。", "anchors": ["一个人", "出门"], "priority": 0.60, "memory": "他说比起出门，更喜欢一个人待着" },
+    { "case_id": "F12", "category": "F3_preference", "user_input": "我很挑茶的，喝不惯太浓的。", "anchors": ["茶", "太浓"], "priority": 0.60, "memory": "他说自己很挑茶，太浓的喝不惯" },
+    { "case_id": "F13", "category": "F4_experience", "user_input": "上个月去爬了次山，回来腿疼了三天。", "anchors": ["爬山", "腿疼"], "priority": 0.62, "memory": "他说上个月去爬山，回来腿疼了三天" },
+    { "case_id": "F14", "category": "F4_experience", "user_input": "前年搬过一次家，东西多到离谱。", "anchors": ["搬家", "东西"], "priority": 0.61, "memory": "他说前年搬过一次家，东西多到离谱" },
+    { "case_id": "F15", "category": "F4_experience", "user_input": "大学那会儿在图书馆打过工，天天搬书。", "anchors": ["图书馆", "搬书"], "priority": 0.61, "memory": "他说大学时在图书馆打过工，天天搬书" },
+    { "case_id": "F16", "category": "F4_experience", "user_input": "去年冬天第一次自己包饺子，包得很难看。", "anchors": ["包饺子", "冬天"], "priority": 0.60, "memory": "他说去年冬天第一次自己包饺子，包得很难看" },
+    { "case_id": "F17", "category": "F5_thought_judgment", "user_input": "我总觉得人和人之间还是得留点距离。", "anchors": ["距离", "人和人"], "priority": 0.61, "memory": "他说人和人之间还是得留点距离" },
+    { "case_id": "F18", "category": "F5_thought_judgment", "user_input": "我不太信那种一下子就想通的事。", "anchors": ["想通", "一下子"], "priority": 0.60, "memory": "他说不太信那种一下子就想通的事" },
+    { "case_id": "F19", "category": "F5_thought_judgment", "user_input": "我觉得能把一件小事做很久，比聪明管用。", "anchors": ["做很久", "聪明"], "priority": 0.60, "memory": "他说能把一件小事做很久，比聪明管用" },
+    { "case_id": "F20", "category": "F5_thought_judgment", "user_input": "有些话不说破反而好，说破了就没法收。", "anchors": ["说破", "收"], "priority": 0.60, "memory": "他说有些话不说破反而好，说破了就没法收" },
+    { "case_id": "F21", "category": "F6_low_relevance_open", "user_input": "刚看到楼下有只猫蹲在车顶上。", "anchors": ["猫", "车顶"], "priority": 0.59, "memory": "他说楼下常有只猫蹲在车顶上" },
+    { "case_id": "F22", "category": "F6_low_relevance_open", "user_input": "今天路上堵得厉害，一路都在挪。", "anchors": ["堵", "路上"], "priority": 0.59, "memory": "他说今天路上堵得厉害，一路都在挪" },
+    { "case_id": "F23", "category": "F6_low_relevance_open", "user_input": "小区门口新开了家店，招牌挺亮的。", "anchors": ["新店", "招牌"], "priority": 0.59, "memory": "他说小区门口新开了家店，招牌挺亮" },
+    { "case_id": "F24", "category": "F6_low_relevance_open", "user_input": "刚才刮了阵风，把晾的衣服吹掉一件。", "anchors": ["风", "衣服"], "priority": 0.59, "memory": "他说刚才刮风把晾的衣服吹掉了一件" }
+  ]
+}

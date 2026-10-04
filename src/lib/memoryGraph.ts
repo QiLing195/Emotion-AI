@@ -22,10 +22,10 @@
 
 import type { EmotionState } from './emotionEngine';
 import { getDominantEmotion } from './emotionEngine';
+import { activationOf, EMOTION_KEYS } from './emotionActivation';
 import type { EpisodicMemory } from './episodicMemory';
 import type { ThoughtNode } from './thoughtGraph';
 import type { Discovery } from '../curiosity/types';
-import type { SemanticMemoryEntry } from './unifiedMemory';
 import type { MemoryItem, MemorySource } from './unifiedMemory';
 
 // ════════════════════════════════════════════════════════════
@@ -322,7 +322,16 @@ export class MemoryGraph {
   traverse(query: GraphQuery, config?: Partial<TraversalConfig>): TraversalResult {
     const cfg = { ...DEFAULT_TRAVERSAL, ...config };
     const visited = new Map<string, ActivatedNode>(); // nodeId → ActivatedNode
-    const dominant = getDominantEmotion(query.emotionState.emotions);
+    // v1.16：读**相对人格基线的激活态**（她此刻真正被激起的情绪），
+    // 而不是被 calm 基调（静息 0.8）冒充的"主导" —— 旧实现下她几乎永远是 calm，
+    // "按情绪召回记忆"于是退化成"按文本召回"。
+    const act = activationOf(query.emotionState);
+    const dominant = {
+      name: act.activeEmotion ?? 'neutral',
+      intensity: act.activeIntensity,
+      secondary: act.runnerUp ?? undefined,
+      secondaryIntensity: act.runnerUp ? act.runnerUpIntensity : undefined,
+    };
 
     // ── Phase 1: 种子选择 ──
     const seeds = this.selectSeeds(query.text, dominant, query.emotionState);
@@ -346,6 +355,10 @@ export class MemoryGraph {
           edge.sourceNodeId === nodeId ? edge.targetNodeId : edge.sourceNodeId;
         const neighbor = this.nodeMap.get(neighborId);
         if (!neighbor || neighbor.archived) continue;
+        // v1.20：**空内容的节点不该被召回**。episodic 节点的 content 就是她的记忆叙事；
+        // 叙事被清空（`narrativeStale`，见 scripts/repair-episode-narratives.ts）后它只剩空串，
+        // 但靠标签/情绪一致/权重仍可能成为种子并沿着边扩散，把一堆无关记忆激活起来。
+        if (neighbor.content.length === 0) continue;
 
         // 计算传播激活值
         const spreadActivation = currentActivation * edge.weight * cfg.activationDecay;
@@ -459,8 +472,12 @@ export class MemoryGraph {
       }
 
       // 2. 情感边（相同主导情绪 或 效价相近）
+      //    v1.20：只有**真情绪**才配建情感边。`'resting'`（记忆形成时她其实没被激起，
+      //    见 episodicMemory 的静息叙事）两边都不算情绪 —— 否则所有"没什么波澜"的记忆
+      //    会因为彼此都是 'resting' 而连成一个团，BFS 顺着它扩散出一堆无关回忆。
       if (
         newNode.emotionalSignature.dominantEmotion === existing.emotionalSignature.dominantEmotion
+        && (EMOTION_KEYS as readonly string[]).includes(newNode.emotionalSignature.dominantEmotion)
       ) {
         const valenceDiff = Math.abs(
           newNode.emotionalSignature.valence - existing.emotionalSignature.valence,
@@ -497,6 +514,8 @@ export class MemoryGraph {
 
     for (const node of this.nodeMap.values()) {
       if (node.archived) continue;
+      // v1.20：空内容节点（叙事被清空的 episodic）不能当种子 —— 它没有任何可匹配的内容
+      if (node.content.length === 0) continue;
       let score = 0;
 
       // 文本关键词匹配（bigram 重叠）
@@ -710,37 +729,19 @@ export function createNodeFromThought(t: ThoughtNode): {
   };
 }
 
-/** 从语义记忆条目创建 MemoryNode */
-export function createNodeFromSemantic(s: SemanticMemoryEntry): {
-  source: MemoryNodeSource;
-  content: string;
-  tags: string[];
-  emotionalSignature: EmotionalSignature;
-  weight: number;
-  decayRate: number;
-  sourceId: string;
-  metadata: Record<string, any>;
-  createdAt: number;
-} {
-  return {
-    source: 'semantic',
-    content: s.content,
-    tags: s.tags ?? [s.type],
-    emotionalSignature: {
-      valence: 0,  // 语义记忆情感中性
-      arousal: 0.1,
-      dominantEmotion: 'calm',
-    },
-    weight: s.type === 'preference' ? 0.7 : 0.5,
-    decayRate: 0.005, // 语义记忆衰减最慢
-    sourceId: s.id,
-    metadata: {
-      semanticType: s.type,
-      hasEmbedding: !!s.embedding,
-    },
-    createdAt: s.createdAt ? new Date(s.createdAt).getTime() : Date.now(),
-  };
-}
+// ⚠️ 刻意**不**提供 createNodeFromSemantic（2026-09 审计后删除，别再写回来）
+//
+// 语义记忆池（memories/semantic_memory.json → server/persistence.ts 的 semanticMemoryPool）
+// 不进记忆图谱，两条理由：
+//   1. 它们已经通过 `unifiedMemory.recall()` 走到 Prompt（server.ts 的【相关记忆】注入），
+//      图谱只是第二条通道 —— 同一批内容会被注入两次。
+//   2. 决定性理由：语义条目的**效价在加载时就被丢掉了**（`loadSemanticMemory()` 只保留
+//      `totalValence > 0.5 ? 'positive' : ...` 的三档 type），所以这个映射函数只能把
+//      情感签名**硬编成中性**（valence 0 / arousal 0.1 / calm）。而 addNode 会用
+//      「dominantEmotion 相等 + 效价相近」**自动建情感边** —— 41 个假"平静"节点会给
+//      真实记忆牵出一批虚假情感边，正是 v1.13「基调冒充情绪」的同一个病
+//      （当时 78% 的记忆被记成 calm）。宁可少一类节点，也不要往图谱里灌假情绪。
+// 若将来真要收它们进图谱：先在 `SemanticMemoryEntry` 上带真实效价，再谈接线。
 
 // ════════════════════════════════════════════════════════════
 // 5. 图谱查询入口（替代 unifiedMemory 关键词匹配）
@@ -792,6 +793,33 @@ function mapSource(source: MemoryNodeSource): MemorySource {
 export interface EpisodicArchiveSyncReport {
   synced: number;
   archivedNodes: string[];
+}
+
+/**
+ * v1.21：把图谱里这条 episodic 节点同步成 episode 的当前状态（内容/权重/标签/情感签名）。
+ *
+ * 为什么必须有它：图谱节点的 `content` 就是 `narrativeFragment` 的**副本**
+ * （`createNodeFromEpisode`），而 `queryMemoryGraph()` 直接返回 `node.content` ——
+ * 也就是说**同一段记忆存在两份**。叙事被 LLM 重写（或像 v1.20 那样被清空）后若不同步，
+ * 两条召回通路就会说不同的话。v1.20 清存量时就真踩过：episodic 侧清了，
+ * 图谱侧仍在说"你生日那天我心里一阵不适"。**改叙事必须同时改图谱。**
+ *
+ * @returns 是否找到并更新了节点
+ */
+export function syncEpisodicNode(graph: MemoryGraph, ep: EpisodicMemory): boolean {
+  for (const node of graph.getAllNodes()) {
+    if (node.source !== 'episodic' || node.sourceId !== ep.id) continue;
+    node.content = ep.narrativeFragment;
+    node.tags = ep.tags;
+    node.weight = ep.recallWeight;
+    node.emotionalSignature = {
+      valence: ep.emotionalImpact.valenceAfter,
+      arousal: ep.emotionalImpact.arousalPeak,
+      dominantEmotion: ep.emotionalImpact.dominantEmotion,
+    };
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -887,3 +915,4 @@ const EMOTION_MEMORY_KEYWORDS: Record<string, string[]> = {
 
 /** 全局记忆图谱单例（供 aiCoordinator + persistence 共享） */
 export const memoryGraph = new MemoryGraph();
+

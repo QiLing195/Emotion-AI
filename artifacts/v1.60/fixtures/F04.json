@@ -1,0 +1,62 @@
+{
+  "case_id": "F04",
+  "category": "F1_daily_behavior",
+  "user_input": "今天把书架上的灰擦干净了，顺手把书按颜色排了一下。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m04",
+        "kind": "memory_echo",
+        "content": "他说书架上的灰积了很久，书也想重新排一遍",
+        "source": {
+          "memoryId": "m04"
+        },
+        "memoryId": "m04",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m04",
+          "anchors": [
+            "书架",
+            "书"
+          ]
+        },
+        "salience": 0.6,
+        "base": 0.6,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.6,
+    "content": "他说书架上的灰积了很久，书也想重新排一遍",
+    "memoryId": "m04"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m04",
+    "anchors": [
+      "书架",
+      "书"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

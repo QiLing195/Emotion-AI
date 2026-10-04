@@ -230,6 +230,18 @@ export class RhythmController {
     this.proactiveQuota.lastSentAt = now.getTime();
   }
 
+  /**
+   * v1.44：今天已经主动发过几条（只读）。
+   *
+   * 为什么要暴露它：低谷期的"一天少打扰一次"（`proactiveMessenger` 的
+   * `LOW_PERIOD_PROACTIVE_DAILY_CAP`）需要**知道今天发过几条**才能判 ——
+   * 而那条判据必须落在闸门那一层（那里才是"她矜持"的唯一出口），
+   * 不能让 `rhythmController` 去关心"她是不是在低谷"（它连她的状态都拿不到）。
+   */
+  proactiveSentToday(): number {
+    return this.proactiveQuota.sentToday;
+  }
+
   // ── 综合决策 ──
 
   /** 生成本轮完整的节奏决策 */

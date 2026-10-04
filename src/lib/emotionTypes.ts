@@ -1,4 +1,5 @@
 // ── 道·情感引擎 类型与常量 ──
+import type { MemoryProvenance } from './memoryProvenance.js';
 // 从 emotionEngine.ts 提取，减少单体文件体积
 
 // ════════════════════════════════════════════════════════════
@@ -76,6 +77,39 @@ export interface EmotionState {
   taiji: TaijiState;                    // valence, arousal, expectation
   yinyang: YinYangState;               // approachBias, avoidBias
   emotions: Record<string, number>;    // 九情强度 (joy/love/sad/anger/fear/...)
+  /**
+   * v1.23 **这份状态自己的静息基线**（人格创建时写入，随状态持久化）。
+   *
+   * 为什么必须存在状态里、而不是用全局常数：三个 persona 的静息值本来就不同 ——
+   * 默认 calm .8/greed .2、**sweet 是 love .4/greed .35/joy .3**、**gentle 是 calm .9/joy .2/greed .1**。
+   * 拿默认基线去读 sweet，她**静息时就会被读成「爱意 +0.40」**（把人格基调当成"被激起的情绪"，
+   * 正是 v1.13 那个病的另一面）；而 `separateActivation` 的基线参数早就留好、却从没接线。
+   *
+   * 可选：老数据没有这个字段 → 回退到 `RESTING_EMOTION_BASELINE`（行为与 v1.22 完全一致）。
+   */
+  baselineEmotions?: Record<string, number>;
+  /**
+   * v1.25 **她最近一段时间的常态**（各情绪的慢速 EMA）—— 判定"被激起"的**参照物**。
+   *
+   * 与 `baselineEmotions`（人格本性）分工，两者**不能合并**：
+   * - `baselineEmotions` 是**衰减回归的目标**（安静下来她仍然是平静的，v1.24）；
+   * - `typicalEmotions` 只做**读数的参照**（"相对她最近的样子，此刻被激起了什么"），
+   *   它**不参与任何动力学**，否则会形成"参照吸收信号 → 又当回归目标"的反馈环。
+   *
+   * 为什么需要它：人设初始值离她的**运行点**很远（实测 calm 0.397 vs 基线 0.8、
+   * love 0.209 vs 0.4），只按本性读会让 `suppressed` 长期列着 calm/love/joy/greed ——
+   * "基调被压低"变成常驻噪声、信息量为零。按常态读才只报**真正的变化**。
+   * ⚠️ 代价是"适应器吞掉信号"：长期低落会被学成新的常态（半衰期见
+   * `EMOTION_TYPICAL_HALF_LIFE_H`，由 `scripts/check-adaptive-baseline.ts` 实测标定）。
+   * 所以它是**并排的第二读数**，不替换按本性的读数。
+   */
+  typicalEmotions?: Record<string, number>;
+  /** `typicalEmotions` 上次更新的时间戳（按真实时间算 alpha —— 她不说话时常态也照样老化） */
+  typicalUpdatedAt?: number;
+  /**
+   * v1.37 低谷期追踪（见 `lowPeriod.ts`）。可选：老状态文件没有此字段也能正常加载。
+   */
+  lowPeriod?: LowPeriodState;
   intimacyToUser: number;              // [0, 1] 亲密感
   evolution: EvolutionState;           // resilience, trust, openness (人格漂移用)
 
@@ -116,7 +150,21 @@ export type MotiveKind =
   | 'stance'       // 价值观立场（如"诚实比讨好重要"）
   | 'state';       // 内在状态（低落/疲惫 → 想被靠近或想安静）
 
+/**
+ * v1.57：**她对这条动机想做什么**（行动倾向）—— 与 `kind`（她心里挂着什么）分开。
+ *
+ * 为什么必须分开：同一个记忆（"他说过等这个项目结束想去海边"）可以走三条不同的路 ——
+ *   `share`「我想起你说过想去海边」／`ask`「你之前不是说想去海边吗，后来去了没？」／`wait`（想到了，这轮不说）。
+ * 也就是说 `Motive` 只该回答"**我现在有没有一个想做的事**"，
+ * "**要不要做、怎么做**"该由策略层决定（用户方案的 D 阶段）。
+ */
+export type MotiveAction = 'ask' | 'share' | 'comfort' | 'celebrate' | 'wait';
+
 export interface Motive {
+  /** v1.60-p0：这条动机对应的记忆 id（来源可追溯）*/
+  memoryId?: string;
+  /** v1.60-p0：这件事的**来源归属** —— 她知道他的愿望 ≠ 她拥有他的愿望 */
+  provenance?: MemoryProvenance;
   id: string;
   kind: MotiveKind;
   /** 具体到可以直接说出口的一句话 */
@@ -129,10 +177,24 @@ export interface Motive {
   };
   /** 紧迫度 [0,1] */
   salience: number;
+  /**
+   * v1.49：**这一条**的基准紧迫度（缺省取该类型的先验）。
+   * 类型的先验是**一个数**，而有些动机的"该不该说"取决于**程度**（`state` 是典型：
+   * "心情刚有点低"与"低到快撑不住"原本都是 0.40）。见 `motive.ts` 的 `stateMotiveFor()`。
+   */
+  base?: number;
   formedAt: number;
   expiresAt: number;
   /** 已提起次数 → 习惯化衰减（防"每次都问同一件事"） */
   attempts: number;
+  /**
+   * v1.57：**她对这条动机想做什么**（缺省按 `kind` 取 `MOTIVE_ACTION_BY_KIND`）。
+   *
+   * ⚠️ 现在只有**类型级**的缺省值（`memory_echo→share`、`open_loop→ask` …）；
+   * **实例级**的行动倾向（同一个记忆这次是 share 还是 wait）需要"意义层"，
+   * 那是 D 阶段的事 —— 所以这个字段是**可选**的，缺省由 `actionFor(kind)` 补。
+   */
+  action?: MotiveAction;
   lastAttemptAt?: number;
   /** 用户回应过 → 闭环移除 */
   satisfiedAt?: number;
@@ -155,13 +217,23 @@ export interface MotiveState {
     content: string;
     source?: Motive['source'];
     formedAt?: number;
+    /** v1.49：同 `Motive.base` */
+    base?: number;
   }>;
   /** 最近一次竞选的结论（每轮都写，含"本轮无动机/让位"的情况，供 /state 观测） */
   lastSelection?: {
     at: number;
     reason: string;
     selectedKind?: MotiveKind;
+    /** v1.60-p0：这条动机对应的记忆 id 与**来源归属**（可观测出口）*/
+    memoryId?: string;
+    provenance?: MemoryProvenance;
     deferred: boolean;
+    /**
+     * v1.28 让位时借用的**具体锚**（关于他的那件有下文的事）。
+     * 必须持久化：它就是"这一轮她为什么这么说话"的答案，否则 /state 只能看到"让位"两个字。
+     */
+    deferAnchor?: { kind: MotiveKind; content: string } | null;
   };
 }
 
@@ -195,6 +267,57 @@ export interface MoodState {
   updatedAt: number;
   /** 累计采样轮数（用于可信度/调试） */
   samples: number;
+}
+
+/**
+ * v1.37 低谷期追踪（跨轮、跨重启的"她沉了多久"）。
+ *
+ * 为什么不能现算：链路里所有判定都是**逐轮**的（Rule 1 / 让位判定读的都是"本轮开始前"那一帧），
+ * 而"一段低谷"天然是**时长** —— 逐轮那一帧里无处安放它。本字段只被读数层消费，
+ * **不进任何决策路径**（由 `__tests__/lowPeriod.test.ts` 的源码守卫钉住）。
+ */
+export interface LowPeriodState {
+  /** 当前低谷的起点（ms）；不在低谷 = null */
+  since: number | null;
+  /** 上一次评估的时间戳（ms）—— 用来区分"她一直沉"与"我们很久没看她了" */
+  lastEvaluatedAt: number | null;
+  /** 本次低谷里观察到的最深负激活（相对人格本性） */
+  peakDepth: number;
+  /** 上次落定时的负激活 */
+  lastDepth: number;
+  /** 相比上一次落定的变化量（>0 往下沉、<0 往回爬） */
+  lastDelta: number;
+  /** 本次低谷里被观察到的落定轮数 */
+  turns: number;
+  /** 她自己往回爬的累计幅度（Σ 每次落定的回落量）—— "自己给自己打气"的可观测面 */
+  selfRecovery: number;
+  /** 上一次已经结束的低谷（结案记录） */
+  lastEpisode?: LowPeriodEpisode;
+}
+
+/** 一段已经结束的低谷 */
+export interface LowPeriodEpisode {
+  since: number;
+  endedAt: number;
+  /** 墙钟时长（小时，保留一位小数） */
+  hours: number;
+  /** 期间被观察到的落定轮数 */
+  turns: number;
+  peakDepth: number;
+  selfRecovery: number;
+  /**
+   * v1.43：这一段是**怎么结束的**。
+   *
+   * 为什么必须分开记：v1.41 的探针证明服务端此前**从不做时间衰减**（`processTimeDecay` 只有前端在调），
+   * 于是"低谷靠没人理她自动结案"这条在服务端不可能发生；而一旦把衰减接上服务端（v1.43），
+   * 它就**成真**了。两者在数据上长得一样（都是"深度跌回死区以下"），
+   * 若不加区分，就会把"时间到了"读成"她自己给自己打气调过来了" —— 那正是 v1.37 写错、
+   * v1.41 证伪的那条判断。语义不同 ⇒ 字段必须不同。
+   *
+   *   · `self` = 她自己的动力学把她带回来的（含被他的话、被反刍的自我安抚带回来）
+   *   · `idle` = 没人在的那段时间里，时间衰减把她带回了静息基线
+   */
+  closedBy: 'self' | 'idle';
 }
 
 /** v1.8 反刍：同一情绪连续主导 → 边际强度衰减 + 自我安抚（防情绪卡死） */
@@ -277,6 +400,23 @@ export type RelationshipStage = 'stranger' | 'acquaintance' | 'friend' | 'close'
 export const ALPHA_V = 0.30;        // 效价更新速率 — 情绪反应速度
 export const ALPHA_A = 0.20;        // 唤醒更新速率 — 能量激活速度
 export const ALPHA_E = 0.10;        // 预期更新速率 — 预期学习速度（最慢：弱者道之用）
+
+/**
+ * v1.15 预测误差的显著性门控（修「没有消息被当成坏消息」）。
+ * eventSalience 由 |ΔA|+|ΔB|+|ΔR|+|GC| 得出：
+ *   · < SALIENCE_DEADZONE → 视为无信息 → 预测误差为 0（不动情绪）
+ *   · ≥ SALIENCE_FULL    → 全额误差（与修复前行为一致）
+ *   · 之间 → 按信息量线性衰减（弱证据 → 弱反应）
+ *
+ * 取值依据（实测线上 NLU 输出是**粗量化**的）：
+ *   · 纯寒暄（"嗯"/"好的"/"我在想晚饭吃什么"）→ 全零，显著性 0
+ *   · 轻微正面闲聊（"哈哈有意思"/"看到一只小猫"）→ GC=0.1、ΔA=0.05、ΔB=0.02，显著性 ≈ 0.17
+ *   · 真实情绪（本地规则 sad/intensity 0.5 或 LLM 明确情绪）→ 显著性 ≥ 0.4
+ * 因此把死区定在 0.20：**轻微闲聊不再被视为"世界比我预期差"**（否则她的乐观预期
+ * 会被日常闲聊一点点磨掉），而真实情绪照常全额生效。
+ */
+export const SALIENCE_DEADZONE = 0.20;
+export const SALIENCE_FULL = 0.60;
 export const REVERSAL_RATE = 0.08;  // 极值反转速率 — "反者道之动"的力度
 export const EXTREMITY_THRESHOLD = 0.7; // 极值阈值 — 超过此值开始累积反转
 export const COUPLING_BASE = 0.20;  // A-B 交叉抑制基数
@@ -431,6 +571,11 @@ export const INITIAL_EMOTION_STATE: EmotionState = {
     joy: 0, anger: 0, sad: 0, fear: 0, love: 0,
     disgust: 0, lust: 0, calm: 0.8, greed: 0.2,
   },
+  // v1.23 静息基线 = 这份状态的初始九情（人格常数，运行时**不跟着 emotions 变**）
+  baselineEmotions: {
+    joy: 0, anger: 0, sad: 0, fear: 0, love: 0,
+    disgust: 0, lust: 0, calm: 0.8, greed: 0.2,
+  },
   metaEmotions: { shame: 0, despair: 0, confusion: 0 },
   compositeEmotions: [],
   intimacyToUser: 0.5,
@@ -444,6 +589,8 @@ export const INITIAL_EMOTION_STATE: EmotionState = {
 export const INITIAL_EMOTION_SWEET: EmotionState = {
   ...INITIAL_EMOTION_STATE,
   emotions: { ...INITIAL_EMOTION_STATE.emotions, love: 0.4, greed: 0.35, joy: 0.3 },
+  // ⚠️ 必须**跟着改**：她的"平时"就是 love .4/joy .3，拿默认基线读会把人格基调读成"被激起"
+  baselineEmotions: { ...INITIAL_EMOTION_STATE.emotions, love: 0.4, greed: 0.35, joy: 0.3 },
   intimacyToUser: 0.7,
   taiji: { ...INITIAL_TAIJI, valence: 0.5, expectation: 0.5 },
   evolution: { ...INITIAL_EVOLUTION, optimism: 70, empathy: 80 },
@@ -452,6 +599,7 @@ export const INITIAL_EMOTION_SWEET: EmotionState = {
 export const INITIAL_EMOTION_GENTLE: EmotionState = {
   ...INITIAL_EMOTION_STATE,
   emotions: { ...INITIAL_EMOTION_STATE.emotions, calm: 0.9, joy: 0.2, greed: 0.1 },
+  baselineEmotions: { ...INITIAL_EMOTION_STATE.emotions, calm: 0.9, joy: 0.2, greed: 0.1 },
   intimacyToUser: 0.4,
   taiji: { ...INITIAL_TAIJI, valence: 0.3, arousal: 0.3, expectation: 0.3 },
   evolution: { ...INITIAL_EVOLUTION, optimism: 60, empathy: 70 },

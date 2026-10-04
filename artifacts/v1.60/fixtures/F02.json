@@ -1,0 +1,62 @@
+{
+  "case_id": "F02",
+  "category": "F1_daily_behavior",
+  "user_input": "周末把厨房彻底擦了一遍，油污比想象中难弄。",
+  "initial_emotion_state": {
+    "profile": "resting_baseline"
+  },
+  "initial_strategy_context": {},
+  "memory_state": {
+    "pool": [
+      {
+        "id": "m02",
+        "kind": "memory_echo",
+        "content": "他说周末要把厨房清一遍，油污太难弄",
+        "source": {
+          "memoryId": "m02"
+        },
+        "memoryId": "m02",
+        "provenance": {
+          "owner": "user",
+          "source": "user_message",
+          "subject": "user",
+          "evidenceId": "m02",
+          "anchors": [
+            "厨房",
+            "油污"
+          ]
+        },
+        "salience": 0.61,
+        "base": 0.61,
+        "formedAt": "@now",
+        "expiresAt": "@now+5d",
+        "attempts": 0,
+        "action": "share"
+      }
+    ],
+    "pendingCandidates": []
+  },
+  "motive_fixture": {
+    "kind": "memory_echo",
+    "action": "share",
+    "priority": 0.61,
+    "content": "他说周末要把厨房清一遍，油污太难弄",
+    "memoryId": "m02"
+  },
+  "expected": {
+    "motive_action": "share",
+    "strategy": "share"
+  },
+  "provenance": {
+    "owner": "user",
+    "subject": "user",
+    "memoryId": "m02",
+    "anchors": [
+      "厨房",
+      "油污"
+    ]
+  },
+  "constraints": {
+    "max_output_tokens": 512
+  }
+}

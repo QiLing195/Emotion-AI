@@ -6,6 +6,11 @@
 //   2. 纯函数：给定相同 state + event，始终产出相同 newState（确定性回放）
 //   3. Timeline Viewer 记录的事件 = 可审计的状态变更历史
 //
+// ⚠️ 现状（2026-09 实测）：**目标 1/3 只完成了一部分** —— 权威管道里只有阶段 3 与 3.1
+//    走 applyEvent，另外 7 路（传染/评价/内在事件/心情/反刍/人格漂移/潜意识）直接改状态
+//    且不发事件。因此 `applyEvent` 可安全用于"算这一步"，但**不能**用来回放历史状态；
+//    原先的 `replayState()`/`validateEventApplication()` 已据此删除，详见文件末尾说明。
+//
 // 当前模式（旧）: 改 state → bus.emit(log)
 // 目标模式（新）: bus.emit(event) → applyEvent(state, event) → newState
 //
@@ -20,8 +25,6 @@ import {
   updateEmotionState,
   applyReinforcement,
   processTimeDecay,
-  setDeterministicMode,
-  isDeterministicMode,
 } from './emotionEngine';
 import type { ReinforcementSignal } from './emotionEngine';
 import { driftPersonalityParams, type DriftConfig, DEFAULT_DRIFT_CONFIG } from './personalityEvolution';
@@ -241,61 +244,25 @@ function applyStrategyFeedback(state: EmotionState, payload: StrategyFeedbackPay
 }
 
 // ════════════════════════════════════════════════════════════
-// 工具函数
+// 已删除的两个"回放/校验"工具（2026-09 审计后删除，别再写回来）
+//
+// 删掉的是 `validateEventApplication()` 与 `replayState()`。它们建立在文件头那句
+// 「事件是唯一真相来源」的**迁移目标**上，而这个目标**从未实现**，实测证据：
+//
+//   权威管道 aiCoordinator.processTurn 里只有两处走 applyEvent（阶段 3 用户话语刺激、
+//   阶段 3.1 奖惩强化），另外 **7 处直接改状态、不发事件**：
+//     3.65① applyEmotionalContagion   3.65①.5 applyAppraisal
+//     3.65② applyInternalEvents       3.65③  applyMoodBias
+//     3.65④ ruminationModulation      3.7     driftPersonalityParams（structuredClone 直改）
+//     🌑     applyShadowEmotionBias
+//   → `replayState(基线, /api/events 的事件)` **永远复现不出真实状态**（差值恰是这 7 路的贡献）。
+//     留着它只会在第一次有人真去"审计"时产出一堆假告警 —— 比没有更坏。
+//   → `validateEventApplication` 校验的是 payload 里声明的 valence/arousal，而这两项在
+//     aiCoordinator 里就是**从刚算出的状态抄下来的**（`valence: newValence`），恒等成立，
+//     是个自我循环的检查（原测试也是先把实测值填进 payload 再断言"一致"）。
+//
+// 真要做"实际状态 vs 记录"的审计，前提是先让这 7 路也变成事件 —— 那是另一件事。
 // ════════════════════════════════════════════════════════════
-
-/**
- * 验证 applyEvent 的确定性：用事件数据重新计算，对比声明的输出值。
- * 返回 null 表示一致，否则返回差异描述。
- *
- * 注意：由于 updateEmotionState 内部有微量噪声（sigma），
- * 此验证仅检查结构性字段，不比较浮点精确值。
- */
-export function validateEventApplication(
-  newState: EmotionState,
-  payload: EmotionUpdatedPayload,
-): string | null {
-  const issues: string[] = [];
-
-  if (payload.valence !== undefined) {
-    const diff = Math.abs(newState.taiji.valence - payload.valence);
-    if (diff > 0.15) {
-      issues.push(`valence mismatch: computed=${newState.taiji.valence.toFixed(3)}, claimed=${payload.valence.toFixed(3)}`);
-    }
-  }
-
-  if (payload.arousal !== undefined) {
-    const diff = Math.abs(newState.taiji.arousal - payload.arousal);
-    if (diff > 0.15) {
-      issues.push(`arousal mismatch: computed=${newState.taiji.arousal.toFixed(3)}, claimed=${payload.arousal.toFixed(3)}`);
-    }
-  }
-
-  return issues.length > 0 ? issues.join('; ') : null;
-}
-
-/**
- * 从事件日志回放状态。
- * 给定初始状态和有序事件列表，依次 apply 每个事件，返回最终状态。
- *
- * 用途：
- *   1. 调试：从事件日志重建"当时的状态应该是什么"
- *   2. 审计：检查实际存储的状态是否与事件推算一致
- *   3. 恢复：从事件日志恢复任意时间点的状态快照
- */
-export function replayState(initialState: EmotionState, events: BusEvent[]): EmotionState {
-  const wasDeterministic = isDeterministicMode();
-  setDeterministicMode(true);
-  try {
-    let state = initialState;
-    for (const event of events) {
-      state = applyEvent(state, event);
-    }
-    return state;
-  } finally {
-    setDeterministicMode(wasDeterministic);
-  }
-}
 
 /**
  * 构建 EmotionUpdated 事件的完整 payload。

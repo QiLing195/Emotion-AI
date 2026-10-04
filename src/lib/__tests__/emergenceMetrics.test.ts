@@ -37,7 +37,7 @@ const frozenSeries = (n: number) => Array.from({ length: n }, (_, i) => 0.3 + 0.
 describe('accumulateSource / markTurn', () => {
   it('空统计全为 0', () => {
     expect(emptyEmergenceStats()).toEqual({
-      turns: 0, external: 0, contagion: 0, internal: 0, mood: 0, rumination: 0, shadow: 0,
+      turns: 0, external: 0, contagion: 0, appraisal: 0, internal: 0, mood: 0, rumination: 0, shadow: 0,
     });
   });
 
@@ -223,9 +223,9 @@ describe('buildEmergenceReport', () => {
     expect(r.internalShare).toBeCloseTo(0.25, 10);
   });
 
-  it('明细包含全部六个来源（含 v1.13 潜意识）', () => {
+  it('明细包含全部来源（含 v1.13 潜意识 与 v1.14 评价层）', () => {
     const r = buildEmergenceReport(stats({ external: 1, contagion: 2, internal: 3, mood: 4, rumination: 5 }), [0.1, 0.2, 0.3]);
-    expect(r.breakdown).toEqual({ external: 1, contagion: 2, internal: 3, mood: 4, rumination: 5, shadow: 0 });
+    expect(r.breakdown).toEqual({ external: 1, contagion: 2, appraisal: 0, internal: 3, mood: 4, rumination: 5, shadow: 0 });
     expect(r.turns).toBe(0);
   });
 });

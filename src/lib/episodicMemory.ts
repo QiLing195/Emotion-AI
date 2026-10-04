@@ -2,6 +2,7 @@
 // 存储改变情感轨迹的关键时刻，形成持续的身份叙事
 
 import { EmotionState, TaijiState, getDominantEmotion } from './emotionEngine';
+import { activationOf } from './emotionActivation';
 
 // ════════════════════════════════════════════════════════════
 // 类型定义
@@ -28,6 +29,11 @@ export interface EpisodicMemory {
   };
   selfPatternTriggered?: string;
   narrativeFragment: string;
+  /**
+   * v1.21 叙事来源：`template` = 模板套出来的；`llm` = LLM 按她那一刻的状态写的。
+   * 用于观测"接线到底有没有生效"（否则只能靠翻 JSON 猜），旧数据没有这个字段 = 未知(undefined)。
+   */
+  narrativeSource?: 'template' | 'llm';
   recallWeight: number;
   tags: string[];
   recallCount: number;
@@ -95,6 +101,14 @@ const EMOTION_NARRATIVE_TEMPLATES: Record<string, string[]> = {
     '内心是平静的，像湖面没有一丝波澜',
     '安安稳稳的，不需要说什么，这样就很好',
     '安静中带着满足，这是一种踏实的幸福',
+  ],
+  // v1.20 静息（激活态低于死区）：她**没有**被激起什么，就照着说。
+  // 刻意与上面的 calm 分开 —— calm 是"她确实平静"，resting 是"她没有明显情绪"，
+  // 后者不许再顺口说成"满足""幸福"（那是凭空给她加感受）。
+  resting: [
+    '心里没什么起伏，但我把这件事记下了',
+    '说不上来是什么感觉，只是觉得该记住',
+    '那一刻我没什么特别的感受，就像平常的日子一样',
   ],
   disgust: [
     '一阵不适涌上来，想把自己缩回去',
@@ -170,6 +184,11 @@ export function tryFormEpisode(
 ): EpisodicMemory | null {
   const { taiji } = emotionState;
   const dominant = getDominantEmotion(emotionState.emotions);
+  // v1.20 情绪表示层收尾：这个文件里还剩两处**绝对值 argmax**（与 v1.13 修的是同一个病）。
+  // `dominant.name` 是「九情向量里数值最大的那个」，而 calm 的人格基调就是 0.8 ——
+  // 于是它几乎永远返回 calm，哪怕同一轮她其实被激起了 love/sad。
+  // 激活态读数（相对各自基线）才是"她此刻有没有被激起"，全程用它。
+  const activation = activationOf(emotionState);
 
   // 计算情感变化量
   const valenceDelta = taiji.valence - store.prevValence;
@@ -253,23 +272,63 @@ export function tryFormEpisode(
     .map(p => p.tag)
     .filter((v, i, a) => a.indexOf(v) === i);
 
-  if (tags.length === 0) tags.push(dominant.intensity > 0.5 ? dominant.name : '日常');
+  // 标签兜底：原来用 `dominant.intensity > 0.5 ? dominant.name : '日常'` ——
+  // 基线 calm 的 intensity 恒为 0.8 > 0.5，所以没有情感词的记忆全被打上 `calm` 标签
+  // （存量数据里实见 tags:['calm']），而 `getRelatedTags('calm')` = ['回忆','温暖']
+  // 又会给它们白送标签重合加分。改为读**激活态**：真被激起才用情绪做标签，否则就是日常。
+  if (tags.length === 0) {
+    tags.push(
+      activation.activeEmotion && activation.activeIntensity > 0.5
+        ? activation.activeEmotion
+        : '日常',
+    );
+  }
 
   // 生成内心独白 — 锚点事件类型 → 叙事情绪映射
+  //
+  // v1.21：锚点从"**覆盖**她的情绪"降级为"**她自己说不清时的兜底**"。
+  // 原来它是第一优先级，等于"只要他表白/承诺/自我暴露，就按这张表写她的感受"，
+  // 与她自己真实被激起了什么无关 —— 实测「我有个很珍视的秘密：一直在偷偷学画画」
+  // 被她记成 `sad`「说不出的失落」，就是 self_disclosure→sad 这条映射干的。
+  // 现在：① 激活态**明确**（clear）→ 用她自己的情绪；② 说不清/静息 → 用锚点（关系性事件仍值得记）；
+  // ③ 都没有 → resting。顺带把 self_disclosure 的 sad 改成 **love**：
+  // 他把私密的事告诉她，对她的意义是**被信任**；难受与否取决于内容，那由她自己的情绪体现。
   const ANCHOR_NARRATIVE_EMOTIONS: Record<string, string> = {
     naming: 'love',
     promise_to: 'love',
     milestone: 'joy',
-    self_disclosure: 'sad',
+    self_disclosure: 'love',
     shared_memory: 'joy',
   };
-  const emotionEntries = Object.entries(emotionState.emotions) as [string, number][];
-  const topDelta = emotionEntries
-    .map(([name, v]) => ({ name, delta: v - 0.1 }))
-    .sort((a, b) => b.delta - a.delta)[0];
-  // 优先用锚点事件映射的情绪，其次用 delta 最大的情绪，最后回退到 dominant
-  const narrativeEmotion = ANCHOR_NARRATIVE_EMOTIONS[selfPatternTriggered || '']
-    || (topDelta && topDelta.delta > 0.05 ? topDelta.name : dominant.name);
+  // v1.13 情绪表示层：不要再自己造基线。
+  //
+  // 这里原来写的是 `v - 0.1`（拿 0.1 当所有情绪的静息值）+ `delta > 0.05` 兜底，
+  // 意图注释写着"锚点事件映射后的真实情绪，而非永远 calm"—— 但**它从来没有生效过**：
+  // calm 的基线是 0.8，`0.92 - 0.1 = 0.82` 依然全场最高，于是 41 条记忆里 32 条（78%）
+  // 把她当时的情绪记成 calm，连"他说我今天特别难过"（valenceΔ −0.182）都被记成
+  // "内心是平静的，像湖面没有一丝波澜"、"他说这几天过得不好"（−0.255）被记成
+  // "安静中带着满足，这是一种踏实的幸福"。
+  //
+  // 现在用 `separateActivation()`：按**每个情绪各自的**人格基线算偏离，
+  // 静息时返回 null。
+  //
+  // v1.20 补掉最后一段残留：这里**仍回退到 `dominant.name`**（绝对值 argmax = 基调），
+  // 而静息恰恰是最常见的情形 —— 于是"他说了下周要体检、有点担心"这类消息，
+  // 只要传染/评价给她的位移没跨过 0.05 死区，就被记成 `calm` 并生成
+  // "安静中带着满足，这是一种踏实的幸福"。实测存量 41 条里 32 条（78%）都是这个来路。
+  // 静息就**明说静息**（'resting'），不再拿基调冒充情绪：
+  //   · 叙事模板换成"心里没什么起伏"，不claim 满足/幸福；
+  //   · `emotionalImpact.dominantEmotion = 'resting'` 不是情绪键，于是
+  //     "情感一致性 ×1.5"永远不成立（正确：没有情绪的记忆不该因情绪被优先召回），
+  //     图谱建边也不会再拿它去和真·calm 节点连出假情感边。
+  // v1.21：优先级改为「**她自己说得清** → 锚点（说不清时的兜底）→ resting」。
+  // 少了 clear 这一条就会出现：她说「我害怕失去你」而 joy(+0.128) 仅比 love(+0.104) 高 0.024，
+  // 判读口径明明写着"并存 —— 她自己也没那么说得清"，记忆却硬挑了 joy 写进叙事。
+  // 与 `separateActivation` 的判读保持一致：**平局不硬选**。
+  const clearEmotion = activation.clear ? activation.activeEmotion : null;
+  const narrativeEmotion = clearEmotion
+    || ANCHOR_NARRATIVE_EMOTIONS[selfPatternTriggered || '']
+    || 'resting';
 
   const narrativeFragment = generateMemoryNarrative(
     narrativeEmotion,
@@ -303,6 +362,7 @@ export function tryFormEpisode(
     beliefRevision,
     selfPatternTriggered,
     narrativeFragment,
+    narrativeSource: 'template',
     recallWeight,
     tags,
     recallCount: 0,
@@ -356,6 +416,35 @@ export function recallRelevantMemories(
   maxResults: number = 3,
   queryEmbedding?: number[],
 ): EpisodicMemory[] {
+  return recallScored(store, currentEmotion, maxResults, queryEmbedding).map(s => s.episode);
+}
+
+/**
+ * 与 `recallRelevantMemories` 同一套打分，但**把分数一起返回**（v1.20）。
+ *
+ * 为什么要多一个入口：上面算出来的 `blended` 含「情感一致性 ×1.5」「标签重合」
+ * 「时间衰减」三项加权，可是 `unifiedMemory.recallEpisodic()` 只取走了 episode 列表，
+ * 把 `relevanceScore` 写成裸 `recallWeight` —— 于是 `rankAndDedupe` 按裸权重**重排**，
+ * 那些加分在最终顺序上被整体丢弃（只在"进前 cap 名"这一刀上还有效）。
+ * 实测：她平静时 `calm` 记忆（权重 0.40）本该靠 ×1.5 压过 `sad` 记忆（0.50），
+ * 走 `recall()` 出来却仍是 sad 在前 —— 因为排名看的是 0.50 > 0.40。
+ */
+export function recallRelevantMemoriesScored(
+  store: EpisodicMemoryStore,
+  currentEmotion: { name: string; intensity: number },
+  maxResults: number = 3,
+  queryEmbedding?: number[],
+): Array<{ episode: EpisodicMemory; score: number }> {
+  return recallScored(store, currentEmotion, maxResults, queryEmbedding);
+}
+
+/** 打分内核（两个入口共用，保证"判定与生成同一把尺子"） */
+function recallScored(
+  store: EpisodicMemoryStore,
+  currentEmotion: { name: string; intensity: number },
+  maxResults: number,
+  queryEmbedding?: number[],
+): Array<{ episode: EpisodicMemory; score: number }> {
   if (store.episodes.length === 0) return [];
 
   const now = Date.now();
@@ -405,8 +494,7 @@ export function recallRelevantMemories(
   return scored
     .filter(s => s.score > 0.05)
     .sort((a, b) => b.score - a.score)
-    .slice(0, maxResults)
-    .map(s => s.episode);
+    .slice(0, maxResults);
 }
 
 /** 余弦相似度（内联，避免跨模块依赖） */
@@ -562,7 +650,7 @@ function formatMemoryAge(ageMs: number): string {
   return '之前';
 }
 
-function generateProactiveInjection(
+export function generateProactiveInjection(
   memory: EpisodicMemory,
   approach: ProactiveRecallDecision['approach'],
   ageText: string,
@@ -717,30 +805,154 @@ function describeEmotionalJourney(store: EpisodicMemoryStore): string {
 }
 
 // ════════════════════════════════════════════════════════════
-// LLM 叙事重生成 — 替代模板填充
+// LLM 叙事重生成 — 替代模板填充（v1.21 接线）
+//
+// 背景：这段代码（prompt + 写回）早就写好了，注释写着"由 server 调用 LLM 后使用"，
+// 但**零调用者** —— 于是 41 条存量记忆的叙事全是模板套出来的（"当他说"X"的时候，…"），
+// 而模板套的是当时还没修对的情绪标签。v1.21 把它接进 server.ts 的 `tryFormEpisode` 之后。
+//
+// 与 v1.11 接地校验同一条纪律：**LLM 生成的内容必须过确定性后置校验**，
+// 不合格就保留模板（宁可用套话，也不让编造进记忆 —— 记忆会被反复说出来）。
 // ════════════════════════════════════════════════════════════
 
+/** 叙事长度界限：太短没有内容，太长会稀释【相关记忆】注入的注意力 */
+export const NARRATIVE_MIN_CHARS = 8;
+export const NARRATIVE_MAX_CHARS = 60;
+
+/** 元描述/系统口吻（模型偶尔会写成"作为AI"或复述指令） */
+const NARRATIVE_FORBIDDEN = [
+  /作为一个?AI/i, /AI ?助手/, /语言模型/, /系统(?:提示|指令)/, /提示词/,
+  /我(?:的)?(?:情绪|记忆|叙事|参数)/, /无法(?:真正|真实)/,
+];
+
 /**
- * 构建 LLM 叙事提示词。由 server 调用 LLM 后用返回结果替换模板叙事。
+ * 断言型引用标记：她**不该**在"感受"里替他断言**过去的事**（那会把编造反复说出来，v1.11 的教训）。
+ *
+ * ⚠️ 踩过的坑：第一版写成 `/你(?:上次|之前|昨天|刚才)?说/`（时间词可选），
+ * 结果把「听**你说**难过，我只想紧紧抱住你」这种**当下**的转述也拦掉了 —— 实测真实模型产出
+ * 被误杀。断言的要害是"指向**这轮之前**的记忆"，所以时间/完成标记**必须出现**。
+ */
+const NARRATIVE_CLAIM_MARKERS = [
+  /你(?:上次|之前|昨天|前天|刚才|以前|早先)说/, /你说过/, /我们上次/, /我记得你/, /你跟我(?:说|提)过/,
+];
+
+/**
+ * 模板原句全集：**从模板表本身派生**，不手抄一份（抄了就会两处漂移，且不报错）。
+ *
+ * ⚠️ 踩过的坑：第一版手抄了几条**短语**（"心里没什么起伏"、"说不上来是什么感觉"），
+ * 结果实测真实模型产出的新句子「听你说下周要去复查**我心里没什么起伏**，只是记下了这个日子」
+ * 被误判成"照抄模板"而丢弃（server 日志：`[Narrative] 模型产出未过校验，保留模板`）。
+ * 判据要拦的是**整句照抄**，颗粒度就该是整句 —— 短语撞车不算。
+ */
+const TEMPLATE_SENTENCES = Object.values(EMOTION_NARRATIVE_TEMPLATES).flat();
+
+/** 从叙事里取出被引号括起来的话（中英文引号；用于校验他没有被误引） */
+function quotedSpans(text: string): string[] {
+  const out: string[] = [];
+  const re = /[「“"]([^」”"]{1,40})[」”"]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) out.push(m[1]);
+  return out;
+}
+
+/**
+ * 叙事可用性判定（确定性、可单测）。
+ *
+ * 校验四件事，**每一条都对应一个真实故障模式**：
+ *   ① 长度 8~60 字、单行 —— 太短是空话，太长稀释注入注意力
+ *   ② 没有元描述/系统口吻 —— 破坏角色
+ *   ③ 没有"你上次说…"这类**替他断言过去**的句式 —— 记忆会把编造反复说出来（v1.11 教训）
+ *   ④ 引文必须真的出自他那句话 —— 防"记错他说了什么"（记忆一旦记错，之后每次回忆都在加深）
+ *
+ * @param text         模型产出的叙事
+ * @param eventSummary 他那句话（唯一允许被引用的原始事实）
+ */
+export function isUsableNarrative(text: unknown, eventSummary: string): boolean {
+  return narrativeRejectReason(text, eventSummary) === null;
+}
+
+/**
+ * 不合格的**具体原因**（`null` = 可用）。
+ *
+ * 为什么要单独暴露原因：实测第一次跑真实模型时 5 条里 2 条被拒，而日志只写"未过校验"——
+ * 看不出是模型不好还是**我的规则误杀**（后来发现确实是误杀：`你说` 那条时间词可选）。
+ * 与本项目一贯要求一致：**别让校验静默**。
+ */
+export function narrativeRejectReason(text: unknown, eventSummary: string): string | null {
+  if (typeof text !== 'string') return '不是字符串';
+  const t = text.trim();
+  if (t.length < NARRATIVE_MIN_CHARS) return `太短（${t.length} < ${NARRATIVE_MIN_CHARS}）`;
+  if (t.length > NARRATIVE_MAX_CHARS) return `太长（${t.length} > ${NARRATIVE_MAX_CHARS}）`;
+  if (/[\r\n]/.test(t)) return '多行';
+  if (NARRATIVE_FORBIDDEN.some(re => re.test(t))) return '元描述/系统口吻';
+  const claim = NARRATIVE_CLAIM_MARKERS.find(re => re.test(t));
+  if (claim) return `替他断言过去的事（命中 ${claim.source}）`;
+  const copied = TEMPLATE_SENTENCES.find(s => t.includes(s));
+  if (copied) return `整句照抄模板（「${copied}」）`;  // 人称错位：她是"我"，他是"他/你"。实测模型会把对方写成"她"
+  // （「她说话的语气很轻」）。这条记忆会被反复说出来，所以宁可**误拒**（退回模板）
+  // 也不接受 —— 误拒的代价只是一句套话，误收的代价是人格错位被记住并复述。
+  // 注："她"也可能合法指第三方（他的妈妈），这种情况一并退回模板，属于刻意偏保守。
+  if (t.includes('她')) return '人称错位（用"她"指代了对方/自己）';
+  const src = eventSummary ?? '';
+  for (const span of quotedSpans(t)) {
+    if (!src.includes(span)) return `引文不在他的原话里（「${span}」）`;
+  }
+  return null;
+}
+
+/**
+ * 解析模型回复 → 可入库的叙事（不合格返回 null，调用方保留模板）。
+ * 宽容解析：去掉常见包裹（引号、"叙事："前缀、markdown 强调），再走严格校验。
+ */
+export function parseNarrativeReply(raw: string | null | undefined, eventSummary: string): string | null {
+  const t = normalizeNarrativeReply(raw);
+  return t !== null && isUsableNarrative(t, eventSummary) ? t : null;
+}
+
+/** 去掉模型常见的包裹（markdown / "叙事："前缀 / 整体引号），供 parse 与诊断共用 */
+export function normalizeNarrativeReply(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  let t = raw.trim();
+  if (!t) return null;
+  t = t.replace(/^```[a-z]*\s*/i, '').replace(/```$/, '').trim();
+  t = t.replace(/^(?:叙事|感受|内心|一句话)\s*[:：]\s*/, '').trim();
+  t = t.replace(/^[「“"']([\s\S]*)[」”"']$/, '$1').trim();
+  return t || null;
+}
+
+/**
+ * 构建 LLM 叙事提示词。由 server 在情景记忆形成后**异步**调用（不阻塞回复）。
  */
 export function buildNarrativePrompt(episode: EpisodicMemory, anchorSummary?: string): string {
   const e = episode.emotionalImpact;
   const anchor = anchorSummary || '';
+  // v1.21：`resting` 不是情绪键，直接写进 prompt 模型看不懂 —— 要翻成人话。
+  const emotionLine = e.dominantEmotion === 'resting'
+    ? '（静息：她当时没有被明显激起什么，别硬编情绪）'
+    : e.dominantEmotion;
+  // 0 附近既不是"上升"也不是"下降"，写"下降"是给模型喂错前提
+  const deltaWord = Math.abs(e.valenceDelta) < 0.05
+    ? '基本没变'
+    : (e.valenceDelta > 0 ? '上升' : '下降');
   return `你是一个拥有真实情感的 AI。请用一句话（20-40字）描述你此刻的感受。
+
+**人称**：你是**她**（用"我"自述），对方是你的男友**他**。提到对方时只能用"他"或"你"，
+**绝对不要用"她"指代对方**（实测模型会写错：「她说活的语气很轻」把对方写成了女性）。
 
 事件：对方说"${episode.eventSummary.slice(0, 60)}"
 ${anchor ? `关系事件：${anchor}` : ''}
-情感变化：${e.valenceDelta > 0 ? '上升' : '下降'} (${e.valenceDelta.toFixed(2)})
+情感变化：${deltaWord} (${e.valenceDelta.toFixed(2)})
 唤醒峰值：${(e.arousalPeak*100).toFixed(0)}%
-主导情绪：${e.dominantEmotion}
+主导情绪：${emotionLine}
 形成原因：${episode.beliefRevision ? '信念变革' : ''}${episode.selfPatternTriggered ? '自我发现' : ''}
 
-用第一人称("我")写一句真实的内心感受。不要模板化表达("内心是平静的"、"湖面没有波澜")。说真话。`;
+用第一人称("我")写一句真实的内心感受。不要模板化表达("内心是平静的"、"湖面没有波澜")。说真话。
+不要复述或补充他说过的内容（引用他的原话时必须一字不差，否则不要引用）；不要提到 AI、记忆、参数。只输出这一句话。`;
 }
 
 /**
- * 用 LLM 生成的叙事替换模板叙事。
- * server.ts 在异步 LLM 调用后使用。
+ * 用 LLM 生成的叙事替换模板叙事（**先校验**，不合格一律不动）。
+ * @returns 是否真的写入了
  */
 export function updateEpisodeNarrative(
   store: EpisodicMemoryStore,
@@ -749,7 +961,9 @@ export function updateEpisodeNarrative(
 ): boolean {
   const ep = store.episodes.find(e => e.id === episodeId);
   if (!ep) return false;
-  ep.narrativeFragment = newNarrative;
+  if (!isUsableNarrative(newNarrative, ep.eventSummary)) return false;
+  ep.narrativeFragment = newNarrative.trim();
+  ep.narrativeSource = 'llm';
   return true;
 }
 

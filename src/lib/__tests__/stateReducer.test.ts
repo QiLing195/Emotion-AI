@@ -1,8 +1,10 @@
 // ── stateReducer 测试 ──
-// 验证 applyEvent 的确定性、可回放性、事件契约
+// 验证 applyEvent 的确定性、事件契约
+// 注：replayState / validateEventApplication 已删除（回放无法复现真实状态 ——
+//     权威管道有 7 路直接改状态、不发事件；详见 stateReducer.ts 末尾说明）
 
 import { describe, it, expect } from 'vitest';
-import { applyEvent, buildEmotionUpdatedPayload, replayState, validateEventApplication } from '../stateReducer';
+import { applyEvent, buildEmotionUpdatedPayload } from '../stateReducer';
 import { INITIAL_EMOTION_STATE, getDominantEmotion } from '../emotionEngine';
 import { DEFAULT_DRIFT_CONFIG } from '../personalityEvolution';
 import type { EmotionEvent, EmotionState } from '../emotionEngine';
@@ -177,90 +179,6 @@ describe('applyEvent', () => {
         expect(newState.taiji.arousal).toBe(state.taiji.arousal);
         expect(newState.emotions.calm).toBe(state.emotions.calm);
       });
-    }
-  });
-});
-
-describe('replayState', () => {
-  it('空事件列表返回原状态', () => {
-    const state = structuredClone(INITIAL_EMOTION_STATE);
-    const result = replayState(state, []);
-    expect(result).toBe(state);
-  });
-
-  it('可以从事件序列回放状态', () => {
-    const state = structuredClone(INITIAL_EMOTION_STATE);
-
-    const events: BusEvent[] = [
-      makeEmotionUpdatedEvent(makePositiveEvent(), state),
-      makeEmotionUpdatedEvent(makePositiveEvent(), state),
-      makeEmotionUpdatedEvent(makeNegativeEvent(), state),
-    ];
-
-    const finalState = replayState(state, events);
-
-    // 两正一负 → 效价应该正向偏移
-    expect(finalState.taiji.valence).toBeDefined();
-    expect(finalState.emotions).toBeDefined();
-    expect(finalState.intimacyToUser).toBeDefined();
-  });
-
-  it('事件顺序不同 → 结果可能不同（因果顺序敏感）', () => {
-    const state1 = structuredClone(INITIAL_EMOTION_STATE);
-    const state2 = structuredClone(INITIAL_EMOTION_STATE);
-
-    const pos = makeEmotionUpdatedEvent(makePositiveEvent(), state1);
-    const neg = makeEmotionUpdatedEvent(makeNegativeEvent(), state1);
-
-    // 先正后负 vs 先负后正
-    const resultPN = replayState(state1, [pos, neg]);
-    const resultNP = replayState(state2, [neg, pos]);
-
-    // 顺序敏感 — 结果应该不同（因为状态是路径依赖的）
-    const sameValence = Math.abs(resultPN.taiji.valence - resultNP.taiji.valence) < 0.001;
-    // 不作为硬断言，因为噪声可能导致微小差异 — 这里只是文档化此行为
-    expect(typeof sameValence).toBe('boolean');
-  });
-});
-
-describe('validateEventApplication', () => {
-  it('一致的事件不报错', () => {
-    const state = structuredClone(INITIAL_EMOTION_STATE);
-    const stimulus = makePositiveEvent();
-    const event = makeEmotionUpdatedEvent(stimulus, state);
-
-    const newState = applyEvent(state, event);
-
-    // 用实际计算出的输出值填充 payload
-    const payload = buildEmotionUpdatedPayload({
-      stimulus,
-      context: { baseA: 0.5, baseB: 0.5, baseR: 0.5, emotionalStability: 0.5, empathy: 50, optimism: 50 },
-      valence: newState.taiji.valence,
-      arousal: newState.taiji.arousal,
-    });
-
-    const error = validateEventApplication(newState, payload);
-    // 由于 payload valence/arousal 来自实际计算值，应该一致
-    expect(error).toBeNull();
-  });
-
-  it('差值过大时报警', () => {
-    const state = structuredClone(INITIAL_EMOTION_STATE);
-    const stimulus = makePositiveEvent();
-    const newState = applyEvent(state, makeEmotionUpdatedEvent(stimulus, state));
-
-    // 故意声明不匹配的 output
-    const payload = buildEmotionUpdatedPayload({
-      stimulus,
-      context: { baseA: 0.5, baseB: 0.5, baseR: 0.5, emotionalStability: 0.5, empathy: 50, optimism: 50 },
-      valence: 0.9,  // 远高于实际值
-      arousal: 0.1,  // 远低于实际值
-    });
-
-    const error = validateEventApplication(newState, payload);
-    // 应该检测到不一致
-    if (Math.abs(newState.taiji.valence - 0.9) > 0.15 || Math.abs(newState.taiji.arousal - 0.1) > 0.15) {
-      expect(error).not.toBeNull();
     }
   });
 });
