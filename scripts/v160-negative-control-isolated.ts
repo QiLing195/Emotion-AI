@@ -31,7 +31,7 @@ const use = fixtures.slice(0, LIMIT);
 
 interface Cell {
   case_id: string; arm: 'A' | 'B'; pid?: number; exitCode: number | null; timedOut?: boolean;
-  initial_state_source?: string; initial_state_hash?: string; fixture_initial_state_hash?: string;
+  initial_state_source?: string; runtime_initial_state_hash?: string; fixture_initial_state_hash?: string;
   initial_state_match?: boolean; mood_cleared?: boolean;
   motiveKind?: string; motiveAction?: string; strategy?: string; provenanceOwner?: string;
   guardVerdict?: string; assistantOutput?: string; responseLength?: number;
@@ -117,9 +117,25 @@ check(maxLive === 1, '任一时刻只有一个 cell 进程存活（严格串行�
 
 // 修正④：初始状态同一性 —— 三方相等
 check(cells.every(c => c.initial_state_match === true), '每格：磁盘初始状态哈希 == fixture 期望哈希', cells.filter(c => c.initial_state_match !== true).map(c => c.case_id + '/' + c.arm));
+// 修正⑥：三方比对必须来自**三个独立来源**的哈希（fixture 空基底构建 vs 各臂写盘回读）
+const pairStateChecks: Array<{ case_id: string; fixture_a_equal: boolean; fixture_b_equal: boolean; a_b_equal: boolean }> = [];
 if (!REACH_ONLY) {
-  const pairOk = [...byCase.values()].filter(v => v.length === 2 && v[0].initial_state_hash === v[1].initial_state_hash && v[0].initial_state_match && v[1].initial_state_match).length;
-  check(pairOk === use.length, '**A/B 初始 emotion state 三方相等**（fixture == A == B）', pairOk + '/' + use.length);
+  for (const [cid, v] of byCase.entries()) {
+    if (v.length !== 2) continue;
+    const [x, y] = v;
+    pairStateChecks.push({
+      case_id: cid,
+      fixture_a_equal: !!x.fixture_initial_state_hash && x.fixture_initial_state_hash === x.runtime_initial_state_hash,
+      fixture_b_equal: !!y.fixture_initial_state_hash && y.fixture_initial_state_hash === y.runtime_initial_state_hash,
+      a_b_equal: !!x.runtime_initial_state_hash && x.runtime_initial_state_hash === y.runtime_initial_state_hash,
+    });
+  }
+  const fa = pairStateChecks.filter(p => p.fixture_a_equal).length;
+  const fb = pairStateChecks.filter(p => p.fixture_b_equal).length;
+  const ab = pairStateChecks.filter(p => p.a_b_equal).length;
+  check(fa === use.length, 'fixture == A 初始状态哈希（' + fa + '/' + use.length + '）', fa);
+  check(fb === use.length, 'fixture == B 初始状态哈希（' + fb + '/' + use.length + '）', fb);
+  check(ab === use.length, 'A == B 初始状态哈希（' + ab + '/' + use.length + '）', ab);
 } else {
   console.log('  · （reach-only：跳过 A/B 状态同一性断言）');
 }
@@ -131,6 +147,13 @@ writeFileSync(ROOT + '/analysis/' + mode + '-summary.json', JSON.stringify({
   phase: mode, isolated: true, real: REAL, limit: LIMIT, cells: cells.length,
   pairs: complete, runtimeUnreachable, structural, rawFile: rawPath,
   initialStateAllMatch: cells.every(c => c.initial_state_match === true),
+  pairStateChecks,
+  threeWay: {
+    fixture_a: pairStateChecks.filter(p => p.fixture_a_equal).length,
+    fixture_b: pairStateChecks.filter(p => p.fixture_b_equal).length,
+    a_b: pairStateChecks.filter(p => p.a_b_equal).length,
+    total: pairStateChecks.length,
+  },
   guardBaselineStatus: 'NOT_MEASURED —— 装置封条（④⑤ + 全量回归）前，guard 计数不得用于任何基线',
   note: '本脚本不产出 agreement / noise floor / guard baseline。',
 }, null, 2) + '\n', 'utf8');

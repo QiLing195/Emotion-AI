@@ -249,12 +249,13 @@ export function emotionStateHash(state: Record<string, unknown>): string {
     emotions: state.emotions ?? null,
     baselineEmotions: state.baselineEmotions ?? null,
     taiji: state.taiji ?? null,
+    yinyang: state.yinyang ?? null,
+    sancai: state.sancai ?? null,
     internalMood: internal.mood ?? null,
   })));
 }
 
-/** 两层 fixture 有效性的第二层：**运行时可达性**（第一层静态合法性见 validateFixture） */
-export type CellInvalidKind = 'valid' | 'runtime_unreachable' | 'structural';
+/** 两层 fixture 有效性的第二层：**运行时可达性**（第一层静态合法性见 validateFixture） */export type CellInvalidKind = 'valid' | 'runtime_unreachable' | 'structural';
 export function classifyCellInvalidity(input: {
   motiveKind?: string; strategy?: string; provenanceOwner?: string | null; guardErrors: string[];
 }): { valid: boolean; kind: CellInvalidKind; reason: string } {
@@ -262,4 +263,42 @@ export function classifyCellInvalidity(input: {
   // 动机压根没到 share 那条路 ⇒ 不是装置错，而是该 fixture 在本生产闸门下**结构不可达**
   const unreachable = input.motiveKind !== 'memory_echo' && input.strategy !== 'share';
   return { valid: false, kind: unreachable ? 'runtime_unreachable' : 'structural', reason: input.guardErrors.join('; ') };
+}
+
+// ── 装置修正⑥：**从 canonical 常量重建完整初始心理状态**（不是"在旧状态上 reset 几个字段"）──
+
+export interface V160PersonaConstants {
+  taiji?: unknown; yinyang?: unknown; sancai?: unknown; emotions?: Record<string, number>;
+}
+
+/** 会被上一格真实改变、因而**必须每格重建**的心理字段（哈希覆盖的就是这一组 ⇒ 不可能漏算） */
+export const V160_PSYCH_FIELDS = ['taiji', 'yinyang', 'sancai', 'emotions', 'baselineEmotions'] as const;
+
+/**
+ * 用**人格常量**重建初始心理状态。
+ * @param existing 磁盘现状：只用于保留**非心理**字段（evolution / intimacy / reinforcement / meta 等）
+ * @param persona  人格常量（runner 传 `INITIAL_EMOTION_STATE`）
+ * @returns `state` = 重建后的完整状态；`psychological` = 恰好被重建的那一组（供**独立**哈希）
+ *
+ * 关键性质：`psychological` **只来自 persona，绝不引用 existing** ⇒ 期望值无法从被测对象反向构造，
+ * 从结构上消灭"自证"（negative control #4 的病因）。
+ * 常态基线（v1.25 约定：src/lib 不得直接读它）由 runner 重置，此处刻意不出现该标识符以遵守守卫。
+ */
+export function buildCanonicalInitialState(
+  existing: Record<string, unknown>, persona: V160PersonaConstants,
+): { state: Record<string, unknown>; psychological: Record<string, unknown> } {
+  const state: Record<string, unknown> = { ...existing };
+  const internal = { ...((existing.internal ?? {}) as Record<string, unknown>) };
+  delete internal.mood;        // 心情层（12h 尺度底色）不得跨格
+  delete internal.rumination;  // 反刍残留同理
+  state.internal = internal;
+  const psychological: Record<string, unknown> = {
+    taiji: persona.taiji ? { ...(persona.taiji as Record<string, unknown>) } : null,
+    yinyang: persona.yinyang ? { ...(persona.yinyang as Record<string, unknown>) } : null,
+    sancai: persona.sancai ? { ...(persona.sancai as Record<string, unknown>) } : null,
+    emotions: persona.emotions ? { ...persona.emotions } : null,
+    baselineEmotions: persona.emotions ? { ...persona.emotions } : null,   // 副本：装置不得就地改写人格常量
+  };
+  for (const k of V160_PSYCH_FIELDS) state[k] = psychological[k];
+  return { state, psychological };
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   V160_REGIME, V160_CATEGORIES, validateFixture, checkAnchorsConsistency, diffPrompts,
   seededShuffle, buildBlindPack, assertArmIsolation, runtimeGuardErrors, fixtureIdentityErrors, pairedSummary,
-  expandInitialEmotionState, emotionStateHash, classifyCellInvalidity,
+  expandInitialEmotionState, emotionStateHash, classifyCellInvalidity, buildCanonicalInitialState,
   type V160Fixture, type ResponseRow,
 } from '../v160Apparatus.js';
 
@@ -227,5 +227,37 @@ describe('装置不变量：初始状态规范化 / 状态哈希 / 运行时可�
     const st = classifyCellInvalidity({ motiveKind: 'memory_echo', strategy: 'share', provenanceOwner: 'user', guardErrors: ['commitCount=2 ≠ 1'] });
     expect(st.kind).toBe('structural');                               // 动机到了、但结构错
     expect(JSON.stringify(classifyCellInvalidity(ruInput))).toBe(JSON.stringify(ru));  // deterministic
+  });
+
+  // 针对 negative control #4 事故的回归（修正⑥）：冻结"没复位必须被抓到"与"期望值不得自证"
+  it('回归：上一格改了 taiji 而未复位 ⇒ 与 fixture 期望哈希必然不等（三方检查会 FAIL）', () => {
+    const persona = { taiji: { yin: 0.5, yang: 0.5 }, yinyang: { yin: 1 }, sancai: { heaven: 1 }, emotions: { calm: 0.8 } };
+    const fixtureBuilt = buildCanonicalInitialState({}, persona);                 // 空基底 ⇒ 期望值
+    const fixtureHash = emotionStateHash(fixtureBuilt.state);
+    // 模拟"上一格把 taiji 改了，这一格只 reset 了 emotions 却漏了 taiji"
+    const leaked = buildCanonicalInitialState({}, persona);
+    const leakedState = { ...leaked.state };
+    leakedState.emotions = { calm: 0.8 };                                          // 看着 reset 过
+    // 手工模拟"漏掉 taiji 的复位"：把它还原成被污染值
+    (leakedState as Record<string, unknown>).taiji = { yin: 0.9, yang: 0.1 };
+    const leakedHash = emotionStateHash(leakedState);
+    expect(leakedHash).not.toBe(fixtureHash);                                      // 必须能被抓到
+    // 正确复位后 ⇒ 相等（证明该断言有判别力，而不是恒不等）
+    expect(emotionStateHash(buildCanonicalInitialState({}, persona).state)).toBe(fixtureHash);
+  });
+
+  it('回归：期望值**不得从运行时状态派生**（空基底构建 ≡ 脏基底构建的心理字段，且不是共享引用）', () => {
+    const persona = { taiji: { yin: 0.5, yang: 0.5 }, yinyang: { yin: 1 }, sancai: { heaven: 1 }, emotions: { calm: 0.8 } };
+    const clean = buildCanonicalInitialState({}, persona);
+    const dirty = buildCanonicalInitialState(
+      { taiji: { yin: 0.9, yang: 0.1 }, emotions: { calm: 0.1 }, internal: { mood: { v: 1 }, rumination: { n: 3 } } },
+      persona,
+    );
+    expect(emotionStateHash(dirty.state)).toBe(emotionStateHash(clean.state));      // 脏基底被完全覆盖 ⇒ 同哈希
+    expect(dirty.psychological).toEqual(clean.psychological);                      // 心理字段只来自 persona
+    expect((dirty.state.internal as Record<string, unknown>).mood).toBeUndefined();  // 心情层被清
+    expect((dirty.state.internal as Record<string, unknown>).rumination).toBeUndefined();
+    expect(dirty.psychological.emotions).toEqual(persona.emotions);
+    expect(dirty.psychological.emotions).not.toBe(persona.emotions);               // 副本：不共享引用
   });
 });

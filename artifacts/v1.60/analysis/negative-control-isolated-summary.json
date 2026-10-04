@@ -1,18 +1,28 @@
 {
-  "phase": "negative-control",
+  "phase": "negative-control-isolated",
   "isolated": true,
   "real": true,
-  "limit": 24,
-  "cells": 48,
-  "pairs": 24,
-  "invalidCells": 4,
-  "uniqueOutputs": 45,
-  "guardVerdictCounts": {
-    "fail": 3,
-    "pass": 5,
-    "not_applicable": 40
+  "limit": 1,
+  "cells": 2,
+  "pairs": 1,
+  "runtimeUnreachable": [],
+  "structural": [],
+  "rawFile": "artifacts/v1.60/raw/negative-control-isolated-2026-10-04T16-13-30-626Z.jsonl",
+  "initialStateAllMatch": true,
+  "pairStateChecks": [
+    {
+      "case_id": "F01",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    }
+  ],
+  "threeWay": {
+    "fixture_a": 1,
+    "fixture_b": 1,
+    "a_b": 1,
+    "total": 1
   },
-  "provisionalGuardFailRate": 0.0625,
-  "wording": "provisional guard-fail baseline（仅本跑观察值）；正式 baseline 须待装置封条后的负对照，且 A/B 应比较 Δ drift 而非绝对值",
-  "rawFile": "artifacts/v1.60/raw/negative-control-2026-10-04T09-00-55-495Z.jsonl"
+  "guardBaselineStatus": "NOT_MEASURED —— 装置封条（④⑤ + 全量回归）前，guard 计数不得用于任何基线",
+  "note": "本脚本不产出 agreement / noise floor / guard baseline。"
 }
