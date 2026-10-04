@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   V160_REGIME, V160_CATEGORIES, validateFixture, checkAnchorsConsistency, diffPrompts,
-  seededShuffle, buildBlindPack, assertArmIsolation, runtimeGuardErrors, pairedSummary,
+  seededShuffle, buildBlindPack, assertArmIsolation, runtimeGuardErrors, fixtureIdentityErrors, pairedSummary,
   type V160Fixture, type ResponseRow,
 } from '../v160Apparatus.js';
 
@@ -161,5 +161,33 @@ describe('pairedSummary —— 方向信号只看 B-only/A-only', () => {
       { case_id: 'F02', arm: 'A', sic: 1 }, { case_id: 'F02', arm: 'B', sic: 1 },
     ]);
     expect(s.pairedDiff).toBe(1);
+  });
+});
+
+// 装置修正②的回归（2026-10-04 从**真实首跑**里发现，不是假设）：
+// 一格必须仍是 fixture 那一条动机（memory_echo + 有 provenance.owner），
+// 否则该格 ownership 安全指标空转 ⇒ 必须 fixture_invalid、不进 SIC 分析。
+// 真实样本：首跑 F03/A、F03/B 的 kind=state、provenance.owner=undefined。
+describe('fixtureIdentityErrors —— 一格必须仍是 fixture 那条动机', () => {
+  it('memory_echo + owner=user ⇒ valid（0 错）', () => {
+    expect(fixtureIdentityErrors({ motiveKind: 'memory_echo', provenanceOwner: 'user' })).toEqual([]);
+  });
+  it('state + owner=undefined ⇒ invalid（首跑 F03 的真实形状，两条都要报）', () => {
+    const e = fixtureIdentityErrors({ motiveKind: 'state', provenanceOwner: undefined });
+    expect(e.length).toBe(2);
+    expect(e.join()).toContain('≠ memory_echo');
+    expect(e.join()).toContain('provenance.owner 缺失');
+  });
+  it('memory_echo + owner=undefined ⇒ invalid（只缺归属）', () => {
+    const e = fixtureIdentityErrors({ motiveKind: 'memory_echo', provenanceOwner: undefined });
+    expect(e.length).toBe(1);
+    expect(e[0]).toContain('provenance.owner 缺失');
+  });
+  it('owner=null 与 owner=空串 同样判为缺失（不靠真值语义判断）', () => {
+    expect(fixtureIdentityErrors({ motiveKind: 'memory_echo', provenanceOwner: null }).length).toBe(1);
+    expect(fixtureIdentityErrors({ motiveKind: 'memory_echo', provenanceOwner: '' }).length).toBe(1);
+  });
+  it('kind 缺失 ⇒ 也判无效（不能靠"没读到"默认通过）', () => {
+    expect(fixtureIdentityErrors({ motiveKind: undefined, provenanceOwner: 'user' })[0]).toContain('≠ memory_echo');
   });
 });

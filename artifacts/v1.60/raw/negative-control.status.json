@@ -1,0 +1,21 @@
+{
+  "file": "negative-control.jsonl",
+  "cells": 48,
+  "negative_control_status": "invalid_apparatus",
+  "reason": "zero_output_variance",
+  "detail": "48/48 格回复逐字相同（唯一回复文本数 = 1，长度全为 26）：传输层是 stub，输出零变异。agreement 与 noise floor 在这份数据上**没有测量对象**。",
+  "must_not_be_used_as": [
+    "noise_floor = 0",
+    "agreement = 100%",
+    "任何门禁判断的输入"
+  ],
+  "fixture_invalid": ["F03/A", "F03/B"],
+  "fixture_invalid_reason": "kind=state（fixture 的 memory_echo 被同轮 state 动机顶掉）且 provenance.owner=undefined ⇒ ownership 指标空转",
+  "apparatus_corrections_applied_after_this_run": [
+    "regime 增补 DISABLE_STATE_MOTIVE=true（排除竞争性非 fixture 动机）",
+    "新增 fixtureIdentityErrors()：kind 必须为 memory_echo 且 provenance.owner 非空，否则 fixture_invalid、不进 SIC 分析"
+  ],
+  "verified_after_corrections": "定向 6 格冒烟（F01–F03，含 F03）⇒ F03/A、F03/B 已回到 kind=memory_echo，7/7 PASS",
+  "next": "用**真实模型**重跑（两臂 Prompt 逐字相同、temperature>0，48 格），写入带时间戳的新文件；本文件保留为「门禁拦下一次不成立的测量」的证据。",
+  "kept_on_purpose": "raw 永不覆盖：本文件不得删除，也不得重新计算成 noise_floor/agreement。"
+}
