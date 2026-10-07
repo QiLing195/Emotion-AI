@@ -1,0 +1,28 @@
+{
+  "file": "negative-control-isolated-2026-10-04T16-19-23-327Z.jsonl",
+  "cells": 48,
+  "pairs": 24,
+  "negative_control_status": "VALID",
+  "gates": {
+    "G1_produced": true,
+    "G2_exit0": true,
+    "G3_maxLive1": true,
+    "G4_initial_state": true,
+    "G5_kind": true,
+    "G6_action_strategy": true,
+    "G7_commit_selection": true,
+    "fixture_eq_A": true,
+    "fixture_eq_B": true,
+    "A_eq_B": true,
+    "no_guard_errors": true
+  },
+  "method": "G1–G7 与三方状态同一性均由 raw 逐格重算（本脚本），非人工填写",
+  "discipline": {
+    "agreement": "NOT MEASURED",
+    "noiseFloor": "NOT MEASURED",
+    "guardBaseline": "NOT MEASURED",
+    "registration": "任何 Guard 率一律不得由本文件或本跑推导"
+  },
+  "scope": "VALID 只证明**装置成立**（真实模型 + cell-isolated + 冻结 fixture + 冻结 A/B 装置能维持严格相同的初始状态与完整管道）；不证明 v1.60 有效。",
+  "next": "blind annotation（48 responses，arm hidden）→ 人工 gold → agreement ≥80% → FP/FN/AMBIGUOUS → noise floor → 量具 Gate"
+}

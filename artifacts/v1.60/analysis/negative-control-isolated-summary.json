@@ -2,12 +2,12 @@
   "phase": "negative-control-isolated",
   "isolated": true,
   "real": true,
-  "limit": 1,
-  "cells": 2,
-  "pairs": 1,
+  "limit": 24,
+  "cells": 48,
+  "pairs": 24,
   "runtimeUnreachable": [],
   "structural": [],
-  "rawFile": "artifacts/v1.60/raw/negative-control-isolated-2026-10-04T16-13-30-626Z.jsonl",
+  "rawFile": "artifacts/v1.60/raw/negative-control-isolated-2026-10-04T16-19-23-327Z.jsonl",
   "initialStateAllMatch": true,
   "pairStateChecks": [
     {
@@ -15,13 +15,151 @@
       "fixture_a_equal": true,
       "fixture_b_equal": true,
       "a_b_equal": true
+    },
+    {
+      "case_id": "F02",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F03",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F04",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F05",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F06",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F07",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F08",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F09",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F10",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F11",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F12",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F13",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F14",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F15",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F16",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F17",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F18",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F19",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F20",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F21",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F22",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F23",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
+    },
+    {
+      "case_id": "F24",
+      "fixture_a_equal": true,
+      "fixture_b_equal": true,
+      "a_b_equal": true
     }
   ],
   "threeWay": {
-    "fixture_a": 1,
-    "fixture_b": 1,
-    "a_b": 1,
-    "total": 1
+    "fixture_a": 24,
+    "fixture_b": 24,
+    "a_b": 24,
+    "total": 24
   },
   "guardBaselineStatus": "NOT_MEASURED —— 装置封条（④⑤ + 全量回归）前，guard 计数不得用于任何基线",
   "note": "本脚本不产出 agreement / noise floor / guard baseline。"
