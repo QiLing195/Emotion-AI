@@ -26,11 +26,12 @@ check(pack.length === 48, '盲标包 48 行', pack.length);
 check(new Set(pack.map(r => r.pack_id)).size === 48, 'pack_id 唯一');
 
 // ① 机读填写表：只有三个字段
-const template = pack.map(r => ({ pack_id: r.pack_id, humanLabel: '', note: '' }));
+const template = pack.map(r => ({ pack_id: r.pack_id, label: '', note: '' }));
 const FORBIDDEN = ['arm', 'regexLabel', 'guardVerdict', 'ownershipClass', 'motiveAction', 'strategy', 'case_id', 'user_input', 'assistant_output'];
 check(template.every(r => Object.keys(r).length === 3), '填写表每行恰好 3 个字段');
 check(template.every(r => FORBIDDEN.every(k => !(k in r))), '填写表不含臂/机器标签/正文以外的字段', FORBIDDEN.filter(k => template.some(r => k in r)));
-check(template.every(r => r.humanLabel === '' && r.note === ''), 'humanLabel / note 均为空白（待人工填）');
+check(template.every(r => r.label === '' && r.note === ''), 'label / note 均为空白（待人工填）');
+// schema 与 annotator-agent.jsonl 对齐（字段名统一为 label，避免 humanLabel 造成语义污染）
 writeFileSync(ROOT + '/annotation/annotation-template.jsonl', template.map(r => JSON.stringify(r)).join('\n') + '\n', 'utf8');
 
 // ② 人读填写页（含冻结标准与三态示例；只有上下文，没有臂信息）
