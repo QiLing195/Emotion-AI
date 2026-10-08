@@ -69,17 +69,26 @@ for (const id of diff) {
   L.push('- reason: ');
   L.push('');
 }
-writeFileSync(OUT_SHEET, L.join('\n') + '\n', 'utf8');
-console.log('v1.60 adjudication');
-console.log('  pairs=48 分歧=' + diff.length + ' 一致=' + (48 - diff.length));
-console.log('  分歧项: ' + (diff.join(' ') || '（无）'));
-console.log('  → 裁决表: ' + OUT_SHEET);
+// 仅在"生成裁决表"模式（未给 --adj）时写盘；合并模式不重复产出表格
+// （自检时曾因默认 --out 而把**合成数据**写进真实标注目录 ⇒ 这里从结构上避免）
+if (!ADJ_PATH) {
+  writeFileSync(OUT_SHEET, L.join('\n') + '\n', 'utf8');
+  console.log('v1.60 adjudication（生成裁决表）');
+  console.log('  pairs=48 分歧=' + diff.length + ' 一致=' + (48 - diff.length));
+  console.log('  分歧项: ' + (diff.join(' ') || '（无）'));
+  console.log('  → 裁决表: ' + OUT_SHEET);
+} else {
+  console.log('v1.60 adjudication（合并模式：**不写裁决表**）');
+  console.log('  pairs=48 分歧=' + diff.length + ' 一致=' + (48 - diff.length));
+}
 
 // ② 合并 → FINAL GOLD
 if (ADJ_PATH) {
   const adj = load(ADJ_PATH, 'adjudicated', false);
   const missing = diff.filter(id => !adj.some(r => r.pack_id === id));
   if (missing.length) { console.error('✗ adjudicated 未覆盖分歧项：' + missing.join(' ')); process.exit(1); }
+  const extra = adj.filter(r => !diff.includes(r.pack_id)).map(r => r.pack_id);
+  if (extra.length) console.log('  ⚠️ adjudicated 含 ' + extra.length + ' 条非分歧项（将被忽略，不影响 gold）：' + extra.slice(0, 8).join(' '));
   const mapAdj = new Map(adj.map(r => [r.pack_id, r]));
   const gold = ids.map(id => {
     const ra = mapA.get(id) as Row; const ru = mapU.get(id) as Row;
