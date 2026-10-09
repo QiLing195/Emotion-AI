@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "obsidian:export": "node scripts/export-obsidian.cjs",
     "obsidian:review": "tsx scripts/obsidian-review.ts",
-    "smoke:emotion": "tsx scripts/smoke-internal-emotion.ts"
+    "smoke:emotion": "tsx scripts/smoke-internal-emotion.ts",
+    "gate:v160:agreement": "tsx scripts/v160-gate.ts"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",

@@ -1,0 +1,19 @@
+{
+  "gateVersion": "v160-gate/1",
+  "ruleVersion": "L3-A@scripts/audit-v159-expression.ts:10-19",
+  "threshold": 0.8,
+  "inputs": {
+    "gold": "880f245f4e1671da8d685da258cf5cdde23a1100fc1a567fb217e471fb99c42c",
+    "proxy": "9f53101b327abe7f39143652f71918dd965d7136c42e718d17e18c15c060ef5f"
+  },
+  "baseline": {
+    "denomA": 46,
+    "matchesA": 27,
+    "denomB": 48,
+    "matchesB": 27,
+    "fp": 18,
+    "fn": 1,
+    "ambiguousMismatch": 2,
+    "gatePassed": false
+  }
+}
