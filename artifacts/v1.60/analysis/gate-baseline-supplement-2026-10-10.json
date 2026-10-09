@@ -1,0 +1,60 @@
+{
+  "kind": "post-hoc integrity supplement",
+  "title": "v1.60 量具 Gate —— annotation-pack.jsonl 哈希事后补充记录",
+  "createdAt": "2026-10-10T00:07:20+08:00",
+  "createdBy": "agent（v1.60 量具 Gate 流程）",
+  "requestedBy": "审阅方（用户）决策 3（2026-10-10）",
+  "explicitCaveat": "本记录为**事后补充**。冻结清单 gate-baseline.json 于 2026-10-09 冻结时**并未包含** annotation-pack.jsonl 的哈希。本记录**不得**被解释为当时已冻结的字段，也**不得**据此改写 gate-baseline.json、Gate 结果或任何历史报告。",
+  "whyNow": "审阅发现：L3-A 代理的真实输入是 annotation-pack.jsonl，但它未被任何清单记录 ⇒ 若该文件被改动，harness 的输入完整性门抓不到（final-gold 与 regex-proxy 均可保持不变），整条证据链会静默脱钩。",
+  "notPartOfFrozenBaseline": true,
+  "doesNotModify": [
+    "artifacts/v1.60/analysis/gate-baseline.json",
+    "artifacts/v1.60/analysis/gate1-agreement.md",
+    "artifacts/v1.60/analysis/gate1-agreement.json",
+    "artifacts/v1.60/analysis/gate-runs/**",
+    "artifacts/v1.60/annotation/**"
+  ],
+  "evidenceChain": "annotation-pack.jsonl --(scripts/v160-regex-proxy.ts · L3-A v1 冻结规则)--> regex-proxy.jsonl --(scripts/v160-gate.ts)--> Gate 两口径指标",
+  "files": [
+    {
+      "path": "artifacts/v1.60/annotation/annotation-pack.jsonl",
+      "role": "L3-A 代理的真实输入（48 条盲标输出；含 pack_id/case_id/user_input/assistant_output，无 arm）",
+      "sha256": "6681b1b5c5245809225a471aaac1f8040c3dbe78ba82a12f026fa5302b571c5c",
+      "bytes": 19326,
+      "lastWriteTime": "2026-10-07 21:55:46",
+      "recordedInFrozenManifest": false,
+      "recordedAt": "2026-10-10T00:07:20+08:00"
+    },
+    {
+      "path": "artifacts/v1.60/annotation/final-gold.jsonl",
+      "role": "真值（机器核对用；已在冻结清单中）",
+      "sha256": "880f245f4e1671da8d685da258cf5cdde23a1100fc1a567fb217e471fb99c42c",
+      "bytes": 9917,
+      "recordedInFrozenManifest": true,
+      "recordedAt": "2026-10-09（gate-baseline.json 冻结时）"
+    },
+    {
+      "path": "artifacts/v1.60/annotation/regex-proxy.jsonl",
+      "role": "L3-A v1 代理输出（已在冻结清单中）",
+      "sha256": "9f53101b327abe7f39143652f71918dd965d7136c42e718d17e18c15c060ef5f",
+      "bytes": 14695,
+      "recordedInFrozenManifest": true,
+      "recordedAt": "2026-10-09（gate-baseline.json 冻结时）"
+    },
+    {
+      "path": "artifacts/v1.60/analysis/gate-baseline.json",
+      "role": "v1 冻结清单自身（供比对；本记录不改写它）",
+      "sha256": "4b38f9ba51c98ac0107a97feffa9a3983a25d3bd54c5ed4550c270b56d254d70",
+      "bytes": 474,
+      "recordedInFrozenManifest": null,
+      "recordedAt": "2026-10-10T00:07:20+08:00"
+    }
+  ],
+  "consequences": {
+    "forV1": "无需改动任何已冻结产物；如需在后续运行中一并校验 pack，必须在**新清单**（v2）中纳入，或在 harness 中增加一个**显式选择的**补充校验文件，且报告中须标明该哈希为事后记录。",
+    "forV2": "artifacts/v1.60-l3a-v2/baseline-manifest-v2.json **必须**包含 annotation-pack.jsonl 的 SHA-256（决策 3），并与 v1 清单字段保持一致。",
+    "ruleVersionV1": "L3-A@scripts/audit-v159-expression.ts:10-19",
+    "threshold": 0.8
+  },
+  "note": "只读核对 + 新增记录；未执行任何新规则；未启动正式 A/B。"
+}
