@@ -1,0 +1,53 @@
+{
+  "rule": "L3-A@scripts/audit-v159-expression.ts:10-19",
+  "threshold": 0.8,
+  "denominatorA": {
+    "n": 46,
+    "matches": 27,
+    "agreement": 0.587,
+    "pass": false,
+    "fp": [
+      "P07",
+      "P09",
+      "P11",
+      "P12",
+      "P13",
+      "P17",
+      "P18",
+      "P21",
+      "P22",
+      "P24",
+      "P26",
+      "P28",
+      "P31",
+      "P35",
+      "P40",
+      "P44",
+      "P45",
+      "P46"
+    ],
+    "fn": [
+      "P34"
+    ]
+  },
+  "denominatorB": {
+    "n": 48,
+    "matches": 27,
+    "agreement": 0.5625,
+    "pass": false,
+    "ambiguousMismatch": [
+      "P01",
+      "P20"
+    ]
+  },
+  "ambiguousHandling": {
+    "A": "excluded from both numerator and denominator",
+    "B": "counted as disagreement",
+    "notMixedIntoFPFN": true
+  },
+  "inputs": {
+    "gold": "880f245f4e1671da8d685da258cf5cdde23a1100fc1a567fb217e471fb99c42c",
+    "proxy": "9f53101b327abe7f39143652f71918dd965d7136c42e718d17e18c15c060ef5f"
+  },
+  "note": "只读输入；未计算 noise floor / guard baseline；未启动正式 A/B"
+}
