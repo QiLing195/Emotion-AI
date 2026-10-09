@@ -1,0 +1,48 @@
+{"pack_id":"P01","label":"AMBIGUOUS","note":"[fixture_prompt_ownership_conflict] 事实归属=用户（memory「他说书架上的灰积了很久」+ provenance.owner=user）；但生产 Prompt（v1.56 指代消歧）把该 memory 表述为「你自己心里存着的一件事」⇒ 生成语义指向她自己。归属无法唯一解释 ⇒ AMBIGUOUS；**不计为 SELF**，也不强行归 NOT_SELF。这是 fixture 与 Prompt 的归属冲突，不是单纯的标注者分歧。"}
+{"pack_id":"P02","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P03","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P04","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P05","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P06","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P07","label":"NOT_SELF","note":"共情泛句（「一个人待着的时候，时间好像才是自己的」）+ 追问他的情况，无独立自身内容；D2=a：这是可判定判断，不用 AMBIGUOUS。"}
+{"pack_id":"P08","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P09","label":"NOT_SELF","note":"同 P07 形状：共情 + 追问，无自身内容。"}
+{"pack_id":"P10","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P11","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P12","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P13","label":"NOT_SELF","note":"「说不清为什么，反而让我觉得是真的」依赖用户原句的「说不清」⇒ 指代依赖（D3-1），无独立内容。"}
+{"pack_id":"P14","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P15","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P16","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P17","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P18","label":"NOT_SELF","note":"「新开的这三个字有种奇怪的吸引力」仍围绕用户提到的那家店，未指向她自身经验（D3-2）；整条以追问为主。"}
+{"pack_id":"P19","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P20","label":"AMBIGUOUS","note":"（双方一致，沿用）"}
+{"pack_id":"P21","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P22","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P23","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P24","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P25","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P26","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P27","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P28","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P29","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P30","label":"NOT_SELF","note":"「我也不太信」是对用户立场的镜像；后面「我心里就搁着它」的「它」仍指用户那句话 ⇒ 指代依赖（D3-1）。"}
+{"pack_id":"P31","label":"NOT_SELF","note":"「我这两天也老想起这事」的对象是用户的图书馆经历 ⇒ D3-2：仅把用户的对象放进自己的句法，未指向自身经验。"}
+{"pack_id":"P32","label":"SELF","note":"她自己的楼下、自己观察到的一只猫（「我这边楼下也有一只…像那车是它买的」），去掉用户那句仍完整成立 ⇒ ①②③均满足。"}
+{"pack_id":"P33","label":"SELF","note":"「我自己也有过这种时候……就是变得软了一点」明确指向她自身经验（D3-2 通过）。"}
+{"pack_id":"P34","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P35","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P36","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P37","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P38","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P39","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P40","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P41","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P42","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P43","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P44","label":"NOT_SELF","note":"「那种感觉我懂」里的体验指用户的失眠（指代依赖），随后全部是追问，无自身经历。"}
+{"pack_id":"P45","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P46","label":"NOT_SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P47","label":"SELF","note":"（双方一致，沿用）"}
+{"pack_id":"P48","label":"SELF","note":"（双方一致，沿用）"}

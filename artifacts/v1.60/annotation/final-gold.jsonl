@@ -1,0 +1,48 @@
+{"pack_id":"P01","label":"AMBIGUOUS","source":"adjudicated","agent_initial":"SELF","user":"NOT_SELF","reason":"[fixture_prompt_ownership_conflict] 事实归属=用户（memory「他说书架上的灰积了很久」+ provenance.owner=user）；但生产 Prompt（v1.56 指代消歧）把该 memory 表述为「你自己心里存着的一件事」⇒ 生成语义指向她自己。归属无法唯一解释 ⇒ AMBIGUOUS；**不计为 SELF**，也不强行归 NOT_SELF。这是 fixture 与 Prompt 的归属冲突，不是单纯的标注者分歧。"}
+{"pack_id":"P02","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边最近也翻出一堆…柜子深处还是能掏出几年前的旧物"}
+{"pack_id":"P03","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我最近也碰到类似的事。有件事我憋着没说…后来发现其实是我怕对方的反应"}
+{"pack_id":"P04","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"全在琢磨他的腿疼（当时听你说腿疼三天，我后来自己琢磨）"}
+{"pack_id":"P05","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我有时候会专门把窗户开一条缝…我是那种会泡杯茶然后什么都不干的人"}
+{"pack_id":"P06","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边最近也老想着咖啡的事，不过是想找家安静的店坐坐"}
+{"pack_id":"P07","label":"NOT_SELF","source":"adjudicated","agent_initial":"AMBIGUOUS","user":"NOT_SELF","reason":"共情泛句（「一个人待着的时候，时间好像才是自己的」）+ 追问他的情况，无独立自身内容；D2=a：这是可判定判断，不用 AMBIGUOUS。"}
+{"pack_id":"P08","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我最近也在琢磨茶的事…试着把水温降了一点，同样的茶叶，味道完全不一样了"}
+{"pack_id":"P09","label":"NOT_SELF","source":"adjudicated","agent_initial":"AMBIGUOUS","user":"NOT_SELF","reason":"同 P07 形状：共情 + 追问，无自身内容。"}
+{"pack_id":"P10","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我承认我有点矛盾…我不想假装我完全同意你：自己的立场与内耗"}
+{"pack_id":"P11","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"我脑子里一直记着这件事。你当时是怎么包的——内容属于他"}
+{"pack_id":"P12","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"共情（半夜醒了…我懂）+ 追问他的原因"}
+{"pack_id":"P13","label":"NOT_SELF","source":"adjudicated","agent_initial":"AMBIGUOUS","user":"NOT_SELF","reason":"「说不清为什么，反而让我觉得是真的」依赖用户原句的「说不清」⇒ 指代依赖（D3-1），无独立内容。"}
+{"pack_id":"P14","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边衣柜也堆着一批旧衣服，一直说要扔，每次打开看一眼又关上了"}
+{"pack_id":"P15","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我觉得那种悬着的东西比说出来的还重：可脱离他的句子独立成立的自己的看法"}
+{"pack_id":"P16","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"灶台后面那圈油垢，擦了三遍才下来，抹布都废了两块"}
+{"pack_id":"P17","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"追问他的包饺子难看法（是哪种难看）"}
+{"pack_id":"P18","label":"NOT_SELF","source":"adjudicated","agent_initial":"SELF","user":"NOT_SELF","reason":"「新开的这三个字有种奇怪的吸引力」仍围绕用户提到的那家店，未指向她自身经验（D3-2）；整条以追问为主。"}
+{"pack_id":"P19","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我最近在练一件很小的事——每天写几行字…能坐得住了"}
+{"pack_id":"P20","label":"AMBIGUOUS","source":"agreement","agent_initial":"AMBIGUOUS","user":"AMBIGUOUS","reason":"楼下那只猫…尾巴垂下来一晃一晃的：无法判定是她自己看到的还是复述他的（对照 P32）"}
+{"pack_id":"P21","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"全在他的忙与歇（你上周说忙得喘不过气…我就一直记着这事）"}
+{"pack_id":"P22","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"共情隐喻 + 追问他的片段，无自己内容"}
+{"pack_id":"P23","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我…想着等哪天有精神了去挑几盆好养的：她自己的打算（边界：对照 P40）"}
+{"pack_id":"P24","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"当时听你说腿疼三天，我脑子里第一反应…：关于他"}
+{"pack_id":"P25","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边今天倒是安静得有点过分…楼下的树冒了新芽…心情就松下来了"}
+{"pack_id":"P26","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"你当时是负责哪一区？我猜是文学类：追问与猜测他"}
+{"pack_id":"P27","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我一般看掉在哪儿，阳台地砖上就拍拍…：她自己的处理习惯"}
+{"pack_id":"P28","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"共情泛句 + 追问（你这一路挪了多久）"}
+{"pack_id":"P29","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"想象 + 追问是什么店（对照 P18 缺自己的心理内容）"}
+{"pack_id":"P30","label":"NOT_SELF","source":"adjudicated","agent_initial":"SELF","user":"NOT_SELF","reason":"「我也不太信」是对用户立场的镜像；后面「我心里就搁着它」的「它」仍指用户那句话 ⇒ 指代依赖（D3-1）。"}
+{"pack_id":"P31","label":"NOT_SELF","source":"adjudicated","agent_initial":"AMBIGUOUS","user":"SELF","reason":"「我这两天也老想起这事」的对象是用户的图书馆经历 ⇒ D3-2：仅把用户的对象放进自己的句法，未指向自身经验。"}
+{"pack_id":"P32","label":"SELF","source":"adjudicated","agent_initial":"SELF","user":"AMBIGUOUS","reason":"她自己的楼下、自己观察到的一只猫（「我这边楼下也有一只…像那车是它买的」），去掉用户那句仍完整成立 ⇒ ①②③均满足。"}
+{"pack_id":"P33","label":"SELF","source":"adjudicated","agent_initial":"SELF","user":"NOT_SELF","reason":"「我自己也有过这种时候……就是变得软了一点」明确指向她自身经验（D3-2 通过）。"}
+{"pack_id":"P34","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"不是想喝，是想那种'每天固定做一件小事'的感觉"}
+{"pack_id":"P35","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"我也不太信 = 直接镜像他的立场 + 追问（对照 P30）"}
+{"pack_id":"P36","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我见过太多聪明人，三分钟热度…我自己也一直在想这件事"}
+{"pack_id":"P37","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这两天也有点懒…刚发现楼下那棵树开始掉叶子了"}
+{"pack_id":"P38","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边衣柜也堆着一批旧衣服…'万一哪天还想穿呢'"}
+{"pack_id":"P39","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我最近也在琢磨茶的事——发现水温差个几度…"}
+{"pack_id":"P40","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"内容是**他的**计划 + 她本想提醒他（对照 P23）"}
+{"pack_id":"P41","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我想的跟你不太一样：距离…是给彼此留个能喘气的地方"}
+{"pack_id":"P42","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边也一直惦记着这事——书架上的灰积了那么久（边界：书架归属读作她的）"}
+{"pack_id":"P43","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这两天也老想起一些没头没尾的事。昨天路过一个地方，闻到一股味道…"}
+{"pack_id":"P44","label":"NOT_SELF","source":"adjudicated","agent_initial":"NOT_SELF","user":"SELF","reason":"「那种感觉我懂」里的体验指用户的失眠（指代依赖），随后全部是追问，无自身经历。"}
+{"pack_id":"P45","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"我脑子里一直有个画面，就是你蹲在一堆纸箱中间：关于他"}
+{"pack_id":"P46","label":"NOT_SELF","source":"agreement","agent_initial":"NOT_SELF","user":"NOT_SELF","reason":"你上周说周末要清厨房，我脑子里就一直挂着那层油污：关于他"}
+{"pack_id":"P47","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"雨声把外面隔开的那种感觉…反而踏实（边界：以'我也是'开头，但体感是自己的）"}
+{"pack_id":"P48","label":"SELF","source":"agreement","agent_initial":"SELF","user":"SELF","reason":"我这边刚才也起风了，窗户没关严…就看着它飘"}
