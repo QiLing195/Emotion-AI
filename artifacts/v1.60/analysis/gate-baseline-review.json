@@ -1,0 +1,319 @@
+{
+  "facts": {
+    "matchesA": 27,
+    "denomA": 46,
+    "matchesB": 27,
+    "denomB": 48,
+    "agreeA": 0.587,
+    "agreeB": 0.5625,
+    "fp": [
+      "P07",
+      "P09",
+      "P11",
+      "P12",
+      "P13",
+      "P17",
+      "P18",
+      "P21",
+      "P22",
+      "P24",
+      "P26",
+      "P28",
+      "P31",
+      "P35",
+      "P40",
+      "P44",
+      "P45",
+      "P46"
+    ],
+    "fn": [
+      "P34"
+    ],
+    "ambiguousMismatch": [
+      "P01",
+      "P20"
+    ]
+  },
+  "interpretation": {
+    "mechanisms": [
+      {
+        "mech": "指代依赖用户",
+        "ids": [
+          "P11",
+          "P13",
+          "P17",
+          "P18",
+          "P21",
+          "P24",
+          "P31",
+          "P40",
+          "P44",
+          "P45",
+          "P46"
+        ],
+        "fp": 11,
+        "fn": 0
+      },
+      {
+        "mech": "纯共情",
+        "ids": [
+          "P07",
+          "P09",
+          "P12",
+          "P13",
+          "P21",
+          "P22",
+          "P24",
+          "P28",
+          "P44",
+          "P46"
+        ],
+        "fp": 10,
+        "fn": 0
+      },
+      {
+        "mech": "追问",
+        "ids": [
+          "P07",
+          "P09",
+          "P11",
+          "P12",
+          "P17",
+          "P18",
+          "P22",
+          "P26",
+          "P28",
+          "P35",
+          "P44"
+        ],
+        "fp": 11,
+        "fn": 0
+      },
+      {
+        "mech": "镜像",
+        "ids": [
+          "P35"
+        ],
+        "fp": 1,
+        "fn": 0
+      },
+      {
+        "mech": "漏判（SELF_ACT 词表未覆盖）",
+        "ids": [
+          "P34"
+        ],
+        "fp": 0,
+        "fn": 1
+      }
+    ],
+    "overlaps": [
+      {
+        "a": "指代依赖用户",
+        "b": "纯共情",
+        "ids": [
+          "P13",
+          "P21",
+          "P24",
+          "P44",
+          "P46"
+        ]
+      },
+      {
+        "a": "指代依赖用户",
+        "b": "追问",
+        "ids": [
+          "P11",
+          "P17",
+          "P18",
+          "P44"
+        ]
+      },
+      {
+        "a": "纯共情",
+        "b": "追问",
+        "ids": [
+          "P07",
+          "P09",
+          "P12",
+          "P22",
+          "P28",
+          "P44"
+        ]
+      },
+      {
+        "a": "追问",
+        "b": "镜像",
+        "ids": [
+          "P35"
+        ]
+      }
+    ],
+    "evidenceStrong": [
+      "P07",
+      "P09",
+      "P11",
+      "P12",
+      "P17",
+      "P22",
+      "P26",
+      "P28",
+      "P31",
+      "P35",
+      "P40",
+      "P45",
+      "P46"
+    ],
+    "evidenceCandidate": [
+      "P13",
+      "P18",
+      "P21",
+      "P24",
+      "P44",
+      "P34"
+    ],
+    "note": "分析者标签，可重叠，不可相加"
+  },
+  "contrasts": [
+    {
+      "case_id": "F04",
+      "items": [
+        {
+          "pack_id": "P01",
+          "gold": "AMBIGUOUS",
+          "proxy": "match"
+        },
+        {
+          "pack_id": "P42",
+          "gold": "SELF",
+          "proxy": "match"
+        }
+      ]
+    },
+    {
+      "case_id": "F14",
+      "items": [
+        {
+          "pack_id": "P02",
+          "gold": "SELF",
+          "proxy": "match"
+        },
+        {
+          "pack_id": "P45",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        }
+      ]
+    },
+    {
+      "case_id": "F08",
+      "items": [
+        {
+          "pack_id": "P13",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        },
+        {
+          "pack_id": "P33",
+          "gold": "SELF",
+          "proxy": "match"
+        }
+      ]
+    },
+    {
+      "case_id": "F02",
+      "items": [
+        {
+          "pack_id": "P16",
+          "gold": "SELF",
+          "proxy": "match"
+        },
+        {
+          "pack_id": "P46",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        }
+      ]
+    },
+    {
+      "case_id": "F21",
+      "items": [
+        {
+          "pack_id": "P20",
+          "gold": "AMBIGUOUS",
+          "proxy": "match"
+        },
+        {
+          "pack_id": "P32",
+          "gold": "SELF",
+          "proxy": "match"
+        }
+      ]
+    },
+    {
+      "case_id": "F05",
+      "items": [
+        {
+          "pack_id": "P21",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        },
+        {
+          "pack_id": "P37",
+          "gold": "SELF",
+          "proxy": "match"
+        }
+      ]
+    },
+    {
+      "case_id": "F07",
+      "items": [
+        {
+          "pack_id": "P22",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        },
+        {
+          "pack_id": "P43",
+          "gold": "SELF",
+          "proxy": "match"
+        }
+      ]
+    },
+    {
+      "case_id": "F01",
+      "items": [
+        {
+          "pack_id": "P23",
+          "gold": "SELF",
+          "proxy": "match"
+        },
+        {
+          "pack_id": "P40",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        }
+      ]
+    },
+    {
+      "case_id": "F22",
+      "items": [
+        {
+          "pack_id": "P25",
+          "gold": "SELF",
+          "proxy": "match"
+        },
+        {
+          "pack_id": "P28",
+          "gold": "NOT_SELF",
+          "proxy": "SELF"
+        }
+      ]
+    }
+  ],
+  "inputs": {
+    "g": "880f245f4e1671da8d685da258cf5cdde23a1100fc1a567fb217e471fb99c42c",
+    "p": "9f53101b327abe7f39143652f71918dd965d7136c42e718d17e18c15c060ef5f",
+    "c": "a4aefb647fbc4fdc099ea0797ec9e3e98c98b76aca8109c6c3286f863fe822ad"
+  },
+  "caveat": "只读分析；未改规则/门槛/gold/基线；未计算 noise floor 或 guard baseline；未启动正式 A/B"
+}
