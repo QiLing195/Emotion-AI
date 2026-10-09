@@ -15,7 +15,7 @@
     "obsidian:export": "node scripts/export-obsidian.cjs",
     "obsidian:review": "tsx scripts/obsidian-review.ts",
     "smoke:emotion": "tsx scripts/smoke-internal-emotion.ts",
-    "gate:v160:agreement": "tsx scripts/v160-gate.ts"
+    "gate:v160:agreement": "node node_modules/tsx/dist/cli.mjs scripts/v160-gate.ts"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",

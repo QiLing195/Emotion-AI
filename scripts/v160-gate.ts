@@ -109,7 +109,15 @@ check(hProxyBefore === base.inputs.proxy, '输入 regex-proxy.jsonl SHA-256 与�
 if (fails.length) { console.log('\nASSERTIONS: 0/' + n + '\nRESULT: FAIL（输入完整性门未通过 ⇒ 拒绝计算）'); process.exit(1); }
 
 const { gold, proxy } = loadInputs();
-if (SELF_TEST) { (proxy[0] as ProxyRow).proxy_label = (proxy[0] as ProxyRow).proxy_label === 'SELF' ? 'NOT_SELF' : 'SELF'; console.log('  · 自检：内存中篡改 ' + proxy[0].pack_id + ' 的代理标签（**未写盘**）'); }
+if (SELF_TEST) {
+  // 篡改点必须**落在会影响指标的样本**上：gold=SELF 且 proxy=SELF ⇒ 改判为 NOT_SELF 会减少 matchesA 并产生 1 个 FN
+  // （此前误用 proxy[0]=P01：其 gold=AMBIGUOUS，翻标签不改变任何指标 ⇒ 自检构造错误，非 harness 缺陷）
+  const goldSelf = new Set(gold.filter(g => g.label === 'SELF').map(g => g.pack_id));
+  const victim = proxy.find(p => goldSelf.has(p.pack_id) && p.proxy_label === 'SELF');
+  if (!victim) { console.error('自检无法构造：找不到 gold=SELF 且 proxy=SELF 的样本'); process.exit(2); }
+  victim.proxy_label = 'NOT_SELF';
+  console.log('  · 自检：内存中把 ' + victim.pack_id + ' 的代理标签 SELF→NOT_SELF（应产生 1 个 FN；**未写盘**）');
+}
 
 // ── 结构门 ──
 check(gold.length === 48, 'gold 48 行', gold.length);
