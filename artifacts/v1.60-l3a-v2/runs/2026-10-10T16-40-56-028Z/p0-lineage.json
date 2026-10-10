@@ -1,0 +1,15 @@
+{
+  "authorization": "P0+P1 ｜ 实现并跑对照（不出机制结论）｜ 不生成新冻结清单",
+  "byteEqual": true,
+  "fieldMismatch": 0,
+  "replayLen": 10083,
+  "frozenLen": 10083,
+  "inputs": {
+    "pack": "6681b1b5c5245809225a471aaac1f8040c3dbe78ba82a12f026fa5302b571c5c",
+    "gold": "880f245f4e1671da8d685da258cf5cdde23a1100fc1a567fb217e471fb99c42c",
+    "proxyV1": "9f53101b327abe7f39143652f71918dd965d7136c42e718d17e18c15c060ef5f",
+    "baseline": "4b38f9ba51c98ac0107a97feffa9a3983a25d3bd54c5ed4550c270b56d254d70"
+  },
+  "ruleIdV1": "L3-A@scripts/audit-v159-expression.ts:10-19",
+  "note": "P0 只证明工具链等价，不证明 v1 规则语义正确"
+}
