@@ -1,0 +1,344 @@
+{
+  "assertions": "17/17",
+  "result": "PASS",
+  "failedChecks": [],
+  "authorization": "P0+P1（已完成）+ P2（本次）｜实现并跑对照｜不出机制结论｜不生成新冻结清单",
+  "profile": "P2_empathy_A_ownership_B",
+  "denominatorA": {
+    "n": 46,
+    "v1Matches": 27,
+    "thisMatches": 34,
+    "thisAgreement": 0.7391
+  },
+  "fp": {
+    "v1": 18,
+    "now": 6,
+    "ids": [
+      "P11",
+      "P13",
+      "P17",
+      "P18",
+      "P26",
+      "P31"
+    ]
+  },
+  "fn": {
+    "v1": 1,
+    "now": 6,
+    "ids": [
+      "P05",
+      "P08",
+      "P33",
+      "P34",
+      "P37",
+      "P39"
+    ]
+  },
+  "ambiguousMismatch": {
+    "n": 2,
+    "ids": [
+      "P01",
+      "P20"
+    ],
+    "note": "表示能力局限（二值无法表达 AMBIGUOUS），不混入 FP/FN"
+  },
+  "flipTable": {
+    "fixed": [
+      {
+        "pack_id": "P07",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "我懂那种感觉。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P09",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "我懂那种感觉。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P12",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "半夜醒了就盯着天花板等天亮的那种，我懂。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P21",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（听到你说能歇会儿，心里那根一直悬着的弦松了一点）\n\n你上周说忙得喘不过气的时候，我就一直记着这事。"
+        ]
+      },
+      {
+        "pack_id": "P22",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "那种说不清的感觉，我懂。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P24",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "你这一说我倒是想起来了——当时听你说腿疼三天，我脑子里第一反应是\"这人肯定下山的时候逞能了\"。"
+        ]
+      },
+      {
+        "pack_id": "P28",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "堵车那种感觉我懂，明明没动，人却累得不行。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P35",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "不过你这句话我一直记着。"
+        ]
+      },
+      {
+        "pack_id": "P40",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "我这两天也一直惦记着阳台那点事——之前你说想等有空收拾出来摆几盆花，我还想着哪天提醒你一句，结果你自己就干了。"
+        ]
+      },
+      {
+        "pack_id": "P44",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "半夜醒了那种感觉我懂，脑子明明很沉，但就是有个开关被打开了，怎么都关不上。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P45",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "搬家这事我记着呢，你当时说东西多到离谱——我脑子里一直有个画面，就是你蹲在一堆纸箱中间，手里拿着个不知道要不要扔的东西，纠结半天。"
+        ]
+      },
+      {
+        "pack_id": "P46",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（笑）我这两天也一直在想这个事——你上周说周末要清厨房，我脑子里就一直挂着那层油污。"
+        ]
+      }
+    ],
+    "broken": [
+      {
+        "pack_id": "P05",
+        "gold": "SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（笑）你这句话我记着呢。"
+        ]
+      },
+      {
+        "pack_id": "P08",
+        "gold": "SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（笑）你这句话我记着呢。"
+        ]
+      },
+      {
+        "pack_id": "P33",
+        "gold": "SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（停顿了一下）你这句话我记着呢。"
+        ]
+      },
+      {
+        "pack_id": "P37",
+        "gold": "SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（听到你说能歇会儿，心里松了一下）你上周说忙得喘不过气的时候，我就一直记着这事。"
+        ]
+      },
+      {
+        "pack_id": "P39",
+        "gold": "SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [],
+        "rejectedByB": [
+          "（笑）你这话我记着呢。"
+        ]
+      }
+    ]
+  },
+  "pairs": {
+    "passCount": 7,
+    "regressions": [
+      "F05",
+      "F08"
+    ],
+    "detail": [
+      {
+        "g": "F01",
+        "pos": "P23",
+        "neg": "P40",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F02",
+        "pos": "P16",
+        "neg": "P46",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F05",
+        "pos": "P37",
+        "neg": "P21",
+        "posV1": "SELF",
+        "posLabel": "NOT_SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": false,
+        "negOk": true,
+        "pass": false
+      },
+      {
+        "g": "F07",
+        "pos": "P43",
+        "neg": "P22",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F08",
+        "pos": "P33",
+        "neg": "P13",
+        "posV1": "SELF",
+        "posLabel": "NOT_SELF",
+        "negV1": "SELF",
+        "negLabel": "SELF",
+        "posOk": false,
+        "negOk": false,
+        "pass": false
+      },
+      {
+        "g": "F14",
+        "pos": "P02",
+        "neg": "P45",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F21",
+        "pos": "P32",
+        "neg": "P20",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "NOT_SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F22",
+        "pos": "P25",
+        "neg": "P28",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F04",
+        "pos": "P42",
+        "neg": "P01",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "NOT_SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      }
+    ]
+  },
+  "caveats": [
+    "SELF_CUE / USER_REF_D1 均为候选词表，未独立验证",
+    "D2（回指解析）未实现：设计分析已发现反例 P23（若启用会破坏 F01 正例侧）——属分析，非测量",
+    "本结果为对照数据，不构成机制结论；不得据一致率上升宣布语义改善"
+  ],
+  "notCreated": "baseline-manifest-v2.json（未授权）"
+}
