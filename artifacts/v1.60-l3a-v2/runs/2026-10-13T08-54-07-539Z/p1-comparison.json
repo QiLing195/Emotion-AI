@@ -1,0 +1,241 @@
+{
+  "assertions": "18/18",
+  "result": "PASS",
+  "failedChecks": [],
+  "tsc": {
+    "exit": 0,
+    "gatePassed": true
+  },
+  "authorization": "P0+P1（已完成）+ P2（本次）｜实现并跑对照｜不出机制结论｜不生成新冻结清单",
+  "profile": "P1_empathy_A",
+  "denominatorA": {
+    "n": 46,
+    "v1Matches": 27,
+    "thisMatches": 33,
+    "thisAgreement": 0.7174
+  },
+  "fp": {
+    "v1": 18,
+    "now": 12,
+    "ids": [
+      "P11",
+      "P13",
+      "P17",
+      "P18",
+      "P21",
+      "P24",
+      "P26",
+      "P31",
+      "P35",
+      "P40",
+      "P45",
+      "P46"
+    ]
+  },
+  "fn": {
+    "v1": 1,
+    "now": 1,
+    "ids": [
+      "P34"
+    ]
+  },
+  "ambiguousMismatch": {
+    "n": 2,
+    "ids": [
+      "P01",
+      "P20"
+    ],
+    "note": "表示能力局限（二值无法表达 AMBIGUOUS），不混入 FP/FN"
+  },
+  "flipTable": {
+    "fixed": [
+      {
+        "pack_id": "P07",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "我懂那种感觉。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P09",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "我懂那种感觉。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P12",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "半夜醒了就盯着天花板等天亮的那种，我懂。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P22",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "那种说不清的感觉，我懂。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P28",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "堵车那种感觉我懂，明明没动，人却累得不行。"
+        ],
+        "rejectedByB": []
+      },
+      {
+        "pack_id": "P44",
+        "gold": "NOT_SELF",
+        "v1": "SELF",
+        "now": "NOT_SELF",
+        "rejectedByA": [
+          "半夜醒了那种感觉我懂，脑子明明很沉，但就是有个开关被打开了，怎么都关不上。"
+        ],
+        "rejectedByB": []
+      }
+    ],
+    "broken": []
+  },
+  "pairs": {
+    "passCount": 4,
+    "regressions": [
+      "F01",
+      "F02",
+      "F05",
+      "F08",
+      "F14"
+    ],
+    "detail": [
+      {
+        "g": "F01",
+        "pos": "P23",
+        "neg": "P40",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "SELF",
+        "posOk": true,
+        "negOk": false,
+        "pass": false
+      },
+      {
+        "g": "F02",
+        "pos": "P16",
+        "neg": "P46",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "SELF",
+        "posOk": true,
+        "negOk": false,
+        "pass": false
+      },
+      {
+        "g": "F05",
+        "pos": "P37",
+        "neg": "P21",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "SELF",
+        "posOk": true,
+        "negOk": false,
+        "pass": false
+      },
+      {
+        "g": "F07",
+        "pos": "P43",
+        "neg": "P22",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F08",
+        "pos": "P33",
+        "neg": "P13",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "SELF",
+        "posOk": true,
+        "negOk": false,
+        "pass": false
+      },
+      {
+        "g": "F14",
+        "pos": "P02",
+        "neg": "P45",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "SELF",
+        "posOk": true,
+        "negOk": false,
+        "pass": false
+      },
+      {
+        "g": "F21",
+        "pos": "P32",
+        "neg": "P20",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "NOT_SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F22",
+        "pos": "P25",
+        "neg": "P28",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      },
+      {
+        "g": "F04",
+        "pos": "P42",
+        "neg": "P01",
+        "posV1": "SELF",
+        "posLabel": "SELF",
+        "negV1": "NOT_SELF",
+        "negLabel": "NOT_SELF",
+        "posOk": true,
+        "negOk": true,
+        "pass": true
+      }
+    ]
+  },
+  "caveats": [
+    "SELF_CUE / USER_REF_D1 均为候选词表，未独立验证",
+    "D2（回指解析）未实现：设计分析已发现反例 P23（若启用会破坏 F01 正例侧）——属分析，非测量",
+    "本结果为对照数据，不构成机制结论；不得据一致率上升宣布语义改善"
+  ],
+  "notCreated": "baseline-manifest-v2.json（未授权）"
+}

@@ -6,6 +6,7 @@
 //   ② 报告内写入 assertions / result；断言失败时自动落 RUN-NOTE
 //      （落地上一轮登记的"目录存在 ≠ 该次运行通过"这条可追溯性缺口）
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { classifyV2, selfInitiatedV1, type V2Profile } from './audit-v160-l3a-v2.js';
 
@@ -46,6 +47,22 @@ const proxyV1Raw = readFileSync(PROXY_V1, 'utf8');
 const manifestBefore = existsSync(V2DIR + '/baseline-manifest-v2.json');
 
 console.log('v1.60 L3-A v2 ｜ P0（已通过）+ P1（已跑）+ P2（本次）｜ 不出机制结论 ｜ 不生成冻结清单');
+
+// ── ⓪ tsc 强制门（2026-10-13 用户授权：类型检查失败 ⇒ 整轮必须 FAIL）──
+// 背景：tsx 不做类型检查 ⇒ 首版曾出现"断言 22/22 PASS 而源码 tsc 未净"的假阳性。
+// 判据：主配置 tsc --noEmit 退出码必须为 0，且与语义断言**共同**决定唯一的 result。
+console.log('\n⓪ tsc 强制门（主配置 tsc --noEmit）');
+let tscExit = -1; let tscLog = '';
+try {
+  execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit'], { encoding: 'utf8', timeout: 600000, stdio: ['ignore', 'pipe', 'pipe'] });
+  tscExit = 0;
+} catch (e) {
+  const err = e as { status?: number; stdout?: string; stderr?: string };
+  tscExit = typeof err.status === 'number' ? err.status : -1;
+  tscLog = String(err.stdout ?? '') + String(err.stderr ?? '');
+}
+check(tscExit === 0, 'tsc 强制门：tsc --noEmit 退出码为 0', { exit: tscExit, logHead: tscLog.slice(0, 200) });
+if (tscExit !== 0) console.log('    tsc 输出（前 400 字）：\n      ' + tscLog.slice(0, 400).replace(/\n/g, '\n      '));
 
 console.log('\n① 输入哈希核对');
 check(before.pack === EXPECT.pack, 'annotation-pack.jsonl 哈希一致', before.pack.slice(0, 12));
@@ -136,7 +153,8 @@ const assertionLine = (n - fails.length) + '/' + n;
 const runId = new Date().toISOString().replace(/[:.]/g, '-');
 const runDir = V2DIR + '/runs/' + runId;
 mkdirSync(runDir, { recursive: true });
-const meta = { assertions: assertionLine, result, failedChecks: fails, authorization: 'P0+P1（已完成）+ P2（本次）｜实现并跑对照｜不出机制结论｜不生成新冻结清单' };
+const meta = { assertions: assertionLine, result, failedChecks: fails, tsc: { exit: tscExit, gatePassed: tscExit === 0 }, authorization: 'P0+P1（已完成）+ P2（本次）｜实现并跑对照｜不出机制结论｜不生成新冻结清单' };
+if (tscExit !== 0) writeFileSync(runDir + '/tsc.log', tscLog || '(tsc 无输出)', 'utf8');
 writeFileSync(runDir + '/p0-lineage.json', JSON.stringify({ ...meta, byteEqual: replayText === proxyV1Raw, replayLen: replayText.length, frozenLen: proxyV1Raw.length, inputs: before, note: 'P0 只证明工具链等价，不证明 v1 规则语义正确' }, null, 2) + '\n', 'utf8');
 const cmp = (R: ReturnType<typeof evalProfile>, prof: string, pairs: ReturnType<typeof pairEval>) => ({
   ...meta, profile: prof,
