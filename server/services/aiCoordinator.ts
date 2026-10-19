@@ -43,8 +43,10 @@ import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
  */
 let selfStateSinkCause: LowPeriodCause | null = null;
 let selfStateSinkSince: number | null = null;
-let selfStatePrevDepth = 0;
-let selfStatePrevTurns = 0;
+/** 上一轮他的原话 + 情绪（沉因要引"真正把深度推过 0.12 的那句"） */
+let selfStatePrevStimulus: { userText: string; hisEmotion: string } | null = null;
+let selfStateCurStimulus: { userText: string; hisEmotion: string } | null = null;
+let selfStateCurText = '';
 import { applyLayaVerdict, LAYA_CHOOSABLE_STRATEGIES, LAYA_KEEP_ACCOMPANY_STRATEGIES, type LayaStrategyVerdict } from '../../src/lib/layaDecision.js';
 import { layaMinConfidence, layaKeepAccompany } from './layaClient.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
@@ -356,28 +358,35 @@ export class AICoordinator {
     // 现场记录天然有据（引文摘自他的话）且不会过期；池子派生降级为兜底。
     let selfStateCause: LowPeriodCause | undefined;
     if (selfStateVoiceEnabled() && lowReading) {
-      const depthNow = herNegativeActivation(extras.updatedEmotionState).intensity;
-      const deepened = depthNow >= LOW_PERIOD_SINK
-        && (lowReading.turns > selfStatePrevTurns || depthNow > selfStatePrevDepth + 0.01);
-      if (lowReading.active && (lowReading.since !== selfStateSinkSince || deepened)) {
-        const fresh = deriveSinkCause({
-          userText: extras.userText,
-          hisEmotion: extras.userAnalysis?.expressedEmotion ?? '',
-        });
+      // 维护"上一轮他的原话"（同一轮里片段会算两次，用文本判断是否为新一轮）
+      const stimulusNow = {
+        userText: extras.userText,
+        hisEmotion: extras.userAnalysis?.expressedEmotion ?? '',
+      };
+      if (stimulusNow.userText !== selfStateCurText) {
+        selfStatePrevStimulus = selfStateCurStimulus;
+        selfStateCurStimulus = stimulusNow;
+        selfStateCurText = stimulusNow.userText;
+      }
+
+      // 记录时机 = **新开一段低谷**（首次跨过 0.12 的下一轮，`since` 会变）
+      // —— 不用"加深"，因为加深会抓到后来那句（"心里堵得慌"）而不是真正把深度推过线的那句。
+      if (lowReading.active && lowReading.since !== selfStateSinkSince) {
+        const fresh = deriveSinkCause(selfStatePrevStimulus);
+        selfStateSinkSince = lowReading.since;
         if (fresh) {
           selfStateSinkCause = fresh;
-          selfStateSinkSince = lowReading.since;
-        } else if (lowReading.since !== selfStateSinkSince) {
-          selfStateSinkCause = null;          // 新的一段低谷、这轮又没有可用的现场原因 ⇒ 不沿用上一段
-          selfStateSinkSince = lowReading.since;
+          console.log(`[SelfStateVoice] 沉因记录: ${fresh.kind} ｜ 引文=${fresh.topic ?? '-'} ｜ 依据=${fresh.evidence}`);
+        } else {
+          selfStateSinkCause = null;          // 新的一段低谷、却没有可用的现场原因 ⇒ 不沿用上一段
+          console.log('[SelfStateVoice] 沉因记录: 无（上一轮他的情绪不是负向 / 没有可用原话）');
         }
       }
-      selfStatePrevDepth = depthNow;
-      selfStatePrevTurns = lowReading.turns;
       selfStateCause = selfStateSinkCause ?? deriveLowPeriodCause({
         rumination: extras.updatedEmotionState.internal?.rumination,
         motivePool: extras.updatedEmotionState.internal?.motive?.pool,
       });
+      console.log(`[SelfStateVoice] 本轮原因: ${selfStateCause.kind} ｜ ${selfStateCause.phrase}`);
     }
     const strategySnippet = resolveStrategySnippet(finalStrategy, {
       inEstablishedLowPeriod: Boolean(lowReading?.established),
