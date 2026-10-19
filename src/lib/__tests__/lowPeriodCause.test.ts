@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveLowPeriodCause,
+  extractAnchoredTopic,
   causePhraseIsGrounded,
   type LowPeriodCause,
 } from '../lowPeriodCause.js';
@@ -42,6 +43,40 @@ describe('deriveLowPeriodCause（只能从真实信号派生）', () => {
       rumination: { emotion: 'sad', streak: 9 },
     });
     expect(c.kind).toBe('carrying_his_matter');
+  });
+});
+
+describe('原因具体化：话题词只从锚点取（他原话里的「…」）', () => {
+  it('open_loop 内容带锚点 ⇒ 原因句点名话题（不猜、不改写）', () => {
+    const c = deriveLowPeriodCause({
+      motivePool: [{ kind: 'open_loop', salience: 0.8, content: '他刚说要去「体检」，我想知道具体是什么情况、他心里怎么想' }],
+    });
+    expect(c.kind).toBe('carrying_his_matter');
+    expect(c.topic).toBe('体检');
+    expect(c.phrase).toContain('体检');
+    expect(c.phrase).toContain('你说的');   // 归属给他的原话，不是她的生活
+  });
+
+  it('没有锚点 ⇒ 退回泛化表述（不硬编话题）', () => {
+    const c = deriveLowPeriodCause({
+      motivePool: [{ kind: 'worry', salience: 0.7, content: '我有点担心他' }],
+    });
+    expect(c.kind).toBe('carrying_his_matter');
+    expect(c.topic).toBeUndefined();
+    expect(c.phrase).toContain('还没落定');
+  });
+
+  it('锚点里若是禁用的外部生活名词 ⇒ 不采用（保守回落泛化）', () => {
+    expect(extractAnchoredTopic('他刚说要去「公司加班」')).toBeNull();
+    expect(extractAnchoredTopic('他刚说要去「体检」')).toBe('体检');
+    expect(extractAnchoredTopic('没有引号的内容')).toBeNull();
+  });
+
+  it('具体化后的原因句仍通过 grounded 检查', () => {
+    const c = deriveLowPeriodCause({
+      motivePool: [{ kind: 'open_loop', salience: 0.8, content: '他刚说要去「面试」，我想知道结果' }],
+    });
+    expect(causePhraseIsGrounded(c.phrase)).toBe(true);
   });
 });
 

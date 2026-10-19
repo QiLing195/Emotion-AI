@@ -9,6 +9,8 @@
  * 但"给原因"绝不能变成"编造她的生活"（她并没有工作/同事/朋友那些外部生活，v1.49c 的禁外部事件
  * 名词就是为此）。所以本模块只从**状态里真实存在**的信号派生原因，且不引入任何外部事件：
  *   ① 动机池里她心里挂着的事（open_loop / worry / memory_echo）—— 那本身就是有依据的
+ *      其中 open_loop 的内容形如 `他刚说要去「体检」，我想知道…` —— 「」里是**他的原话话题**，
+ *      所以话题词直接取锚点（**不猜、不改写**），这才能把原因说具体而不造假。
  *   ② 反刍链（同一情绪连续主导 ≥3 轮）—— "缓不过来"有内部依据
  *   ③ 都没有 ⇒ 诚实地说"说不上来为什么"（不编）
  *
@@ -24,6 +26,8 @@ export interface LowPeriodCause {
   phrase: string;
   /** 派生依据（审计用） */
   evidence: string;
+  /** 具体话题（只有在锚点里取到时才有；用于报告"具体化率"） */
+  topic?: string;
 }
 
 /** 她心里挂着的事（这三类本身就是"有具体所指"的动机） */
@@ -35,26 +39,43 @@ const CARRYING_KINDS = new Set(['open_loop', 'worry', 'memory_echo']);
  */
 const FORBIDDEN_LIFE_NOUNS = /工作|上班|同事|老板|公司|朋友|闺蜜|同学|学校|老师|家里|妈妈|爸爸|父母|天气|下雨|出差|旅行|超市|做饭|加班|项目/;
 
+/** open_loop 内容里的引号锚点就是他原话里的话题：`他刚说要去「体检」…` */
+const ANCHOR_RE = /「([^」]{1,12})」/;
+
 export interface DeriveLowPeriodCauseInput {
   /** 反刍链（`EmotionState.internal.rumination`） */
   rumination?: { emotion?: string; streak?: number } | null;
-  /** 动机池（`EmotionState.internal.motive.pool`）—— 只读 kind/salience */
-  motivePool?: Array<{ kind?: string; salience?: number }> | null;
+  /** 动机池（`EmotionState.internal.motive.pool`）—— 只读 kind/salience/content */
+  motivePool?: Array<{ kind?: string; salience?: number; content?: string }> | null;
   /** 本次低谷已落定的轮数（低谷读数里的 turns；只作为审计证据，不参与判定） */
   lowTurns?: number;
 }
 
-function pickCarryingMotive(pool?: Array<{ kind?: string; salience?: number }> | null): string | null {
+function pickCarryingMotive(
+  pool?: Array<{ kind?: string; salience?: number; content?: string }> | null,
+): { kind: string; salience: number; content: string } | null {
   if (!pool || pool.length === 0) return null;
-  let best: { kind: string; salience: number } | null = null;
+  let best: { kind: string; salience: number; content: string } | null = null;
   for (const m of pool) {
     const kind = String(m?.kind ?? '');
     if (!CARRYING_KINDS.has(kind)) continue;
     const salience = Number(m?.salience ?? 0);
     if (!Number.isFinite(salience)) continue;
-    if (!best || salience > best.salience) best = { kind, salience };
+    if (!best || salience > best.salience) {
+      best = { kind, salience, content: String(m?.content ?? '') };
+    }
   }
-  return best ? best.kind : null;
+  return best;
+}
+
+/** 从动机内容里取引号锚点（= 他原话里的话题）；取不到返回 null */
+export function extractAnchoredTopic(content: string): string | null {
+  const m = ANCHOR_RE.exec(String(content ?? ''));
+  if (!m) return null;
+  const topic = m[1].trim();
+  if (!topic) return null;
+  if (FORBIDDEN_LIFE_NOUNS.test(topic)) return null;
+  return topic;
 }
 
 /**
@@ -63,10 +84,19 @@ function pickCarryingMotive(pool?: Array<{ kind?: string; salience?: number }> |
 export function deriveLowPeriodCause(input: DeriveLowPeriodCauseInput = {}): LowPeriodCause {
   const carrying = pickCarryingMotive(input.motivePool);
   if (carrying) {
+    const topic = extractAnchoredTopic(carrying.content);
+    if (topic) {
+      return {
+        kind: 'carrying_his_matter',
+        phrase: `心里一直挂着你说的「${topic}」那件事`,
+        evidence: `motive_pool:${carrying.kind}:anchor`,
+        topic,
+      };
+    }
     return {
       kind: 'carrying_his_matter',
       phrase: '心里一直挂着一件还没落定的事',
-      evidence: `motive_pool:${carrying}`,
+      evidence: `motive_pool:${carrying.kind}`,
     };
   }
 
