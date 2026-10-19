@@ -250,7 +250,7 @@ describe('v1.37 低谷期时长', () => {
     expect(readLines.length, '低谷读数只允许在协调器里被调用一次').toBe(1);
     for (const l of readLines) {
       // 每一个能改动"她低谷时说什么"的开关都必须在场 —— 否则新加的片段会绕过这条约定
-      for (const flag of ['lowPeriodStanceEnabled()', 'lowPeriodRestraintEnabled()']) {
+      for (const flag of ['lowPeriodStanceEnabled()', 'lowPeriodRestraintEnabled()', 'selfStateVoiceEnabled()']) {
         expect(l, `这一行读低谷读数，却没有挂开关 ${flag}`).toContain(flag);
       }
     }

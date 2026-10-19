@@ -18,6 +18,7 @@ import type { Discovery } from '../curiosity/types';
 import type { PatternCandidate } from '../curiosity/patterns';
 import type { Insight } from '../curiosity/insights';
 import { activationOf } from './emotionActivation';
+import { shouldUseSelfStateVoice, SELF_STATE_VOICE_SNIPPET } from './selfStateVoice';
 import { canonicalEmotion, isPositiveUserEmotion } from './emotionCanonical';
 import { rewardLearner } from './rewardLearner';
 
@@ -690,6 +691,17 @@ export function resolveStrategySnippet(
   }
   if (LOW_PERIOD_STANCE_EXCLUDED.has(strategy)) return base;
   if (isPositiveUserEmotion(opts.hisEmotion ?? null)) {
+    // v1.60：她自己"沉"时，准许她说一句自己此刻的状态（默认关）。
+    // v1.38 片段明文写着「不要转身讲自己的事」，与本实验方向相反 ⇒ 本开关优先。
+    if (shouldUseSelfStateVoice({
+      inEstablishedLowPeriod: opts.inEstablishedLowPeriod,
+      hisIsPositive: true,
+      strategy,
+    })) {
+      // 操纵证据：只有开关开着且条件全过才到这里 ⇒ 日志即"这一轮真的换了片段"
+      console.log('[Strategy] 自我状态表达许可片段已启用（v1.60 ENABLE_SELF_STATE_VOICE）');
+      return SELF_STATE_VOICE_SNIPPET;
+    }
     return lowPeriodStanceEnabled() ? LOW_PERIOD_STANCE_SNIPPET : base;
   }
   if (!lowPeriodRestraintEnabled()) return base;

@@ -33,6 +33,7 @@ import {
 } from '../../src/lib/emergenceMetrics.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
+import { selfStateVoiceEnabled } from '../../src/lib/selfStateVoice.js';
 import { applyLayaVerdict, LAYA_CHOOSABLE_STRATEGIES, LAYA_KEEP_ACCOMPANY_STRATEGIES, type LayaStrategyVerdict } from '../../src/lib/layaDecision.js';
 import { layaMinConfidence, layaKeepAccompany } from './layaClient.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
@@ -331,7 +332,7 @@ export class AICoordinator {
     // 守卫要求这一行**本身**同时挂着两个开关名（见 lowPeriod.test.ts 的约定守卫）——
     // 表达式故意不折行：折了行，"挂了开关"就只写在注释里，而注释挡不住接线。
     const strategySnippet = resolveStrategySnippet(finalStrategy, {
-      inEstablishedLowPeriod: (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled()) && lowPeriodOf(extras.updatedEmotionState).established,
+      inEstablishedLowPeriod: (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled() || selfStateVoiceEnabled()) && lowPeriodOf(extras.updatedEmotionState).established,
       hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
     });
     if (hasOverrides(arbitrationOutput)) {
