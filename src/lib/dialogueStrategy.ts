@@ -691,9 +691,11 @@ export function resolveStrategySnippet(
     return base;
   }
   if (LOW_PERIOD_STANCE_EXCLUDED.has(strategy)) return base;
-  if (isPositiveUserEmotion(opts.hisEmotion ?? null)) {
-    // v1.60：她自己"沉"时，准许她说一句自己此刻的状态（默认关）。
-    // v1.38 片段明文写着「不要转身讲自己的事」，与本实验方向相反 ⇒ 本开关优先。
+  const hisPositive = isPositiveUserEmotion(opts.hisEmotion ?? null);
+  const hisOrdinary = !hisPositive && isOrdinaryUserEmotion(opts.hisEmotion ?? null);
+  // v1.60：好消息**与平常事**都用同一个"可以说一句自己"的许可 ——
+  // 平常事没有"提他的伤心事会扫兴"的社会风险，是检验"她是不敢说还是不会说"的对照臂。
+  if (hisPositive || hisOrdinary) {
     if (shouldUseSelfStateVoice({
       inEstablishedLowPeriod: opts.inEstablishedLowPeriod,
       hisIsPositive: true,
@@ -703,7 +705,10 @@ export function resolveStrategySnippet(
       console.log('[Strategy] 自我状态表达许可片段已启用（v1.60 ENABLE_SELF_STATE_VOICE）');
       return buildSelfStateVoiceSnippet(opts.selfStateCause, { allowDialogueAttribution: causeFromDialogueEnabled() });
     }
-    return lowPeriodStanceEnabled() ? LOW_PERIOD_STANCE_SNIPPET : base;
+    if (hisPositive) {
+      return lowPeriodStanceEnabled() ? LOW_PERIOD_STANCE_SNIPPET : base;
+    }
+    // 平常事且开关关 ⇒ 继续走 v1.42 白名单分支（行为与旧版逐字相同）
   }
   if (!lowPeriodRestraintEnabled()) return base;
   if (!LOW_PERIOD_RESTRAINT_TARGETS.has(strategy)) return base;
