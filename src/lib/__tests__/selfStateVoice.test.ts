@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   selfStateVoiceEnabled,
   shouldUseSelfStateVoice,
+  causeFromDialogueEnabled,
+  buildSelfStateVoiceSnippet,
   SELF_STATE_VOICE_SNIPPET,
   SELF_STATE_VOICE_EXCLUDED,
 } from '../selfStateVoice.js';
@@ -95,5 +97,29 @@ describe('SELF_STATE_VOICE_SNIPPET 的语义约束（防跑偏成 v1.38 或自�
 
   it('必须划死"让他反过来安慰你"', () => {
     expect(SELF_STATE_VOICE_SNIPPET).toContain('不要把这轮变成');
+  });
+});
+
+describe('v1.60 近路：允许从对话记录归因（默认关）', () => {
+  it('默认关：片段里不出现对话归因许可', () => {
+    expect(causeFromDialogueEnabled()).toBe(false);
+    expect(SELF_STATE_VOICE_SNIPPET).not.toContain('他刚才说的那句话或那种情绪');
+  });
+
+  it('开启后：片段允许从对话归因，但要求"必须是他真的说过的，不许编"', () => {
+    const s = buildSelfStateVoiceSnippet(undefined, { allowDialogueAttribution: true });
+    expect(s).toContain('他刚才说的那句话或那种情绪');
+    expect(s).toContain('必须是他真的说过的，不许编');
+    // 仍保留诚实兜底
+    expect(s).toContain('说不上来为什么');
+  });
+
+  it('有派生原因时也允许对话归因（两条并列，不互相压制）', () => {
+    const s = buildSelfStateVoiceSnippet(
+      { kind: 'carrying_his_matter', phrase: '心里一直挂着「体检」那件事', evidence: 'x', topic: '体检' },
+      { allowDialogueAttribution: true },
+    );
+    expect(s).toContain('体检');
+    expect(s).toContain('他刚才说的那句话或那种情绪');
   });
 });

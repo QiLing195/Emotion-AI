@@ -24,6 +24,17 @@ export function selfStateVoiceEnabled(): boolean {
   return process.env.ENABLE_SELF_STATE_VOICE === 'true';
 }
 
+/**
+ * 是否允许"从**对话记录**归因"（默认关）。
+ *
+ * 为什么单开一条：她手里本来就有对话记录（prompt 带 recentMessages），但片段只允许用两条派生来源
+ * （动机池/反刍）⇒ 4/4 全落"说不上来"。而"他刚才那句话让我沉"是最容易拿到、也最真实的归因 ——
+ * 数据本来就在，只是没被允许用。开启后仍要求**引他说过的内容，不许编**。
+ */
+export function causeFromDialogueEnabled(): boolean {
+  return process.env.ENABLE_SELF_STATE_CAUSE_FROM_DIALOGUE === 'true';
+}
+
 /** 守门策略永不替换（与 LOW_PERIOD_STANCE_EXCLUDED 同义） */
 export const SELF_STATE_VOICE_EXCLUDED: ReadonlySet<StrategyType> =
   new Set<StrategyType>(['crisis', 'boundary', 'repair']);
@@ -37,16 +48,26 @@ export const SELF_STATE_VOICE_EXCLUDED: ReadonlySet<StrategyType> =
  * 有**真实原因**时（来自 `deriveLowPeriodCause`），允许顺口带一句原因，但只用这一条；
  * 原因派生不出来时，明确要求"诚实地说说不上来为什么"——**不许为了给原因而编**。
  */
-export function buildSelfStateVoiceSnippet(cause?: LowPeriodCause): string {
-  const causeLine = cause && cause.kind !== 'unknown'
+export function buildSelfStateVoiceSnippet(
+  cause?: LowPeriodCause,
+  opts: { allowDialogueAttribution?: boolean } = {},
+): string {
+  const derivedLine = cause && cause.kind !== 'unknown'
     ? `- 如果这条**真实原因**成立，可以顺口带一句原因（**只能用它，不要自己编**）：${cause.phrase}`
+    : '';
+  const dialogueLine = opts.allowDialogueAttribution
+    ? `- 如果让你沉下去的就是**他刚才说的那句话或那种情绪**，可以直接点出来（引他说过的内容）——**必须是他真的说过的，不许编**；说不出来就还是说「说不上来为什么」`
+    : '';
+  const fallbackLine = cause && cause.kind !== 'unknown'
+    ? ''
     : '- 如果你确实说不上来为什么，就诚实地说「说不上来为什么」——**不要为了给原因而编**';
+  const causeLines = [derivedLine, dialogueLine, fallbackLine].filter(Boolean).join('\n');
   return `【当前策略：你自己这几天在低谷，他说的是好消息】
 你状态不好——不用演，也不用瞒。这一轮你**可以**做两件事：
 - 先就事论事地应一声他的好消息（"真好"／"恭喜你"／"你值得"）——让他知道你听见了
 - 然后**可以说一句**你自己此刻的状态（一句就够）：比如「我这两天有点沉」「心里有点闷」
   —— 说完就停住，不要展开成一段自述
-${causeLine}
+${causeLines}
 - **不必**假装高兴（不用惊叹、不用把情绪举高去陪他），**也不必**把低落藏得死死的
 - ❌ 不要追问细节；❌ 不要把这轮变成"让他反过来安慰你"
 - 你可以接得低、也可以带一句自己——但每一句都要真的落在他那件事上`;
