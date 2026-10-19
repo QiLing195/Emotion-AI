@@ -873,24 +873,31 @@ export class AIGirlfriendServer {
         if (jevEnabled()) {
           const jevSettings = this.readAISettings();
           if (jevSettings?.apiKey) {
+            // 字段路径已按 2026-10-19 首跑暴露的问题修正（此前读错 ⇒ her_state 全空 ⇒ jev 编造她的情绪）：
+            //   valence → taiji.valence ｜ 低谷 → 顶层 lowPeriod（since/turns）｜ 反刍 → internal.rumination（emotion/streak）
+            //   activated → activationOf(state).delta（相对她**自己的**基线；这是短对话里唯一能表达"她被激起什么"的信号）
             const herStateLoose = currentEmotionState as unknown as {
-              valence?: number;
+              taiji?: { valence?: number };
+              lowPeriod?: { since?: number | null; turns?: number };
               internal?: {
-                lowPeriod?: { active?: boolean; durationTurns?: number; turns?: number };
-                rumination?: { dominant?: string; dominantEmotion?: string; streak?: number; count?: number };
+                rumination?: { emotion?: string; streak?: number };
                 motive?: { pool?: Array<{ id?: string; kind?: string; salience?: number; content?: string }> };
               };
             };
-            const lp = herStateLoose?.internal?.lowPeriod;
+            const lp = herStateLoose?.lowPeriod;
             const ru = herStateLoose?.internal?.rumination;
             const pool = herStateLoose?.internal?.motive?.pool ?? [];
+            const herActivated = currentEmotionState
+              ? (activationOf(currentEmotionState) as unknown as { delta?: Record<string, number> }).delta ?? {}
+              : {};
             const selected = motiveSelection.selected;
             const jevInput = assembleJevInput({
-              herValence: Number(herStateLoose?.valence ?? 0),
-              lowPeriodActive: Boolean(lp?.active),
-              lowPeriodTurns: Number(lp?.durationTurns ?? lp?.turns ?? 0),
-              ruminationDominant: ru?.dominant ?? ru?.dominantEmotion ?? null,
-              ruminationStreak: Number(ru?.streak ?? ru?.count ?? 0),
+              herValence: Number(herStateLoose?.taiji?.valence ?? 0),
+              herActivated,
+              lowPeriodActive: lp?.since != null,
+              lowPeriodTurns: Number(lp?.turns ?? 0),
+              ruminationDominant: ru?.emotion ?? null,
+              ruminationStreak: Number(ru?.streak ?? 0),
               hisEmotion: emotionAnalysis.userAnalysis?.expressedEmotion ?? 'neutral',
               hisIntensity: Number(emotionAnalysis.userAnalysis?.intensity ?? 0),
               hisSummary: message,

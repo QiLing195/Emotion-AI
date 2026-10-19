@@ -96,6 +96,13 @@ describe('assembleJevInput（归一化，不做判断）', () => {
     expect(input.rules_default.action).toBe('wait');
     expect(input.rules_default.reason_code).toBe('RULE_DEFAULT');
   });
+
+  it('激活态只保留被激起的信号（丢掉 |delta|<0.005 的浮点噪声）', () => {
+    const input = inputOf({ herActivated: { sad: 0.08, joy: -0.02, calm: 0.001 } });
+    expect(input.her_state.activated.sad).toBeCloseTo(0.08, 5);
+    expect(input.her_state.activated.joy).toBeCloseTo(-0.02, 5);
+    expect(input.her_state.activated.calm).toBeUndefined();
+  });
 });
 
 describe('buildJevPrompt', () => {
@@ -150,6 +157,22 @@ describe('parseJevOutput（严格校验）', () => {
 
   it('非 JSON 文本 ⇒ null', () => {
     expect(parseJevOutput('我觉得应该分享。', inputOf())).toBeNull();
+  });
+
+  it('一致性护栏：输入没有"她低落"证据时，LOW_MOOD_* 理由一律拒绝（防编造她的状态）', () => {
+    const noLow = inputOf({ lowPeriodActive: false, ruminationDominant: null, herActivated: {}, herValence: 0 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_MATCH_SILENT' }), noLow)).toBeNull();
+    // 同样输入下，非 LOW_MOOD 的理由仍可通过（护栏只拦编造，不拦正常决策）
+    expect(parseJevOutput(validOutputJson({ reason_code: 'SHARE_SELF_STATE' }), noLow)).not.toBeNull();
+  });
+
+  it('一致性护栏：有"她低落"证据时，LOW_MOOD_* 允许（low_period / 负向被激起 / valence 低）', () => {
+    const viaLowPeriod = inputOf({ lowPeriodActive: true });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_LET_HIM_SHARE' }), viaLowPeriod)).not.toBeNull();
+    const viaActivated = inputOf({ lowPeriodActive: false, herActivated: { sad: -0.08 }, herValence: 0 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_MATCH_SILENT' }), viaActivated)).not.toBeNull();
+    const viaValence = inputOf({ lowPeriodActive: false, herValence: -0.2 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_LET_HIM_SHARE' }), viaValence)).not.toBeNull();
   });
 });
 
@@ -217,15 +240,17 @@ describe('runJevShadow（永不抛异常，只记账）', () => {
     expect(rec.jev).toBeNull();
   });
 
-  it('输出非法 ⇒ PARSE_FAILED，决策为 null', async () => {
+  it('输出非法 ⇒ PARSE_FAILED，决策为 null（且保留原始输出便于归因）', async () => {
+    const bad = '{"action":"shout","conflict":"none","inner_line":"x","reason_code":"A_1"}';
     const rec = await runJevShadow({
       turnId: 't-4',
       input: inputOf(),
-      callModel: async () => '{"action":"shout","conflict":"none","inner_line":"x","reason_code":"A_1"}',
+      callModel: async () => bad,
       logPath: logPath(dir()),
     });
     expect(rec.errorCode).toBe('PARSE_FAILED');
     expect(rec.jev).toBeNull();
+    expect(rec.rawHead).toContain('shout');
   });
 });
 
