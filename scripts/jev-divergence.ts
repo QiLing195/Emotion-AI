@@ -68,9 +68,18 @@ function pct(a: number, b: number): string {
 }
 
 /** 兼容 v0 账本（无 conflictClass/authority 字段时按输入推算） */
+/**
+ * ⚠️ 始终按**当前定义**重算，不信任记录里的 `conflictClass`：
+ * 2026-10-19 发现冲突类阈值定义有缺陷（用了 0.05 而非项目既有 0.12 语义），
+ * 修正后必须重算，否则旧标签会把 ①/② 的分析带偏。
+ */
 function conflictOf(rec: JevShadowRecord): boolean {
-  if (typeof rec.conflictClass === 'boolean') return rec.conflictClass;
   return isConflictClass(rec.input);
+}
+
+/** 记录里当时写入的 conflictClass（用于展示"定义修正影响了多少条"） */
+function storedConflictOf(rec: JevShadowRecord): boolean | null {
+  return typeof rec.conflictClass === 'boolean' ? rec.conflictClass : null;
 }
 
 function authorityOf(rec: JevShadowRecord): string {
@@ -99,6 +108,8 @@ function analyze(rows: Row[], label: string): void {
 
   const byErr = new Map<string, number>();
   for (const r of errors) byErr.set(r.rec.errorCode ?? 'UNKNOWN', (byErr.get(r.rec.errorCode ?? 'UNKNOWN') ?? 0) + 1);
+  const reclass = rows.filter(r => storedConflictOf(r.rec) !== null && storedConflictOf(r.rec) !== conflictOf(r.rec)).length;
+  if (reclass > 0) console.log(`  ⚠️ 定义修正影响：${reclass} 条记录的 conflictClass 与当前定义不符（已按当前定义重算，不信任旧标签）`);
   if (byErr.size) console.log(`  失败分布: ${[...byErr].map(([k, v]) => `${k}=${v}`).join(' ｜ ')}`);
   for (const r of errors.slice(0, 5)) {
     console.log(`    - ${r.rec.turnId} ${r.rec.errorCode} raw=${String(r.rec.rawHead ?? '').slice(0, 90)}`);

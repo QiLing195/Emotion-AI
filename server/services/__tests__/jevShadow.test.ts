@@ -10,6 +10,9 @@ import {
   jevEnabled,
   runJevShadow,
   jevInputDigest,
+  hasLowMoodEvidence,
+  isSinking,
+  isConflictClass,
   JEV_INNER_LINE_MAX,
   JEV_DEFAULT_TIMEOUT_MS,
   type AssembleJevInputArgs,
@@ -315,6 +318,22 @@ describe('jevEnabled', () => {
 
 describe('v1 权限闸门（只接管冲突类）', () => {
   const dir = () => mkdtempSync(join(tmpdir(), 'jev-gate-'));
+
+  it('冲突类判定用 0.12（项目"真沉"语义），不是 0.05 激活死区', () => {
+    const blip = inputOf({ lowPeriodActive: false, herValence: 0, hisEmotion: 'neutral', herActivated: { sad: 0.06 } });
+    expect(isSinking(blip)).toBe(false);
+    expect(isConflictClass(blip)).toBe(false);
+    const real = inputOf({ lowPeriodActive: false, herValence: 0, hisEmotion: 'neutral', herActivated: { sad: 0.13 } });
+    expect(isSinking(real)).toBe(true);
+    expect(isConflictClass(real)).toBe(true);
+  });
+
+  it('冲突类还要求他这一侧是报喜或平常事', () => {
+    const hisSad = inputOf({ lowPeriodActive: true, hisEmotion: 'sad' });
+    expect(isConflictClass(hisSad)).toBe(false);
+    const hisJoy = inputOf({ lowPeriodActive: true, hisEmotion: 'joy' });
+    expect(isConflictClass(hisJoy)).toBe(true);
+  });
 
   it('非冲突轮（他难过/她稳）⇒ authority=none、limitations 含 authority-none', async () => {
     const rec = await runJevShadow({

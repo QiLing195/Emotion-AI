@@ -182,9 +182,20 @@ function activatedOf(map: Record<string, number> | undefined): Record<string, nu
 }
 
 /**
- * 输入里是否有"她低落"的证据。
+ * "她真的沉进去了"的阈值 —— **必须**与项目既有语义对齐：
+ * `lowPeriod.LOW_PERIOD_SINK` = `dialogueStrategy.ACCOMPANY_WHEN_SHE_SINKS` = `motive.DEFER_HER_SINK` = 0.12。
  *
- * ⚠️ 方向（8 轮真实样本抓出的 bug）：`activated` 正 = 被激起，负 = 基调被压下去
+ * 2026-10-19 v1 真实数据抓出的定义缺陷：冲突类最初用**激活死区 0.05** 判"她低落"，
+ * 结果一组"她根本不低"的剧本（low_period 从未为真、valence 全 ≥0）被 9/10 判成冲突轮 ——
+ * 因为 +0.05 只是"被激起"的噪声边界（一次轻微传染就够），不是"她真的沉的"。
+ * ⇒ 冲突类用 0.12（真沉）；护栏 `hasLowMoodEvidence` 仍用 0.05（"有任何负向被激起就不算编造"）。
+ */
+export const SINK_THRESHOLD = 0.12;
+
+/**
+ * 输入里是否有"她低落"的证据（**护栏用，宽松**）。
+ *
+ * ⚠️ 方向：`activated` 正 = 被激起，负 = 基调被压下去
  * ⇒ "她被激起难过/恐惧/愤怒/厌恶" 是这些情绪的 delta **≥** 死区（+0.05），不是 ≤ -0.05。
  */
 export function hasLowMoodEvidence(input: JevInput): boolean {
@@ -194,17 +205,24 @@ export function hasLowMoodEvidence(input: JevInput): boolean {
   return ['sad', 'fear', 'anger', 'disgust'].some(k => (input.her_state.activated[k] ?? 0) >= STIRRED);
 }
 
+/** 她是否"真的沉进去了"（**冲突类判定用，严格** —— 与项目既有 0.12 语义对齐） */
+export function isSinking(input: JevInput): boolean {
+  if (input.her_state.low_period) return true;
+  if (input.her_state.valence <= -0.1) return true;
+  return ['sad', 'fear', 'anger', 'disgust'].some(k => (input.her_state.activated[k] ?? 0) >= SINK_THRESHOLD);
+}
+
 /** v1：他这一侧是否为负向情绪 */
 export function isHisNegative(input: JevInput): boolean {
   return NEGATIVE_EMOTIONS.includes(String(input.his_turn.emotion || '').toLowerCase());
 }
 
 /**
- * v1：冲突类 = 她低落 ∧ 他报喜/平常事（= v1.38 / v1.42 族）。
+ * v1：冲突类 = **她真的沉（≥0.12 / low_period）** ∧ 他报喜或平常事（= v1.38 / v1.42 族）。
  * **只有这一族**允许 jev 改判（v0 的错误是让它每轮都改）。
  */
 export function isConflictClass(input: JevInput): boolean {
-  if (!hasLowMoodEvidence(input)) return false;
+  if (!isSinking(input)) return false;
   const his = String(input.his_turn.emotion || '').toLowerCase();
   return POSITIVE_EMOTIONS.includes(his) || his === 'neutral';
 }
