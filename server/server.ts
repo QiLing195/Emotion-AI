@@ -890,10 +890,16 @@ export class AIGirlfriendServer {
             const herActivated = currentEmotionState
               ? (activationOf(currentEmotionState) as unknown as { delta?: Record<string, number> }).delta ?? {}
               : {};
+            // v1.1：静息显式化（resting=true 是**正确状态**，不是"没读到"）
+            const herActivationFull = currentEmotionState
+              ? (activationOf(currentEmotionState) as unknown as { resting?: boolean; note?: string })
+              : { resting: false, note: '' };
             const selected = motiveSelection.selected;
             const jevInput = assembleJevInput({
               herValence: Number(herStateLoose?.taiji?.valence ?? 0),
               herActivated,
+              herResting: Boolean(herActivationFull.resting),
+              herStateNote: String(herActivationFull.note ?? ''),
               lowPeriodActive: lp?.since != null,
               lowPeriodTurns: Number(lp?.turns ?? 0),
               ruminationDominant: ru?.emotion ?? null,

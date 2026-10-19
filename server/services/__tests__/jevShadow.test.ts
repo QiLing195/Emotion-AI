@@ -107,6 +107,15 @@ describe('assembleJevInput（归一化，不做判断）', () => {
     expect(input.her_state.activated.joy).toBeCloseTo(-0.02, 5);
     expect(input.her_state.activated.calm).toBeUndefined();
   });
+
+  it('v1.1：静息显式化 —— resting/note 透传；未传时默认 resting=false、note 空', () => {
+    const rest = inputOf({ herResting: true, herStateNote: '静息（没有明显情绪）' });
+    expect(rest.her_state.resting).toBe(true);
+    expect(rest.her_state.note).toContain('静息');
+    const unset = inputOf();
+    expect(unset.her_state.resting).toBe(false);
+    expect(unset.her_state.note).toBe('');
+  });
 });
 
 describe('buildJevPrompt', () => {

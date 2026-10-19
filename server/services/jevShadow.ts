@@ -80,6 +80,14 @@ export interface JevInput {
     activated: Record<string, number>;
     low_period: { active: boolean; turns: number } | null;
     rumination: { dominant: string; streak: number } | null;
+    /**
+     * v1.1：**静息**显式化。
+     * 没有它时，"她此刻没有明显情绪（resting）"与"状态没读到（空）"在账本里长得一样，
+     * 会让人（和模型）误以为缺数据。`resting=true` 是**正确状态**，不是缺陷。
+     */
+    resting: boolean;
+    /** v1.1：`activationOf(state).note` 的人话读数（如「静息（没有明显情绪）」/「难过 +0.18」） */
+    note: string;
   };
   his_turn: { emotion: string; intensity: number; summary: string };
   recent: Array<{ who: 'her' | 'him'; intent?: string; emotion?: string }>;
@@ -131,6 +139,9 @@ export interface AssembleJevInputArgs {
   lowPeriodTurns: number;
   ruminationDominant: string | null;
   ruminationStreak: number;
+  /** v1.1：静息标记与人话读数（来自 `activationOf(state).resting / .note`） */
+  herResting?: boolean;
+  herStateNote?: string;
   hisEmotion: string;
   hisIntensity: number;
   hisSummary: string;
@@ -254,6 +265,8 @@ export function assembleJevInput(a: AssembleJevInputArgs): JevInput {
       rumination: a.ruminationDominant
         ? { dominant: truncate(a.ruminationDominant, 20), streak: Math.max(0, Math.round(Number(a.ruminationStreak) || 0)) }
         : null,
+      resting: Boolean(a.herResting),
+      note: truncate(a.herStateNote, 40),
     },
     his_turn: {
       emotion: truncate(a.hisEmotion, 20) || 'neutral',
