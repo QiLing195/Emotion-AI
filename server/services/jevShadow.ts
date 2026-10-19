@@ -43,6 +43,32 @@ const REASON_CODE_RE = /^[A-Z][A-Z0-9_]{2,31}$/;
 /** inner_line 不得夹带 Prompt 痕迹/引号（它是着色素材，不是回复） */
 const INNER_LINE_FORBIDDEN_RE = /[【】「」“”"]/;
 
+/**
+ * `reason_code` 的**闭合枚举**（2026-10-19 真实运行后收敛）。
+ *
+ * 为什么必须闭合：首跑三轮里模型自己造了 `LOW_ENERGY_HIS_SAD`、`LOW_MOOD_HOLD_SPACE` 等码
+ * ⇒ ①护栏只能按前缀拦"自报低落"，挡不住"换个名字的同一行为"；
+ *   ②离线分歧分析无法按码聚合（每条一个码等于没分类）。
+ */
+export const JEV_REASON_CODES = [
+  'KEEP_DEFAULT',          // 规则决策已经对，不改
+  'HER_LOW_HE_RISES',      // 她低沉 + 他报喜 ⇒ 低位回应（不许假装高兴，也不许冷处理）
+  'HER_LOW_HE_NEUTRAL',    // 她低沉 + 他平常事 ⇒ 安静陪着，不追问
+  'HE_DOWN_SHE_STEADY',    // 他难过 + 她稳 ⇒ 共情/靠近
+  'BOTH_DOWN_ACCOMPANY',   // 两人都沉 ⇒ 少说、靠近
+  'HE_RISES_SHE_STEADY',   // 他报喜 + 她稳 ⇒ 一起高兴
+  'SHE_WANTS_TO_SHARE',    // 她想说自己的事 ⇒ share
+  'SHE_HOLDS_BACK',        // 她想说但这轮不说 ⇒ wait
+  'ASK_FOLLOWUP',          // 要先问一句才接得住 ⇒ ask
+  'INSUFFICIENT_INFO',     // 信息不足 ⇒ 回落规则
+] as const;
+export type JevReasonCode = (typeof JEV_REASON_CODES)[number];
+
+/** 这些理由**要求**输入里存在"她低落"的证据（否则就是编造她的状态） */
+const REASON_REQUIRES_LOW = new Set<JevReasonCode>(['HER_LOW_HE_RISES', 'HER_LOW_HE_NEUTRAL']);
+/** 这些理由隐含冲突，`conflict` 必须是 `her_vs_his` */
+const REASON_IMPLIES_CONFLICT = new Set<JevReasonCode>(['HER_LOW_HE_RISES', 'HER_LOW_HE_NEUTRAL', 'BOTH_DOWN_ACCOMPANY']);
+
 export interface JevCandidateRef {
   id: string;
   kind: string;
@@ -71,7 +97,7 @@ export interface JevOutput {
   motive_id: string | null;
   inner_line: string;
   conflict: JevConflict;
-  reason_code: string;
+  reason_code: JevReasonCode;
 }
 
 export interface JevShadowRecord {
@@ -157,15 +183,20 @@ function activatedOf(map: Record<string, number> | undefined): Record<string, nu
  * 输入里是否有"她低落"的证据。
  *
  * 为什么需要这条：影子首跑（2026-10-19）暴露 —— 当 `her_state` 近乎空白时，
- * jev 会把**他的** sad 读成**她**的低落（记录 1），甚至在没有她的低落信号时
- * 直接声称"我有点低落"（记录 2）。这是"用她没有的情绪当既有事实"，
- * 与项目历史上 v1.48/镜像/指代歧义同族 ⇒ 必须在**校验层**拦住，而不是只靠 Prompt 软约束。
+ * jev 会把**他的** sad 读成**她**的低落，甚至在没有她的低落信号时直接声称"我有点低落"。
+ * 这是"用她没有的情绪当既有事实"，与项目历史上 v1.48/镜像/指代歧义同族 ⇒ 必须在**校验层**拦住。
+ *
+ * ⚠️ 方向（2026-10-19 8 轮真实样本抓出的 bug）：`activated` 的语义是
+ * 「**正 = 被激起**，负 = 该基调被压下去」⇒ "她被激起难过/恐惧/愤怒/厌恶" 是这些情绪的
+ * delta **≥** 死区（+0.05），**不是** ≤ -0.05。首版写反了，导致第 3 轮把真实的
+ * `disgust +0.116` 判成"无低落证据"而误杀 jev 输出。
  */
 export function hasLowMoodEvidence(input: JevInput): boolean {
   if (input.her_state.low_period) return true;
   if (input.her_state.valence <= -0.1) return true;
   const NEG = ['sad', 'fear', 'anger', 'disgust'];
-  return NEG.some(k => (input.her_state.activated[k] ?? 0) <= -0.05);
+  const STIRRED = 0.05; // = ACTIVATION_DEADZONE：低于它视为噪声
+  return NEG.some(k => (input.her_state.activated[k] ?? 0) >= STIRRED);
 }
 
 /** 组装 jev 输入（纯函数）：只做归一化/截断/去重/排序，不做任何判断 */
@@ -236,10 +267,12 @@ export function buildJevPrompt(input: JevInput): string {
     `4) inner_line ≤ ${JEV_INNER_LINE_MAX} 字，第一人称，不带引号/括号，不解释原因。`,
     '5) 只输出 JSON，不要解释，不要代码块。',
     '6) **不得编造她的状态**：her_state 里没有低落证据（low_period 为空、activated 里没有负向被激起、valence 不低于 -0.1）时，',
-    '   不许声称"我低落/我也没力气"这类 LOW_MOOD 理由 —— 她可能只是平静。他的情绪不等于她的情绪。',
+    '   不许使用 HER_LOW_* 理由 —— 她可能只是平静。他的情绪不等于她的情绪。',
     '',
     '输出格式（严格）：',
-    '{"action":"share|wait|ask","motive_id":"<candidates 里的 id 或 null>","inner_line":"…","conflict":"her_vs_his|none","reason_code":"大写_下划线"}',
+    '{"action":"share|wait|ask","motive_id":"<candidates 里的 id 或 null>","inner_line":"…","conflict":"her_vs_his|none","reason_code":"<下表之一>"}',
+    'reason_code **只能**取下列闭合枚举（其它值一律作废）：',
+    ...JEV_REASON_CODES.map(code => `  - ${code}`),
     '',
     '--- 输入 ---',
     JSON.stringify(input),
@@ -284,8 +317,14 @@ export function parseJevOutput(raw: string | null | undefined, input: JevInput):
   if (!JEV_ACTIONS.includes(o.action as JevAction)) return null;
   if (!JEV_CONFLICTS.includes(o.conflict as JevConflict)) return null;
   if (typeof o.reason_code !== 'string' || !REASON_CODE_RE.test(o.reason_code)) return null;
-  // 一致性护栏：输入里没有"她低落"的证据时，禁止声称 LOW_MOOD_*（防编造她的状态）
-  if (o.reason_code.startsWith('LOW_MOOD') && !hasLowMoodEvidence(input)) return null;
+  // 闭合枚举：不在表里的码一律拒绝（首跑发现模型会自造码 ⇒ 分歧无法聚合）
+  const reason = o.reason_code as JevReasonCode;
+  if (!JEV_REASON_CODES.includes(reason)) return null;
+  const conflict = o.conflict as JevConflict;
+  // 一致性护栏 1：声明"她低落"但没有低落证据 ⇒ 编造她的状态
+  if (REASON_REQUIRES_LOW.has(reason) && !hasLowMoodEvidence(input)) return null;
+  // 一致性护栏 2：隐含冲突的理由，conflict 不能是 none
+  if (REASON_IMPLIES_CONFLICT.has(reason) && conflict !== 'her_vs_his') return null;
   if (typeof o.inner_line !== 'string') return null;
 
   const line = o.inner_line.replace(/\s+/g, ' ').trim();
@@ -305,8 +344,8 @@ export function parseJevOutput(raw: string | null | undefined, input: JevInput):
     action: o.action as JevAction,
     motive_id: motiveId,
     inner_line: line,
-    conflict: o.conflict as JevConflict,
-    reason_code: o.reason_code,
+    conflict,
+    reason_code: reason,
   };
 }
 

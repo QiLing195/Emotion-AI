@@ -54,7 +54,7 @@ function validOutputJson(over: Record<string, unknown> = {}): string {
     motive_id: 'm1',
     inner_line: '我也想跟他说说我的事',
     conflict: 'her_vs_his',
-    reason_code: 'SHARE_SELF_STATE',
+    reason_code: 'SHE_WANTS_TO_SHARE',
     ...over,
   });
 }
@@ -159,20 +159,42 @@ describe('parseJevOutput（严格校验）', () => {
     expect(parseJevOutput('我觉得应该分享。', inputOf())).toBeNull();
   });
 
-  it('一致性护栏：输入没有"她低落"证据时，LOW_MOOD_* 理由一律拒绝（防编造她的状态）', () => {
+  it('一致性护栏：输入没有"她低落"证据时，HER_LOW_* 理由一律拒绝（防编造她的状态）', () => {
     const noLow = inputOf({ lowPeriodActive: false, ruminationDominant: null, herActivated: {}, herValence: 0 });
-    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_MATCH_SILENT' }), noLow)).toBeNull();
-    // 同样输入下，非 LOW_MOOD 的理由仍可通过（护栏只拦编造，不拦正常决策）
-    expect(parseJevOutput(validOutputJson({ reason_code: 'SHARE_SELF_STATE' }), noLow)).not.toBeNull();
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_NEUTRAL' }), noLow)).toBeNull();
+    // 同样输入下，非 HER_LOW 的理由仍可通过（护栏只拦编造，不拦正常决策）
+    expect(parseJevOutput(validOutputJson({ reason_code: 'SHE_WANTS_TO_SHARE' }), noLow)).not.toBeNull();
   });
 
-  it('一致性护栏：有"她低落"证据时，LOW_MOOD_* 允许（low_period / 负向被激起 / valence 低）', () => {
+  it('一致性护栏：有"她低落"证据时，HER_LOW_* 允许（low_period / 负向情绪被激起 / valence 低）', () => {
     const viaLowPeriod = inputOf({ lowPeriodActive: true });
-    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_LET_HIM_SHARE' }), viaLowPeriod)).not.toBeNull();
-    const viaActivated = inputOf({ lowPeriodActive: false, herActivated: { sad: -0.08 }, herValence: 0 });
-    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_MATCH_SILENT' }), viaActivated)).not.toBeNull();
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_RISES' }), viaLowPeriod)).not.toBeNull();
+    // 方向：activated 正 = 被激起 ⇒ "被激起难过"是 sad **+0.08**（首版写成 -0.08 是反的）
+    const viaActivated = inputOf({ lowPeriodActive: false, herActivated: { sad: 0.08 }, herValence: 0 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_NEUTRAL' }), viaActivated)).not.toBeNull();
+    // 8 轮真实样本里的真实形态：disgust +0.116（真低落证据）
+    const viaDisgust = inputOf({ lowPeriodActive: false, herActivated: { disgust: 0.116 }, herValence: -0.066 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_RISES' }), viaDisgust)).not.toBeNull();
     const viaValence = inputOf({ lowPeriodActive: false, herValence: -0.2 });
-    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_LET_HIM_SHARE' }), viaValence)).not.toBeNull();
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_RISES' }), viaValence)).not.toBeNull();
+  });
+
+  it('一致性护栏方向正确：负向情绪 delta 为负（基调被压下去）**不是**低落证据', () => {
+    const suppressed = inputOf({ lowPeriodActive: false, herActivated: { sad: -0.08, fear: -0.06 }, herValence: 0 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_NEUTRAL' }), suppressed)).toBeNull();
+    // 死区以下的微正偏移也不算
+    const noise = inputOf({ lowPeriodActive: false, herActivated: { sad: 0.03 }, herValence: 0 });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_NEUTRAL' }), noise)).toBeNull();
+  });
+
+  it('闭合枚举：模型自造的码（首跑真实出现过的 LOW_ENERGY_HIS_SAD）⇒ 拒绝', () => {
+    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_ENERGY_HIS_SAD' }), inputOf())).toBeNull();
+    expect(parseJevOutput(validOutputJson({ reason_code: 'LOW_MOOD_HOLD_SPACE' }), inputOf())).toBeNull();
+  });
+
+  it('一致性护栏：隐含冲突的理由要求 conflict=her_vs_his', () => {
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_RISES', conflict: 'none' }), inputOf({ lowPeriodActive: true }))).toBeNull();
+    expect(parseJevOutput(validOutputJson({ reason_code: 'KEEP_DEFAULT', conflict: 'none' }), inputOf())).not.toBeNull();
   });
 });
 
