@@ -34,7 +34,17 @@ import {
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
 import { selfStateVoiceEnabled } from '../../src/lib/selfStateVoice.js';
-import { deriveLowPeriodCause } from '../../src/lib/lowPeriodCause.js';
+import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../../src/lib/lowPeriodCause.js';
+import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
+
+/**
+ * v1.60「沉因现场记录」的进程内缓冲。
+ * 局限：重启后第一段低谷可能没有现场引文（届时回落池子派生 / "说不上来"）——已在记录里标注。
+ */
+let selfStateSinkCause: LowPeriodCause | null = null;
+let selfStateSinkSince: number | null = null;
+let selfStatePrevDepth = 0;
+let selfStatePrevTurns = 0;
 import { applyLayaVerdict, LAYA_CHOOSABLE_STRATEGIES, LAYA_KEEP_ACCOMPANY_STRATEGIES, type LayaStrategyVerdict } from '../../src/lib/layaDecision.js';
 import { layaMinConfidence, layaKeepAccompany } from './layaClient.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
@@ -229,6 +239,8 @@ export class AICoordinator {
       updatedEmotionState: EmotionState;
       shadowStrategyMod: ReturnType<typeof shadowLayer.getStrategyModulation>;
       userAnalysis: UserEmotionAnalysis | null | undefined;
+      /** v1.60：本轮他的原话（沉因现场记录要引它） */
+      userText: string;
     };
     commitInputs: { valenceDelta: number; userDirectedAtAI: boolean };
   } | null = null;
@@ -289,6 +301,8 @@ export class AICoordinator {
       shadowStrategyMod: ReturnType<typeof shadowLayer.getStrategyModulation>;
       /** v1.58：片段里要读他的情绪键（原本直接读 `input`）*/
       userAnalysis: UserEmotionAnalysis | null | undefined;
+      /** v1.60：本轮他的原话（沉因现场记录要引它，保证引文来自真实对话） */
+      userText: string;
     },
   ): {
     decision: StrategyDecision;
@@ -332,18 +346,43 @@ export class AICoordinator {
     //  放宽的理由始终是它要拿真管道 A/B，而不是"顺手接一下"）。
     // 守卫要求这一行**本身**同时挂着两个开关名（见 lowPeriod.test.ts 的约定守卫）——
     // 表达式故意不折行：折了行，"挂了开关"就只写在注释里，而注释挡不住接线。
+    // v1.60：低谷读数只读一行（接线守卫要求这一行同时挂着三个开关名）。
+    const lowReading = (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled() || selfStateVoiceEnabled()) ? lowPeriodOf(extras.updatedEmotionState) : null;
+    // v1.60：「沉因现场记录」—— 在"她沉 / 沉得更深"的那一轮，用**这一轮他那句话**当原因。
+    //
+    // 为什么必须现场记录（两条实测教训）：
+    //   ① 池子派生会卡在旧话题：5 段种了 5 个不同话题，池里的 open_loop 始终是「体检」⇒ 她说错了原因；
+    //   ② "允许她从对话记录自行归因"的近路**两臂 0/5 无效** ⇒ 模型不会在表达时自发重构"因为哪句话"。
+    // 现场记录天然有据（引文摘自他的话）且不会过期；池子派生降级为兜底。
+    let selfStateCause: LowPeriodCause | undefined;
+    if (selfStateVoiceEnabled() && lowReading) {
+      const depthNow = herNegativeActivation(extras.updatedEmotionState).intensity;
+      const deepened = depthNow >= LOW_PERIOD_SINK
+        && (lowReading.turns > selfStatePrevTurns || depthNow > selfStatePrevDepth + 0.01);
+      if (lowReading.active && (lowReading.since !== selfStateSinkSince || deepened)) {
+        const fresh = deriveSinkCause({
+          userText: extras.userText,
+          hisEmotion: extras.userAnalysis?.expressedEmotion ?? '',
+        });
+        if (fresh) {
+          selfStateSinkCause = fresh;
+          selfStateSinkSince = lowReading.since;
+        } else if (lowReading.since !== selfStateSinkSince) {
+          selfStateSinkCause = null;          // 新的一段低谷、这轮又没有可用的现场原因 ⇒ 不沿用上一段
+          selfStateSinkSince = lowReading.since;
+        }
+      }
+      selfStatePrevDepth = depthNow;
+      selfStatePrevTurns = lowReading.turns;
+      selfStateCause = selfStateSinkCause ?? deriveLowPeriodCause({
+        rumination: extras.updatedEmotionState.internal?.rumination,
+        motivePool: extras.updatedEmotionState.internal?.motive?.pool,
+      });
+    }
     const strategySnippet = resolveStrategySnippet(finalStrategy, {
-      inEstablishedLowPeriod: (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled() || selfStateVoiceEnabled()) && lowPeriodOf(extras.updatedEmotionState).established,
+      inEstablishedLowPeriod: Boolean(lowReading?.established),
       hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
-      // v1.60：给她"为什么沉"的**真实**原因（只从动机池/反刍链派生；派生不出来就说"说不上来"）
-      ...(selfStateVoiceEnabled()
-        ? {
-            selfStateCause: deriveLowPeriodCause({
-              rumination: extras.updatedEmotionState.internal?.rumination,
-              motivePool: extras.updatedEmotionState.internal?.motive?.pool,
-            }),
-          }
-        : {}),
+      ...(selfStateCause ? { selfStateCause } : {}),
     });
     if (hasOverrides(arbitrationOutput)) {
     console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
@@ -1030,6 +1069,7 @@ export class AICoordinator {
     const strategyPlan = this.computeStrategyPlan(strategyCtx, {
       conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod,
       userAnalysis: input.userAnalysis,
+      userText: input.userText,
     });
     const strategyDecision = strategyPlan.decision;
     const finalStrategy = strategyPlan.finalStrategy;
@@ -1045,7 +1085,7 @@ export class AICoordinator {
       // `commitFinalStrategyWithMotive()` 一次性提交 —— 于是只有一个最终策略被记账。
       this.pendingStrategy = {
         strategyCtx,
-        extras: { conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod, userAnalysis: input.userAnalysis },
+        extras: { conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod, userAnalysis: input.userAnalysis, userText: input.userText },
         commitInputs,
       };
     } else {

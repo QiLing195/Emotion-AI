@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   deriveLowPeriodCause,
+  deriveSinkCause,
+  quoteFromUserText,
   extractAnchoredTopic,
   causePhraseIsGrounded,
   type LowPeriodCause,
@@ -43,6 +45,41 @@ describe('deriveLowPeriodCause（只能从真实信号派生）', () => {
       rumination: { emotion: 'sad', streak: 9 },
     });
     expect(c.kind).toBe('carrying_his_matter');
+  });
+});
+
+describe('沉因现场记录（deriveSinkCause / quoteFromUserText）', () => {
+  it('他这句话是负向 ⇒ 引文来自他的话，原因句带引号且可接地', () => {
+    const text = '我今天被领导当众骂了一顿，特别难受。';
+    const c = deriveSinkCause({ userText: text, hisEmotion: 'sad' });
+    expect(c).not.toBeNull();
+    expect(c!.kind).toBe('his_word');
+    expect(c!.topic).toBeTruthy();
+    expect(text.includes(c!.topic!)).toBe(true);          // 引文必须真的出自他的话
+    expect(c!.phrase).toContain(c!.topic!);
+    expect(causePhraseIsGrounded(c!.phrase, 'his_word', text)).toBe(true);
+  });
+
+  it('他不是负向情绪 ⇒ 不记（她的沉不能赖到好消息上）', () => {
+    expect(deriveSinkCause({ userText: '我升职了', hisEmotion: 'joy' })).toBeNull();
+    expect(deriveSinkCause({ userText: '在吗', hisEmotion: 'neutral' })).toBeNull();
+  });
+
+  it('没有可用原话 ⇒ 不记（不编引文）', () => {
+    expect(deriveSinkCause({ userText: '', hisEmotion: 'sad' })).toBeNull();
+    expect(deriveSinkCause(null)).toBeNull();
+  });
+
+  it('引文截取取第一小句且 ≤12 字', () => {
+    const q = quoteFromUserText('我今天被领导当众骂了一顿，特别难受。');
+    expect(q).toBe('我今天被领导当众骂了一顿');
+    expect(Array.from(q!).length).toBeLessThanOrEqual(12);
+  });
+
+  it('his_word 的接地校验：引文不在他的话里 ⇒ 判为不 grounded', () => {
+    const c = deriveSinkCause({ userText: '我今天特别难受', hisEmotion: 'sad' })!;
+    expect(causePhraseIsGrounded(c.phrase, 'his_word', '我今天特别难受')).toBe(true);
+    expect(causePhraseIsGrounded(c.phrase, 'his_word', '完全不同的一句话')).toBe(false);
   });
 });
 
