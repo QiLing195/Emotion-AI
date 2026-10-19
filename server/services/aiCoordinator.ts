@@ -369,17 +369,20 @@ export class AICoordinator {
         selfStateCurText = stimulusNow.userText;
       }
 
-      // 记录时机 = **新开一段低谷**（首次跨过 0.12 的下一轮，`since` 会变）
-      // —— 不用"加深"，因为加深会抓到后来那句（"心里堵得慌"）而不是真正把深度推过线的那句。
-      if (lowReading.active && lowReading.since !== selfStateSinkSince) {
-        const fresh = deriveSinkCause(selfStatePrevStimulus);
+      // 记录时机（a3 修正）= **新开一段低谷** 或 **这一轮他来了一句负向的话**
+      //   · 只看"新开一段" ⇒ 长期低谷内原因永不更新（实测 cycle2-5 都引 cycle1 的原因）
+      //   · 只看"加深"     ⇒ 抓到后来那句（"心里堵得慌"）而丢掉真正起因
+      const newPeriod = lowReading.active && lowReading.since !== selfStateSinkSince;
+      const freshThisTurn = deriveSinkCause(selfStateCurStimulus);   // 本轮他这句是否负向且可引
+      if (newPeriod || (lowReading.active && freshThisTurn)) {
+        const fresh = (newPeriod ? deriveSinkCause(selfStatePrevStimulus) : null) ?? freshThisTurn;
         selfStateSinkSince = lowReading.since;
         if (fresh) {
           selfStateSinkCause = fresh;
-          console.log(`[SelfStateVoice] 沉因记录: ${fresh.kind} ｜ 引文=${fresh.topic ?? '-'} ｜ 依据=${fresh.evidence}`);
+          console.log(`[SelfStateVoice] 沉因记录: ${fresh.kind} ｜ 引文=${fresh.topic ?? '-'} ｜ 依据=${fresh.evidence} ｜ 时机=${newPeriod ? '新开一段' : '本轮负向'}`);
         } else {
           selfStateSinkCause = null;          // 新的一段低谷、却没有可用的现场原因 ⇒ 不沿用上一段
-          console.log('[SelfStateVoice] 沉因记录: 无（上一轮他的情绪不是负向 / 没有可用原话）');
+          console.log('[SelfStateVoice] 沉因记录: 无（本轮他的情绪不是负向 / 没有可用原话）');
         }
       }
       selfStateCause = selfStateSinkCause ?? deriveLowPeriodCause({
