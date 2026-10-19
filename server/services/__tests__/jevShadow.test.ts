@@ -40,6 +40,7 @@ function baseArgs(over: Partial<AssembleJevInputArgs> = {}): AssembleJevInputArg
     rulesAction: 'wait',
     rulesMotiveId: 'm3',
     rulesReasonCode: 'RULE1_HIS_STRONG_HER_SINK',
+    rulesReasonText: '用户情绪强度 0.85 > 0.7，但我自己也被带进去了 —— 不再追着共情，安静陪着',
     ...over,
   };
 }
@@ -196,6 +197,34 @@ describe('parseJevOutput（严格校验）', () => {
     expect(parseJevOutput(validOutputJson({ reason_code: 'HER_LOW_HE_RISES', conflict: 'none' }), inputOf({ lowPeriodActive: true }))).toBeNull();
     expect(parseJevOutput(validOutputJson({ reason_code: 'KEEP_DEFAULT', conflict: 'none' }), inputOf())).not.toBeNull();
   });
+
+  it('v1 护栏：HE_DOWN_* 要求他这一侧为负向情绪', () => {
+    const hisNeutral = inputOf({ hisEmotion: 'neutral' });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HE_DOWN_SHE_STEADY' }), hisNeutral)).toBeNull();
+    const hisSad = inputOf({ hisEmotion: 'sad' });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'HE_DOWN_SHE_STEADY' }), hisSad)).not.toBeNull();
+  });
+
+  it('v1 护栏：BOTH_DOWN_* 要求她低 且 他为负', () => {
+    const bothLowOk = inputOf({ hisEmotion: 'sad', lowPeriodActive: true });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'BOTH_DOWN_ACCOMPANY', conflict: 'her_vs_his' }), bothLowOk)).not.toBeNull();
+    const hisJoy = inputOf({ hisEmotion: 'joy', lowPeriodActive: true });
+    expect(parseJevOutput(validOutputJson({ reason_code: 'BOTH_DOWN_ACCOMPANY', conflict: 'her_vs_his' }), hisJoy)).toBeNull();
+  });
+
+  it('v1 输入：rules_default.reason_text 透传（v0 只有 STRATEGY_* 码）', () => {
+    const input = inputOf();
+    expect(input.version).toBe('jev-v1');
+    expect(input.rules_default.reason_text).toContain('安静陪着');
+  });
+
+  it('v1 prompt：包含人设裁定、非冲突必须 KEEP、动作定义与 few-shot', () => {
+    const prompt = buildJevPrompt(inputOf());
+    expect(prompt).toContain('不是没有');
+    expect(prompt).toContain('KEEP_DEFAULT');
+    expect(prompt).toContain('share =');
+    expect(prompt).toContain('例1');
+  });
 });
 
 describe('jevAgrees', () => {
@@ -281,6 +310,44 @@ describe('jevEnabled', () => {
     expect(jevEnabled({} as NodeJS.ProcessEnv)).toBe(false);
     expect(jevEnabled({ ENABLE_JEV_DECISION: '1' } as NodeJS.ProcessEnv)).toBe(false);
     expect(jevEnabled({ ENABLE_JEV_DECISION: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+  });
+});
+
+describe('v1 权限闸门（只接管冲突类）', () => {
+  const dir = () => mkdtempSync(join(tmpdir(), 'jev-gate-'));
+
+  it('非冲突轮（他难过/她稳）⇒ authority=none、limitations 含 authority-none', async () => {
+    const rec = await runJevShadow({
+      turnId: 'g1',
+      input: inputOf({ hisEmotion: 'sad', lowPeriodActive: false, ruminationDominant: null, herValence: 0 }),
+      callModel: async () => validOutputJson({ reason_code: 'HE_DOWN_SHE_STEADY', action: 'wait', motive_id: 'm3' }),
+      logPath: join(dir(), 'l.jsonl'),
+    });
+    expect(rec.conflictClass).toBe(false);
+    expect(rec.authority).toBe('none');
+    expect(rec.limitations).toContain('authority-none');
+  });
+
+  it('冲突轮（她低落 + 他报喜）⇒ authority=conflict_only', async () => {
+    const rec = await runJevShadow({
+      turnId: 'g2',
+      input: inputOf({ hisEmotion: 'joy', lowPeriodActive: true }),
+      callModel: async () => validOutputJson({ reason_code: 'HER_LOW_HE_RISES', action: 'wait', motive_id: null }),
+      logPath: join(dir(), 'l.jsonl'),
+    });
+    expect(rec.conflictClass).toBe(true);
+    expect(rec.authority).toBe('conflict_only');
+    expect(rec.limitations).not.toContain('authority-none');
+  });
+
+  it('wouldOverride = 意图改判（与是否生效无关；影子永不生效）', async () => {
+    const rec = await runJevShadow({
+      turnId: 'g3',
+      input: inputOf({ hisEmotion: 'joy', lowPeriodActive: true }),
+      callModel: async () => validOutputJson({ reason_code: 'HER_LOW_HE_RISES', action: 'wait', motive_id: null }),
+      logPath: join(dir(), 'l.jsonl'),
+    });
+    expect(rec.wouldOverride).toBe(true); // 规则是 wait/m3，jev 是 wait/null ⇒ motive 不同
   });
 });
 

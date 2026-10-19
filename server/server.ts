@@ -915,11 +915,14 @@ export class AIGirlfriendServer {
               rulesAction: (selected ? actionFor(selected.kind, selected.action) : 'wait') as JevAction,
               rulesMotiveId: selected ? String(selected.id) : null,
               rulesReasonCode: `STRATEGY_${String(turnOutput.strategy).toUpperCase()}`,
+              // v1：把规则的**人类可读理由**给 jev（v0 只给 STRATEGY_* 码，对它无信息）
+              rulesReasonText: String((turnOutput.strategyDecision as unknown as { reason?: string })?.reason ?? ''),
             });
             void runJevShadow({
               turnId: `${userId || 'anonymous'}-${persistedRound}`,
               input: jevInput,
-              callModel: (system, user) => generateAIResponse(jevSettings, system, user, true, 0.2),
+              // v1：温度 0（影子不追求多样性，可复现优先）
+              callModel: (system, user) => generateAIResponse(jevSettings, system, user, true, 0),
             }).then(rec => {
               if (rec.errorCode) {
                 console.log(`[Jev] 影子未产出：${rec.errorCode}（${rec.latencyMs}ms）`);

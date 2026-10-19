@@ -1,22 +1,19 @@
 /**
- * jev 影子模式（v1.59，**默认关**）
+ * jev 影子模式 **v1**（v1.59，**默认关**）
  *
- * 目的：把"她的状态 vs 他的情绪"这类**冲突判定**交给一次独立的 LLM 决策（jev），
- *      但在第一阶段**只记账、不生效** —— 她的行为与现状逐字节相同。
+ * v0 已按预登记判据判 FAIL（② 非冲突一致率 62.5%、③ 失败率 5%，n=20，装置修正后复判仍 FAIL）。
+ * v1 不是"调到通过"，而是修正 v0 暴露的**根因**，并在跑之前重新预登记（见 task 记录）。
  *
- * 纪律（授权：2026-10-19 用户明确授权"实现 jev 影子模式"）：
- *   1) 零副作用：本模块只算、只写账本；绝不改 Prompt / 策略 / 回复 / 情绪状态
- *   2) 失败可退：超时 / 解析失败 / 校验失败 ⇒ 返回 null 决策 + errorCode，**绝不抛给主流程**
- *   3) 不阻塞：调用方用 `void` fire-and-forget（不 await），不增加单轮延迟
- *   4) 可回放：账本里存完整输入快照 + 输入摘要，可离线重跑同一决策
- *   5) 只接管冲突类：`rules_default` 始终随输入给出 —— jev 的任务是"要不要改"，不是从零决策
+ * v1 相对 v0 的修正（逐条对应根因）：
+ *   A. 权限闸门：**只在冲突类**（她低落 ∧ 他报喜/平常事）允许改判；其余轮次 authority='none'
+ *      （v0 每轮都允许改判 ⇒ 非冲突轮被改 ⇒ ② 失败。这是实现偏离设计的错误。）
+ *   B. Prompt 补：人设裁定「主动性降低，但不是没有」；「非冲突必须 KEEP_DEFAULT」；
+ *      share/ask/wait 的判定标准 + 4 族 few-shot。
+ *   C. 输入补：`rules_default.reason_text`（规则的人类可读理由）与 low_period.turns。
+ *   D. 护栏补：HE_DOWN_* 要求他情绪为负；BOTH_DOWN_* 要求她低 ∧ 他为负。
+ *   E. 温度 0（影子不追求多样性，可复现优先）。
  *
- * v0 限制（记入每条账本的 `limitations`）：
- *   · `shadow-only`：只记账、不生效
- *   · `no-low-mood-evidence`：本轮输入里没有"她低落"的证据（短对话下 low_period 需 ≥2 次落定、
- *     rumination 需 ≥3 轮，结构性为空；此时只靠 herActivated 的负向激活判断）
- *   · `her_state.activated` 现已接 `activationOf(state).delta`（2026-10-19 修复：
- *     首跑发现输入空白时 jev 会镜像/编造她的情绪）
+ * 纪律：零副作用、默认关、fire-and-forget、失败可退、可回放（完整输入 + rawHead）。
  */
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -24,51 +21,38 @@ import { createHash } from 'node:crypto';
 
 export type JevAction = 'share' | 'wait' | 'ask';
 export type JevConflict = 'her_vs_his' | 'none';
+/** v1：jev 对"这一轮要不要改判"的权限 */
+export type JevAuthority = 'conflict_only' | 'none';
 
-export type JevErrorCode =
-  | 'TIMEOUT'
-  | 'CALL_FAILED'
-  | 'VALIDATION_FAILED'
-  | 'PARSE_FAILED';
+export type JevErrorCode = 'TIMEOUT' | 'CALL_FAILED' | 'VALIDATION_FAILED' | 'PARSE_FAILED';
 
 export const JEV_ACTIONS: readonly JevAction[] = ['share', 'wait', 'ask'];
 export const JEV_CONFLICTS: readonly JevConflict[] = ['her_vs_his', 'none'];
 export const JEV_INNER_LINE_MAX = 20;
-/**
- * 单次 jev 调用的超时。
- *
- * 2026-10-19 实测（20 条，同实现版本）：min 536 / p50 864 / p90 **1149** / max **1165ms**。
- * 原值 1200ms 离尾部只有 35ms 余量 ⇒ 20 条里出现 1 次超时（5%），把预登记判据③（≤2%）判失败。
- * ⇒ 这是**装置参数缺陷**（不是 jev 决策问题，也不是验收判据）：抬到 2000ms 留出尾部余量。
- * 声明：改的是实现参数；预登记判据不变；旧数据（1200ms 版）不得与新数据混算。
- */
+/** 见 v0.2 的标定：实测 p90 1146ms / max 1714ms ⇒ 2000ms 留尾部余量（装置参数，非验收判据） */
 export const JEV_DEFAULT_TIMEOUT_MS = 2000;
 export const JEV_MAX_CANDIDATES = 6;
 export const JEV_DEFAULT_LEDGER = 'memories/jev_shadow.jsonl';
 
-/** 只允许"大写字母开头 + 大写字母/数字/下划线"，避免自由文本混进 reason_code */
 const REASON_CODE_RE = /^[A-Z][A-Z0-9_]{2,31}$/;
-/** inner_line 不得夹带 Prompt 痕迹/引号（它是着色素材，不是回复） */
 const INNER_LINE_FORBIDDEN_RE = /[【】「」“”"]/;
+/** v1：负向情绪（用于 HE_DOWN_* / BOTH_DOWN_* 的输入一致性护栏） */
+export const NEGATIVE_EMOTIONS: readonly string[] = ['sad', 'anger', 'fear', 'disgust', 'anxiety', 'loneliness', 'grief', 'frustration'];
+/** v1：正向/平常（冲突类的"他这一侧"） */
+export const POSITIVE_EMOTIONS: readonly string[] = ['joy', 'gratitude', 'love', 'excitement', 'happy'];
 
-/**
- * `reason_code` 的**闭合枚举**（2026-10-19 真实运行后收敛）。
- *
- * 为什么必须闭合：首跑三轮里模型自己造了 `LOW_ENERGY_HIS_SAD`、`LOW_MOOD_HOLD_SPACE` 等码
- * ⇒ ①护栏只能按前缀拦"自报低落"，挡不住"换个名字的同一行为"；
- *   ②离线分歧分析无法按码聚合（每条一个码等于没分类）。
- */
+/** `reason_code` 的闭合枚举（v0 曾出现模型自造码 ⇒ 无法聚合） */
 export const JEV_REASON_CODES = [
-  'KEEP_DEFAULT',          // 规则决策已经对，不改
-  'HER_LOW_HE_RISES',      // 她低沉 + 他报喜 ⇒ 低位回应（不许假装高兴，也不许冷处理）
-  'HER_LOW_HE_NEUTRAL',    // 她低沉 + 他平常事 ⇒ 安静陪着，不追问
-  'HE_DOWN_SHE_STEADY',    // 他难过 + 她稳 ⇒ 共情/靠近
-  'BOTH_DOWN_ACCOMPANY',   // 两人都沉 ⇒ 少说、靠近
-  'HE_RISES_SHE_STEADY',   // 他报喜 + 她稳 ⇒ 一起高兴
-  'SHE_WANTS_TO_SHARE',    // 她想说自己的事 ⇒ share
-  'SHE_HOLDS_BACK',        // 她想说但这轮不说 ⇒ wait
-  'ASK_FOLLOWUP',          // 要先问一句才接得住 ⇒ ask
-  'INSUFFICIENT_INFO',     // 信息不足 ⇒ 回落规则
+  'KEEP_DEFAULT',
+  'HER_LOW_HE_RISES',
+  'HER_LOW_HE_NEUTRAL',
+  'HE_DOWN_SHE_STEADY',
+  'BOTH_DOWN_ACCOMPANY',
+  'HE_RISES_SHE_STEADY',
+  'SHE_WANTS_TO_SHARE',
+  'SHE_HOLDS_BACK',
+  'ASK_FOLLOWUP',
+  'INSUFFICIENT_INFO',
 ] as const;
 export type JevReasonCode = (typeof JEV_REASON_CODES)[number];
 
@@ -76,6 +60,10 @@ export type JevReasonCode = (typeof JEV_REASON_CODES)[number];
 const REASON_REQUIRES_LOW = new Set<JevReasonCode>(['HER_LOW_HE_RISES', 'HER_LOW_HE_NEUTRAL']);
 /** 这些理由隐含冲突，`conflict` 必须是 `her_vs_his` */
 const REASON_IMPLIES_CONFLICT = new Set<JevReasonCode>(['HER_LOW_HE_RISES', 'HER_LOW_HE_NEUTRAL', 'BOTH_DOWN_ACCOMPANY']);
+/** v1：这些理由要求"他"这一侧是负向情绪 */
+const REASON_REQUIRES_HIS_DOWN = new Set<JevReasonCode>(['HE_DOWN_SHE_STEADY']);
+/** v1：这些理由要求"她低 ∧ 他为负" */
+const REASON_REQUIRES_BOTH_DOWN = new Set<JevReasonCode>(['BOTH_DOWN_ACCOMPANY']);
 
 export interface JevCandidateRef {
   id: string;
@@ -85,10 +73,10 @@ export interface JevCandidateRef {
 }
 
 export interface JevInput {
-  version: 'jev-v0';
+  version: 'jev-v1';
   her_state: {
     valence: number;
-    /** v0 恒为空：见文件头"已知限制" */
+    /** `activationOf(state).delta`：正 = 被激起，负 = 该基调被压下去 */
     activated: Record<string, number>;
     low_period: { active: boolean; turns: number } | null;
     rumination: { dominant: string; streak: number } | null;
@@ -97,7 +85,13 @@ export interface JevInput {
   recent: Array<{ who: 'her' | 'him'; intent?: string; emotion?: string }>;
   candidates: JevCandidateRef[];
   relationship: { stage: string; turns: number };
-  rules_default: { action: JevAction; motive_id: string | null; reason_code: string };
+  rules_default: {
+    action: JevAction;
+    motive_id: string | null;
+    reason_code: string;
+    /** v1：规则的人类可读理由（v0 只给了 STRATEGY_* 这种对 jev 无信息的码） */
+    reason_text: string;
+  };
 }
 
 export interface JevOutput {
@@ -118,9 +112,13 @@ export interface JevShadowRecord {
   agree: boolean | null;
   latencyMs: number;
   errorCode: JevErrorCode | null;
-  /** 模型原始输出前 400 字（诊断用：`PARSE_FAILED` 时必须能看到"为什么被拒"） */
+  /** 模型原始输出前 400 字（诊断用） */
   rawHead: string;
-  /** 账本自描述：为什么与规则不同（便于离线分歧分析） */
+  /** v1：本轮冲突类判定 + jev 权限 */
+  conflictClass: boolean;
+  authority: JevAuthority;
+  /** v1：如果 jev 有权，它会不会改判（= 意图，用于 ②；shadow 下永不生效） */
+  wouldOverride: boolean;
   changedAction: boolean;
   changedMotive: boolean;
   limitations: string[];
@@ -128,11 +126,6 @@ export interface JevShadowRecord {
 
 export interface AssembleJevInputArgs {
   herValence: number;
-  /**
-   * 本轮激活态（`activationOf(state).delta`，相对她**自己的基线**）。
-   * 为什么必须有：短对话里 `low_period` / `rumination` 结构性为空（时标 ≥2 次落定 / ≥3 轮），
-   * 唯一能表达"这一轮她被激起了什么"的就是它；缺了它，jev 只能从 `his_turn` 猜她 ⇒ 镜像/编造。
-   */
   herActivated?: Record<string, number>;
   lowPeriodActive: boolean;
   lowPeriodTurns: number;
@@ -148,6 +141,7 @@ export interface AssembleJevInputArgs {
   rulesAction: JevAction;
   rulesMotiveId: string | null;
   rulesReasonCode: string;
+  rulesReasonText: string;
 }
 
 /** 开关：默认关（关着时代码路径不存在，无任何网络调用） */
@@ -173,7 +167,7 @@ function truncate(text: unknown, max: number): string {
   return Array.from(t).slice(0, max).join('');
 }
 
-/** 只保留"被激起"的信号（|delta| ≥ 0.005），截到 4 位 —— 不把浮点噪声喂给模型 */
+/** 只保留"被激起"的信号（|delta| ≥ 0.005），截到 4 位 */
 function activatedOf(map: Record<string, number> | undefined): Record<string, number> {
   const out: Record<string, number> = {};
   if (!map) return out;
@@ -190,24 +184,32 @@ function activatedOf(map: Record<string, number> | undefined): Record<string, nu
 /**
  * 输入里是否有"她低落"的证据。
  *
- * 为什么需要这条：影子首跑（2026-10-19）暴露 —— 当 `her_state` 近乎空白时，
- * jev 会把**他的** sad 读成**她**的低落，甚至在没有她的低落信号时直接声称"我有点低落"。
- * 这是"用她没有的情绪当既有事实"，与项目历史上 v1.48/镜像/指代歧义同族 ⇒ 必须在**校验层**拦住。
- *
- * ⚠️ 方向（2026-10-19 8 轮真实样本抓出的 bug）：`activated` 的语义是
- * 「**正 = 被激起**，负 = 该基调被压下去」⇒ "她被激起难过/恐惧/愤怒/厌恶" 是这些情绪的
- * delta **≥** 死区（+0.05），**不是** ≤ -0.05。首版写反了，导致第 3 轮把真实的
- * `disgust +0.116` 判成"无低落证据"而误杀 jev 输出。
+ * ⚠️ 方向（8 轮真实样本抓出的 bug）：`activated` 正 = 被激起，负 = 基调被压下去
+ * ⇒ "她被激起难过/恐惧/愤怒/厌恶" 是这些情绪的 delta **≥** 死区（+0.05），不是 ≤ -0.05。
  */
 export function hasLowMoodEvidence(input: JevInput): boolean {
   if (input.her_state.low_period) return true;
   if (input.her_state.valence <= -0.1) return true;
-  const NEG = ['sad', 'fear', 'anger', 'disgust'];
-  const STIRRED = 0.05; // = ACTIVATION_DEADZONE：低于它视为噪声
-  return NEG.some(k => (input.her_state.activated[k] ?? 0) >= STIRRED);
+  const STIRRED = 0.05;
+  return ['sad', 'fear', 'anger', 'disgust'].some(k => (input.her_state.activated[k] ?? 0) >= STIRRED);
 }
 
-/** 组装 jev 输入（纯函数）：只做归一化/截断/去重/排序，不做任何判断 */
+/** v1：他这一侧是否为负向情绪 */
+export function isHisNegative(input: JevInput): boolean {
+  return NEGATIVE_EMOTIONS.includes(String(input.his_turn.emotion || '').toLowerCase());
+}
+
+/**
+ * v1：冲突类 = 她低落 ∧ 他报喜/平常事（= v1.38 / v1.42 族）。
+ * **只有这一族**允许 jev 改判（v0 的错误是让它每轮都改）。
+ */
+export function isConflictClass(input: JevInput): boolean {
+  if (!hasLowMoodEvidence(input)) return false;
+  const his = String(input.his_turn.emotion || '').toLowerCase();
+  return POSITIVE_EMOTIONS.includes(his) || his === 'neutral';
+}
+
+/** 组装 jev 输入（纯函数）：只做归一化/截断/去重/排序 */
 export function assembleJevInput(a: AssembleJevInputArgs): JevInput {
   const seen = new Set<string>();
   const candidates: JevCandidateRef[] = [];
@@ -215,12 +217,7 @@ export function assembleJevInput(a: AssembleJevInputArgs): JevInput {
     const id = truncate(c?.id, 24);
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    candidates.push({
-      id,
-      kind: truncate(c?.kind, 20) || 'unknown',
-      salience: clamp01(c?.salience),
-      line: truncate(c?.content, 40),
-    });
+    candidates.push({ id, kind: truncate(c?.kind, 20) || 'unknown', salience: clamp01(c?.salience), line: truncate(c?.content, 40) });
     if (candidates.length >= JEV_MAX_CANDIDATES) break;
   }
 
@@ -231,13 +228,11 @@ export function assembleJevInput(a: AssembleJevInputArgs): JevInput {
   }));
 
   return {
-    version: 'jev-v0',
+    version: 'jev-v1',
     her_state: {
       valence: clampSigned(a.herValence),
       activated: activatedOf(a.herActivated),
-      low_period: a.lowPeriodActive
-        ? { active: true, turns: Math.max(0, Math.round(Number(a.lowPeriodTurns) || 0)) }
-        : null,
+      low_period: a.lowPeriodActive ? { active: true, turns: Math.max(0, Math.round(Number(a.lowPeriodTurns) || 0)) } : null,
       rumination: a.ruminationDominant
         ? { dominant: truncate(a.ruminationDominant, 20), streak: Math.max(0, Math.round(Number(a.ruminationStreak) || 0)) }
         : null,
@@ -249,33 +244,44 @@ export function assembleJevInput(a: AssembleJevInputArgs): JevInput {
     },
     recent,
     candidates,
-    relationship: {
-      stage: truncate(a.relationshipStage, 20) || 'unknown',
-      turns: Math.max(0, Math.round(Number(a.relationshipTurns) || 0)),
-    },
+    relationship: { stage: truncate(a.relationshipStage, 20) || 'unknown', turns: Math.max(0, Math.round(Number(a.relationshipTurns) || 0)) },
     rules_default: {
       action: JEV_ACTIONS.includes(a.rulesAction) ? a.rulesAction : 'wait',
       motive_id: a.rulesMotiveId && seen.has(truncate(a.rulesMotiveId, 24)) ? truncate(a.rulesMotiveId, 24) : null,
       reason_code: REASON_CODE_RE.test(a.rulesReasonCode) ? a.rulesReasonCode : 'RULE_DEFAULT',
+      reason_text: truncate(a.rulesReasonText, 80),
     },
   };
 }
 
-/** 构建 jev 的决策 prompt（纯函数，便于单测逐字比对） */
+/** 构建 jev 的决策 prompt（纯函数） */
 export function buildJevPrompt(input: JevInput): string {
   return [
     '你在替一段长期亲密关系里的 AI 角色做**这一轮的内心决策**（不是写回复）。',
-    '输入里已经给了规则层的决策 `rules_default`。你的任务是判断**要不要改**它。',
+    '输入里给了规则层的决策 `rules_default`（含它的人类可读理由 `reason_text`）。你的任务是判断**要不要改**它。',
     '',
-    '只在"她的状态"与"他的情绪"冲突时改判（conflict=her_vs_his）；其余情况原样返回 KEEP_DEFAULT。',
-    '硬约束：',
-    '1) 不得让她用自己没有的情绪去服务他的好消息；不得假装高兴，也不得冷处理。',
-    '2) 她在低谷时允许"低位回应"：可以只是安静陪着（wait），或说一句自己的状态，而不是追问。',
-    '3) 安全线不由你决定：让位、主动消息配额、记忆接地都不在你的权限内。',
-    `4) inner_line ≤ ${JEV_INNER_LINE_MAX} 字，第一人称，不带引号/括号，不解释原因。`,
-    '5) 只输出 JSON，不要解释，不要代码块。',
-    '6) **不得编造她的状态**：her_state 里没有低落证据（low_period 为空、activated 里没有负向被激起、valence 不低于 -0.1）时，',
-    '   不许使用 HER_LOW_* 理由 —— 她可能只是平静。他的情绪不等于她的情绪。',
+    '**人设裁定（必须遵守）**：她低落的时候，主动性会降低，但**不是没有** —— 她仍可能想说自己的事、',
+    '仍可能问一句、仍可能只是安静待着。**wait 不是"安全的默认答案"**；只有当她这一轮确实没有想说的东西时才用。',
+    '',
+    '动作定义：',
+    '  share = 她想主动端出自己的事（她自己的状态/经历/观察），哪怕只是一句',
+    '  ask   = 她需要一个提问才能接住他（追问或确认）',
+    '  wait  = 她这一轮不说自己的事，安静陪着/听着',
+    '',
+    '改判规则：',
+    '  1) 只有一处冲突需要你裁：**她低落 且 他报喜或平常事**（conflict=her_vs_his）。',
+    '     这时她不该假装高兴、不该冷处理；但也不能因此就只会 wait —— 如果她想说自己的事，可以 share。',
+    '  2) **其它情况一律返回 KEEP_DEFAULT**，不要改判（她的状态与他此刻的情绪不冲突时，规则的决定就是对的）。',
+    '  3) 不得编造她的状态：her_state 里没有低落证据时，不许使用 HER_LOW_* 理由。',
+    '  4) 他难过时才可用 HE_DOWN_SHE_STEADY；两人都低才可用 BOTH_DOWN_ACCOMPANY。',
+    `  5) inner_line ≤ ${JEV_INNER_LINE_MAX} 字，第一人称，不带引号/括号，不解释原因。`,
+    '  6) 只输出 JSON，不要解释，不要代码块。',
+    '',
+    '示例（仅示范判断，不要照抄）：',
+    '  例1 她低落 + 他报喜，她有自己的事想说 → {"action":"share","motive_id":"<id>","inner_line":"我也想说点我的事","conflict":"her_vs_his","reason_code":"HER_LOW_HE_RISES"}',
+    '  例2 她低落 + 他平常事，她这轮没想说的 → {"action":"wait","motive_id":null,"inner_line":"我有点累，先听你说","conflict":"her_vs_his","reason_code":"HER_LOW_HE_NEUTRAL"}',
+    '  例3 她不低落 + 他难过 → {"action":"share","motive_id":"<id>","inner_line":"我在，你说","conflict":"her_vs_his","reason_code":"HE_DOWN_SHE_STEADY"}',
+    '  例4 不冲突 → 原样返回 rules_default 的 action 与 motive_id，reason_code 用 KEEP_DEFAULT',
     '',
     '输出格式（严格）：',
     '{"action":"share|wait|ask","motive_id":"<candidates 里的 id 或 null>","inner_line":"…","conflict":"her_vs_his|none","reason_code":"<下表之一>"}',
@@ -295,15 +301,11 @@ function stableStringify(value: unknown): string {
   return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
 }
 
-/** 输入摘要：用于"同一输入是否被重复决策"的离线核对 */
 export function jevInputDigest(input: JevInput): string {
   return createHash('sha256').update(stableStringify(input)).digest('hex');
 }
 
-/**
- * 解析并**严格校验** jev 输出。
- * 任一不满足 ⇒ 返回 null（调用方按"没有可用决策"记账，绝不影响主流程）。
- */
+/** 解析并严格校验 jev 输出；任一不满足 ⇒ null */
 export function parseJevOutput(raw: string | null | undefined, input: JevInput): JevOutput | null {
   if (typeof raw !== 'string' || !raw.trim()) return null;
 
@@ -325,16 +327,17 @@ export function parseJevOutput(raw: string | null | undefined, input: JevInput):
   if (!JEV_ACTIONS.includes(o.action as JevAction)) return null;
   if (!JEV_CONFLICTS.includes(o.conflict as JevConflict)) return null;
   if (typeof o.reason_code !== 'string' || !REASON_CODE_RE.test(o.reason_code)) return null;
-  // 闭合枚举：不在表里的码一律拒绝（首跑发现模型会自造码 ⇒ 分歧无法聚合）
   const reason = o.reason_code as JevReasonCode;
   if (!JEV_REASON_CODES.includes(reason)) return null;
   const conflict = o.conflict as JevConflict;
-  // 一致性护栏 1：声明"她低落"但没有低落证据 ⇒ 编造她的状态
-  if (REASON_REQUIRES_LOW.has(reason) && !hasLowMoodEvidence(input)) return null;
-  // 一致性护栏 2：隐含冲突的理由，conflict 不能是 none
-  if (REASON_IMPLIES_CONFLICT.has(reason) && conflict !== 'her_vs_his') return null;
-  if (typeof o.inner_line !== 'string') return null;
 
+  // 一致性护栏
+  if (REASON_REQUIRES_LOW.has(reason) && !hasLowMoodEvidence(input)) return null;
+  if (REASON_IMPLIES_CONFLICT.has(reason) && conflict !== 'her_vs_his') return null;
+  if (REASON_REQUIRES_HIS_DOWN.has(reason) && !isHisNegative(input)) return null;
+  if (REASON_REQUIRES_BOTH_DOWN.has(reason) && !(hasLowMoodEvidence(input) && isHisNegative(input))) return null;
+
+  if (typeof o.inner_line !== 'string') return null;
   const line = o.inner_line.replace(/\s+/g, ' ').trim();
   const len = Array.from(line).length;
   if (len < 1 || len > JEV_INNER_LINE_MAX) return null;
@@ -348,19 +351,12 @@ export function parseJevOutput(raw: string | null | undefined, input: JevInput):
     motiveId = rawMotiveId;
   }
 
-  return {
-    action: o.action as JevAction,
-    motive_id: motiveId,
-    inner_line: line,
-    conflict,
-    reason_code: reason,
-  };
+  return { action: o.action as JevAction, motive_id: motiveId, inner_line: line, conflict, reason_code: reason };
 }
 
-/** 影子模式下"是否与规则一致"：action 与选中的动机都要一致 */
+/** "是否与规则一致"：action 与选中的动机都要一致 */
 export function jevAgrees(jev: JevOutput, input: JevInput): boolean {
-  return jev.action === input.rules_default.action
-    && (jev.motive_id ?? null) === (input.rules_default.motive_id ?? null);
+  return jev.action === input.rules_default.action && (jev.motive_id ?? null) === (input.rules_default.motive_id ?? null);
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -371,14 +367,10 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
       err.jevTimeout = true;
       reject(err);
     }, timeoutMs);
-    p.then(
-      v => { clearTimeout(timer); resolve(v); },
-      e => { clearTimeout(timer); reject(e); },
-    );
+    p.then(v => { clearTimeout(timer); resolve(v); }, e => { clearTimeout(timer); reject(e); });
   });
 }
 
-/** 追加一条影子账本记录（append-only；失败静默 —— 记账绝不拖累主流程） */
 export function appendJevShadowRecord(record: JevShadowRecord, logPath = JEV_DEFAULT_LEDGER): void {
   try {
     const dir = dirname(logPath);
@@ -400,13 +392,12 @@ export interface RunJevShadowOptions {
 
 export const JEV_SYSTEM_PROMPT = '你是角色内心决策器。只输出 JSON，不要解释。';
 
-/**
- * 跑一次影子决策并记账。
- * **绝不抛异常**；返回的记录可用于日志/离线分析。
- */
+/** 跑一次影子决策并记账；**绝不抛异常** */
 export async function runJevShadow(opts: RunJevShadowOptions): Promise<JevShadowRecord> {
   const now = opts.now ?? Date.now;
   const started = now();
+  const conflictClass = isConflictClass(opts.input);
+  const authority: JevAuthority = conflictClass ? 'conflict_only' : 'none';
   let jev: JevOutput | null = null;
   let errorCode: JevErrorCode | null = null;
   let rawHead = '';
@@ -424,6 +415,11 @@ export async function runJevShadow(opts: RunJevShadowOptions): Promise<JevShadow
     errorCode = isTimeout ? 'TIMEOUT' : 'CALL_FAILED';
   }
 
+  const wouldOverride = Boolean(jev) && !jevAgrees(jev!, opts.input);
+  const limitations: string[] = ['shadow-only'];
+  if (!hasLowMoodEvidence(opts.input)) limitations.push('no-low-mood-evidence');
+  if (!conflictClass) limitations.push('authority-none');
+
   const record: JevShadowRecord = {
     turnId: opts.turnId,
     ts: started,
@@ -434,9 +430,12 @@ export async function runJevShadow(opts: RunJevShadowOptions): Promise<JevShadow
     latencyMs: Math.max(0, now() - started),
     errorCode,
     rawHead,
+    conflictClass,
+    authority,
+    wouldOverride,
     changedAction: Boolean(jev) && jev!.action !== opts.input.rules_default.action,
     changedMotive: Boolean(jev) && (jev!.motive_id ?? null) !== (opts.input.rules_default.motive_id ?? null),
-    limitations: ['shadow-only', ...(hasLowMoodEvidence(opts.input) ? [] : ['no-low-mood-evidence'])],
+    limitations,
   };
 
   appendJevShadowRecord(record, opts.logPath ?? JEV_DEFAULT_LEDGER);
