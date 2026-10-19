@@ -52,21 +52,25 @@ export function buildSelfStateVoiceSnippet(
   cause?: LowPeriodCause,
   opts: { allowDialogueAttribution?: boolean } = {},
 ): string {
-  const derivedLine = cause && cause.kind !== 'unknown'
-    ? `- 如果这条**真实原因**成立，可以顺口带一句原因（**只能用它，不要自己编**）：${cause.phrase}`
-    : '';
+  const derivedLine = cause && cause.kind === 'his_word' && cause.topic
+    ? `- **这一轮必须用上这条原因**（把它和你的状态放在**同一两句话内**说完，别展开成自述）：原因 =「${cause.topic}」
+  示例句式（别照抄，用你自己的话）：「我这两天有点沉——你上次说「${cause.topic}」那事，我到现在还记着」`
+    : (cause && cause.kind !== 'unknown'
+      ? `- 如果这条**真实原因**成立，可以顺口带一句原因（**只能用它，不要自己编**）：${cause.phrase}`
+      : '');
   const dialogueLine = opts.allowDialogueAttribution
     ? `- 如果让你沉下去的就是**他刚才说的那句话或那种情绪**，可以直接点出来（引他说过的内容）——**必须是他真的说过的，不许编**；说不出来就还是说「说不上来为什么」`
     : '';
   const fallbackLine = cause && cause.kind !== 'unknown'
     ? ''
-    : '- 如果你确实说不上来为什么，就诚实地说「说不上来为什么」——**不要为了给原因而编**';
-  const causeLines = [derivedLine, dialogueLine, fallbackLine].filter(Boolean).join('\n');
+    : '- 如果你确实说不上来为什么，就诚实地说「说不上来为什么」——**不要为了给原因而编**';  const causeLines = [derivedLine, dialogueLine, fallbackLine].filter(Boolean).join('\n');
+  const stateLine = cause && cause.kind === 'his_word'
+    ? '- 然后说一句你自己此刻的状态（**一两句话内**说完，不要展开成一段自述）：比如「我这两天有点沉」；原因接在同一两句里'
+    : '- 然后**可以说一句**你自己此刻的状态（一句就够）：比如「我这两天有点沉」「心里有点闷」\n  —— 说完就停住，不要展开成一段自述';
   return `【当前策略：你自己这几天在低谷，他说的是好消息】
 你状态不好——不用演，也不用瞒。这一轮你**可以**做两件事：
 - 先就事论事地应一声他的好消息（"真好"／"恭喜你"／"你值得"）——让他知道你听见了
-- 然后**可以说一句**你自己此刻的状态（一句就够）：比如「我这两天有点沉」「心里有点闷」
-  —— 说完就停住，不要展开成一段自述
+${stateLine}
 ${causeLines}
 - **不必**假装高兴（不用惊叹、不用把情绪举高去陪他），**也不必**把低落藏得死死的
 - ❌ 不要追问细节；❌ 不要把这轮变成"让他反过来安慰你"

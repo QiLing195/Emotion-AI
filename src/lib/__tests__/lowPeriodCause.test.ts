@@ -157,6 +157,20 @@ describe('片段构建（有原因 / 无原因）', () => {
     expect(s).not.toContain('说不上来为什么');
   });
 
+  it('his_word（现场记录的原因）⇒ 强制要求用上，并给一句话内的位置示范', () => {
+    const cause: LowPeriodCause = {
+      kind: 'his_word',
+      phrase: '因为你说「我今天被领导当众骂了一顿」，我听着也跟着沉下去了',
+      evidence: 'sink:his_word:sad',
+      topic: '我今天被领导当众骂了一顿',
+    };
+    const s = buildSelfStateVoiceSnippet(cause);
+    expect(s).toContain('这一轮必须用上这条原因');
+    expect(s).toContain('我今天被领导当众骂了一顿');
+    expect(s).toContain('同一两句话内');
+    expect(s).not.toContain('说不上来为什么');
+  });
+
   it('unknown 原因仍走"说不上来"分支（不把 unknown 当原因）', () => {
     const s = buildSelfStateVoiceSnippet({ kind: 'unknown', phrase: '说不上来为什么', evidence: '' });
     expect(s).toContain('说不上来为什么');
