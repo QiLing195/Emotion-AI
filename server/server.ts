@@ -1757,7 +1757,12 @@ export class AIGirlfriendServer {
         // 这里把它暴露出来，先量清楚它值不值得动。**尚未接进任何行为**
         // （`lowPeriodOf` 只许展示层读，见 src/lib/__tests__/lowPeriod.test.ts 的源码守卫）。
         // 人设裁定：她低谷时"自闭"= 自己给自己打气、自己调整自己；主动性**降低、但不是没有**。
-        lowPeriod: lowPeriodOf(es),
+        // v1.60：补暴露 `lastEpisode`（已结束的那段低谷的 selfRecovery / closedBy / hours / turns）——
+        // 进行中的 selfRecovery 已在 lowPeriodOf 里；而"昨天那段是我自己缓过来的"只在 lastEpisode 里。
+        lowPeriod: {
+          ...lowPeriodOf(es),
+          lastEpisode: es?.lowPeriod?.lastEpisode ?? null,
+        },
         // v1.25 并排的第二个读数：**相对她最近一段时间的常态**被激起了什么。
         // 与上面的 `activation`（相对人格本性）分工：本性读数回答"她偏离自己的本性多远"
         // （长期底色会一直挂在里面，实测 suppressed 长期列着 calm/love/joy/greed），
