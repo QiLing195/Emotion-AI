@@ -185,6 +185,7 @@ server/services/ ← 后端服务层
 | `ENABLE_LOW_PERIOD_RESTRAINT` | dialogueStrategy.ts | v1.42/v1.46：`true` → 她**已成段**低谷 + 他这句话是**平常事**（归一后 neutral）时，策略片段换成「这一轮不要求你推进对话；但要把那件事里最具体的一点接住」。白名单只收 `neutral`/`explore`；**负向四键永不替换**（不碰 v1.31 的承认通路）。**默认关**（五跑结案，见债务表 v1.42/v1.46 行） |
 | `DISABLE_LOW_PERIOD_PROACTIVE_HOLD` | proactiveMessenger.ts | v1.40/v1.44：**已上线（默认开）**——她**自己在低谷**时更矜持：空闲 **120→240 分钟**（推后）且**每日上限 2→1**（v1.44 加码；当天第一条照发 = "降低但不是没有"，两跑真管道均达标）。`=true` 回退到每 2h 可发 / 每日 2 条 |
 | `LAYA_STRATEGY` | server.ts / layaClient.ts | `off`（默认，**一次网络都不发**）/ `shadow`（只记账：记下"模型想改判成什么"但不改）/ `on`（可改判）。v1.33；配套 `LAYA_ENDPOINT`(默认 `http://127.0.0.1:8790`)、`LAYA_MIN_CONFIDENCE`(0.5)、`LAYA_TIMEOUT_MS`(1500)、`LAYA_MODEL`(multilingual) |
+| `ENABLE_JEV_DECISION` | jevShadow.ts / server.ts | v1.59：**默认关**——`true` → 在策略**定稿提交之后**跑一次独立的 LLM 决策（jev），判断"她的状态 vs 他的情绪"冲突时该 `share/wait/ask`、挑哪条动机、给一句 ≤20 字内心话。**影子模式：只写账本 `memories/jev_shadow.jsonl`，绝不改 Prompt/策略/回复/状态**；`void` fire-and-forget（不增加单轮延迟）；超时 1200ms / 解析或校验失败 ⇒ 记 `errorCode` 后放弃，**永不抛给主流程**。关着时这条代码路径不进入（行为与旧版逐字节相同）。离线分歧分析读账本即可（不需要再调模型） |
 
 ## 情绪涌现与防"自嗨漂移"设计（v1.7/v1.8）
 

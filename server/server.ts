@@ -84,6 +84,12 @@ import {
   buildSpecificizePrompt, parseSpecificMotives, shouldSpecificize,
 } from './services/motiveSpecificizer.js';
 import {
+  assembleJevInput,
+  jevEnabled,
+  runJevShadow,
+  type JevAction,
+} from './services/jevShadow.js';
+import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
 } from '../src/lib/memoryGrounding.js';
 import {
@@ -856,6 +862,65 @@ export class AIGirlfriendServer {
           turnOutput.strategy = committedStrategy.strategy;
           turnOutput.strategySnippet = committedStrategy.strategySnippet;
           turnOutput.strategyDecision = committedStrategy.strategyDecision;
+        }
+
+        // ── v1.59 jev 影子模式（**默认关**）──
+        // 目的：把"她的状态 vs 他的情绪"这类冲突判定交给一次独立决策，但第一阶段**只记账、不生效**。
+        // 纪律：① 零副作用（不改 Prompt/策略/回复/状态）② `void` fire-and-forget（不增加单轮延迟）
+        //       ③ 失败可退（runJevShadow 永不抛异常，只写 errorCode）④ 账本可回放（存完整输入快照）
+        // 授权：2026-10-19 用户明确授权"实现 jev 影子模式 + 离线分歧分析"。
+        // 开关 ENABLE_JEV_DECISION=true 才跑；关着时这条代码路径都不进入（行为与现状逐字节相同）。
+        if (jevEnabled()) {
+          const jevSettings = this.readAISettings();
+          if (jevSettings?.apiKey) {
+            const herStateLoose = currentEmotionState as unknown as {
+              valence?: number;
+              internal?: {
+                lowPeriod?: { active?: boolean; durationTurns?: number; turns?: number };
+                rumination?: { dominant?: string; dominantEmotion?: string; streak?: number; count?: number };
+                motive?: { pool?: Array<{ id?: string; kind?: string; salience?: number; content?: string }> };
+              };
+            };
+            const lp = herStateLoose?.internal?.lowPeriod;
+            const ru = herStateLoose?.internal?.rumination;
+            const pool = herStateLoose?.internal?.motive?.pool ?? [];
+            const selected = motiveSelection.selected;
+            const jevInput = assembleJevInput({
+              herValence: Number(herStateLoose?.valence ?? 0),
+              lowPeriodActive: Boolean(lp?.active),
+              lowPeriodTurns: Number(lp?.durationTurns ?? lp?.turns ?? 0),
+              ruminationDominant: ru?.dominant ?? ru?.dominantEmotion ?? null,
+              ruminationStreak: Number(ru?.streak ?? ru?.count ?? 0),
+              hisEmotion: emotionAnalysis.userAnalysis?.expressedEmotion ?? 'neutral',
+              hisIntensity: Number(emotionAnalysis.userAnalysis?.intensity ?? 0),
+              hisSummary: message,
+              recent: (recentMessages ?? []).slice(-2).map((m: any) => ({
+                who: (m?.role === 'user' ? 'him' : 'her') as 'her' | 'him',
+              })),
+              candidates: (selected ? [selected, ...pool] : pool).map((m: any) => ({
+                id: String(m?.id ?? ''),
+                kind: String(m?.kind ?? 'unknown'),
+                salience: Number(m?.salience ?? 0),
+                content: String(m?.content ?? ''),
+              })),
+              relationshipStage: this._relationshipState.stage,
+              relationshipTurns: persistedRound,
+              rulesAction: (selected ? actionFor(selected.kind, selected.action) : 'wait') as JevAction,
+              rulesMotiveId: selected ? String(selected.id) : null,
+              rulesReasonCode: `STRATEGY_${String(turnOutput.strategy).toUpperCase()}`,
+            });
+            void runJevShadow({
+              turnId: `${userId || 'anonymous'}-${persistedRound}`,
+              input: jevInput,
+              callModel: (system, user) => generateAIResponse(jevSettings, system, user, true, 0.2),
+            }).then(rec => {
+              if (rec.errorCode) {
+                console.log(`[Jev] 影子未产出：${rec.errorCode}（${rec.latencyMs}ms）`);
+              } else if (rec.changedAction || rec.changedMotive) {
+                console.log(`[Jev] 影子分歧：规则 ${jevInput.rules_default.action}/${jevInput.rules_default.motive_id ?? '-'} → jev ${rec.jev?.action}/${rec.jev?.motive_id ?? '-'}（${rec.jev?.reason_code}，${rec.latencyMs}ms）`);
+              }
+            }).catch(() => { /* 影子绝不拖累主流程 */ });
+          }
         }
 
         // （v1.29：策略片段**不再**排在这里 —— 它挪到了 Prompt 最末，见下面那处 append。
