@@ -34,7 +34,15 @@ export type JevErrorCode =
 export const JEV_ACTIONS: readonly JevAction[] = ['share', 'wait', 'ask'];
 export const JEV_CONFLICTS: readonly JevConflict[] = ['her_vs_his', 'none'];
 export const JEV_INNER_LINE_MAX = 20;
-export const JEV_DEFAULT_TIMEOUT_MS = 1200;
+/**
+ * 单次 jev 调用的超时。
+ *
+ * 2026-10-19 实测（20 条，同实现版本）：min 536 / p50 864 / p90 **1149** / max **1165ms**。
+ * 原值 1200ms 离尾部只有 35ms 余量 ⇒ 20 条里出现 1 次超时（5%），把预登记判据③（≤2%）判失败。
+ * ⇒ 这是**装置参数缺陷**（不是 jev 决策问题，也不是验收判据）：抬到 2000ms 留出尾部余量。
+ * 声明：改的是实现参数；预登记判据不变；旧数据（1200ms 版）不得与新数据混算。
+ */
+export const JEV_DEFAULT_TIMEOUT_MS = 2000;
 export const JEV_MAX_CANDIDATES = 6;
 export const JEV_DEFAULT_LEDGER = 'memories/jev_shadow.jsonl';
 

@@ -285,7 +285,7 @@ describe('jevEnabled', () => {
 });
 
 describe('默认超时常量', () => {
-  it('默认为 1200ms（不阻塞主流程的设计值）', () => {
-    expect(JEV_DEFAULT_TIMEOUT_MS).toBe(1200);
+  it('默认 2000ms（v1.59 修正：1200ms 离实测 p90 1149/max 1165 太近，20 条里出过 1 次超时）', () => {
+    expect(JEV_DEFAULT_TIMEOUT_MS).toBe(2000);
   });
 });
