@@ -34,6 +34,7 @@ import {
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
 import { selfStateVoiceEnabled } from '../../src/lib/selfStateVoice.js';
+import { deriveLowPeriodCause } from '../../src/lib/lowPeriodCause.js';
 import { applyLayaVerdict, LAYA_CHOOSABLE_STRATEGIES, LAYA_KEEP_ACCOMPANY_STRATEGIES, type LayaStrategyVerdict } from '../../src/lib/layaDecision.js';
 import { layaMinConfidence, layaKeepAccompany } from './layaClient.js';
 import { conflictManager } from '../../src/lib/conflictManager.js';
@@ -334,6 +335,15 @@ export class AICoordinator {
     const strategySnippet = resolveStrategySnippet(finalStrategy, {
       inEstablishedLowPeriod: (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled() || selfStateVoiceEnabled()) && lowPeriodOf(extras.updatedEmotionState).established,
       hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
+      // v1.60：给她"为什么沉"的**真实**原因（只从动机池/反刍链派生；派生不出来就说"说不上来"）
+      ...(selfStateVoiceEnabled()
+        ? {
+            selfStateCause: deriveLowPeriodCause({
+              rumination: extras.updatedEmotionState.internal?.rumination,
+              motivePool: extras.updatedEmotionState.internal?.motive?.pool,
+            }),
+          }
+        : {}),
     });
     if (hasOverrides(arbitrationOutput)) {
     console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
