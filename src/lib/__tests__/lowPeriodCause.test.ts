@@ -157,7 +157,7 @@ describe('片段构建（有原因 / 无原因）', () => {
     expect(s).not.toContain('说不上来为什么');
   });
 
-  it('his_word（现场记录的原因）⇒ 强制要求用上，并给一句话内的位置示范', () => {
+  it('his_word（现场记录的原因）⇒ 只作为**选项**提供（可以说，也可以不说，绝不强制）', () => {
     const cause: LowPeriodCause = {
       kind: 'his_word',
       phrase: '因为你说「我今天被领导当众骂了一顿」，我听着也跟着沉下去了',
@@ -165,9 +165,12 @@ describe('片段构建（有原因 / 无原因）', () => {
       topic: '我今天被领导当众骂了一顿',
     };
     const s = buildSelfStateVoiceSnippet(cause);
-    expect(s).toContain('这一轮必须用上这条原因');
     expect(s).toContain('我今天被领导当众骂了一顿');
-    expect(s).toContain('同一两句话内');
+    expect(s).toContain('不想说也可以');
+    expect(s).toContain('只能用这条真实原因');
+    // 设计红线：不许写成"必须说/必须用上"（用户 2026-10-20 明确）
+    expect(s).not.toContain('必须用上');
+    expect(s).not.toContain('必须说');
     expect(s).not.toContain('说不上来为什么');
   });
 

@@ -83,8 +83,15 @@ describe('selfStateVoice 开关（默认关）', () => {
 });
 
 describe('SELF_STATE_VOICE_SNIPPET 的语义约束（防跑偏成 v1.38 或自述）', () => {
-  it('必须同时含三件事：可以说一句自己 / 不必假装高兴 / 不展开成自述', () => {
-    expect(SELF_STATE_VOICE_SNIPPET).toContain('可以说一句');
+  it('可选而非必须：含"可以选择…也可以不说"，且不出现"必须说/必须用上"', () => {
+    expect(SELF_STATE_VOICE_SNIPPET).toContain('可以选择');
+    expect(SELF_STATE_VOICE_SNIPPET).toContain('也可以不说');
+    expect(SELF_STATE_VOICE_SNIPPET).not.toContain('必须说');
+    expect(SELF_STATE_VOICE_SNIPPET).not.toContain('必须用上');
+  });
+
+  it('必须同时含三件事：允许说一句自己 / 不必假装高兴 / 不展开成自述', () => {
+    expect(SELF_STATE_VOICE_SNIPPET).toContain('说一句自己此刻的状态');
     expect(SELF_STATE_VOICE_SNIPPET).toContain('不必');
     expect(SELF_STATE_VOICE_SNIPPET).toContain('假装高兴');
     expect(SELF_STATE_VOICE_SNIPPET).toContain('不要展开成');
