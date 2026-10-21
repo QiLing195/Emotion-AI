@@ -113,11 +113,14 @@ describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
     expect(unifiedExpressionEnabled({ ENABLE_UNIFIED_EXPRESSION: 'true' } as NodeJS.ProcessEnv)).toBe(true);
   });
 
-  it('许可里明确"可以说 1~3 句"，并给出状态句 + 落回他', () => {
+  it('短许可：只给"可以说"+示例+不限句数，**不给格式骨架**', () => {
     const r = buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100 });
-    expect(r.snippet).toContain('1~3 句');
-    expect(r.snippet).toContain('状态：');
+    expect(r.snippet).toContain('你可以说一句自己（也可以不说）');
+    expect(r.snippet).toContain('想说几句都行');
+    expect(r.snippet).toContain('不用按格式');
     expect(r.snippet).toContain('落回他那件事');
+    expect(r.snippet).not.toContain('状态：');
+    expect(r.snippet).not.toContain('最后一句');
     expect(r.cls).toBe('sad');
   });
 
@@ -126,7 +129,7 @@ describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
     expect(withCause.snippet).toContain('被领导当众骂了一顿');
     expect(withCause.snippet).toContain('只能');
     const noCause = buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100 });
-    expect(noCause.snippet).toContain('不要为了给原因编事');
+    expect(noCause.snippet).toContain('别编');
   });
 
   it('安全门/预算门与旧接口一致', () => {
@@ -135,12 +138,11 @@ describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
     expect(buildUnifiedPermit({ activated: { joy: 0.01 }, round: 100 }).reason).toBe('resting_or_ambiguous');
   });
 
-  it('相邻预算桶 ⇒ 状态句不同（多句也在轮换）', () => {
+  it('相邻预算桶 ⇒ 示例句不同（短示例也轮换）', () => {
     const a = buildUnifiedPermit({ activated: { joy: 0.3 }, round: 100 });
     const b = buildUnifiedPermit({ activated: { joy: 0.3 }, round: 100 + EXPRESSION_BUDGET_TURNS });
-    const sa = String(a.snippet).match(/状态：(.+)/)?.[1] ?? '';
-    const sb = String(b.snippet).match(/状态：(.+)/)?.[1] ?? '';
-    expect(sa).not.toBe(sb);
+    const ex = (s: string) => String(s).match(/比如：(.+)$/m)?.[1] ?? '';
+    expect(ex(String(a.snippet))).not.toBe(ex(String(b.snippet)));
   });
 });
 describe('v1.66 问必答（他明确问她时可突破预算一次）', () => {
@@ -158,7 +160,7 @@ describe('v1.66 问必答（他明确问她时可突破预算一次）', () => {
       activated: { sad: 0.3 }, round: 100, lastExpressedRound: 99, hisAsksAboutHer: true,
     });
     expect(r.snippet).not.toBeNull();
-    expect(r.reason).toContain('ok-unified');
+    expect(r.reason).toContain('ok-short');
   });
 
   it('预算未到 + 他没问 ⇒ 仍然拦（保持不表演）', () => {

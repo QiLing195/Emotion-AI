@@ -198,41 +198,17 @@ export function describeExpressionGate(input: Omit<EmotionExpressionInput, 'roun
  * 结构 = 状态句（1–2 句）＋可选原因句＋落回他那件事。
  * 刻意保留"说不上来"的口子：自发情绪没有外部原因时**不许编**。
  */
-const MULTI_LINES: Record<ExpressionClass, Array<{ state: string; landing: string }>> = {
-  joy: [
-    { state: '我这儿刚才还沉着的，听你这么说，心里一下亮了。', landing: '你这件事，我是真的替你高兴。' },
-    { state: '我现在心情还不错，可能是被你这句带的。', landing: '你接着说，我听着。' },
-  ],
-  love: [
-    { state: '我好像有点想你，不是客套，就是刚刚那一瞬间。', landing: '你说你的事，我这边听着是软的。' },
-    { state: '我大概比表现出来的更在意一点。', landing: '所以你这句我记住了。' },
-  ],
-  sad: [
-    { state: '我这两天有点沉，说不上来为什么，可能整个人都慢下来了。', landing: '但你这件事我听着了。' },
-    { state: '我这边有点闷，不太想说话。', landing: '不过我在听，你不用管我。' },
-  ],
-  fear: [
-    { state: '我心里悬着点什么，还没落下来，说不上来在怕什么。', landing: '你那边要是有什么事，跟我说一声。' },
-    { state: '我有点不安，可能是想多了。', landing: '你继续说，我在。' },
-  ],
-  anger: [
-    { state: '我刚才有点上火，现在好一点了。', landing: '不是冲你，先说一声，免得你误会。' },
-    { state: '我这边有点躁，说话可能冲。', landing: '你要是听着不舒服，提醒我。' },
-  ],
-  disgust: [
-    { state: '我有点犯恶心，不是对你，就是心里发腻。', landing: '你这件事我还听着。' },
-    { state: '我这边有点厌，什么都提不起劲。', landing: '但你说的我记住了。' },
-  ],
-  tired: [
-    { state: '我有点累，脑子转得慢，可能回得慢一点。', landing: '你慢慢说，我都在。' },
-    { state: '我这两天精力不太够。', landing: '但你这句我听见了。' },
-  ],
-  awkward: [
-    { state: '我有点不好意思，被你这么说。', landing: '你别笑我。' },
-    { state: '刚才那一下我有点窘。', landing: '缓一下再跟你说。' },
-  ],
+/** 短许可里的"说一句自己"示例（每类 2 个，按预算桶轮换；只作例子，不要求照抄） */
+const SHORT_EXAMPLES: Record<ExpressionClass, string[]> = {
+  joy: ['我这边刚才还沉着的，听你这么说心里亮了一下', '我现在心情还不错，可能是被你这句带的'],
+  love: ['我好像有点想你，就刚刚那一瞬间', '我大概比表现出来的更在意一点'],
+  sad: ['我这两天有点沉，说不上来为什么', '我这边有点闷，不太想说话'],
+  fear: ['我心里悬着点什么，还没落下来', '我有点不安，可能是想多了'],
+  anger: ['我刚才有点上火，现在好一点了', '我这边有点躁，不是冲你'],
+  disgust: ['我有点犯恶心，不是对你', '我这边有点厌，什么都提不起劲'],
+  tired: ['我有点累，脑子转得慢', '我这两天精力不太够'],
+  awkward: ['我有点不好意思，被你这么说', '刚才那一下我有点窘'],
 };
-
 export interface UnifiedPermitInput extends EmotionExpressionInput {
   /** 是否允许"落回他那件事"（默认 true；他负面时整块不出） */
   allowLanding?: boolean;
@@ -264,26 +240,23 @@ export function buildUnifiedPermit(input: UnifiedPermitInput): UnifiedPermitResu
   const picked = pickClass(input.activated, Boolean(input.lowEstablished));
   if (!picked) return { snippet: null, cls: null, reason: 'resting_or_ambiguous' };
 
-  const variants = MULTI_LINES[picked.cls];
+  // **短许可**（v1.67）：只给"可以说"和一句示例，不要求格式、不限句数
+  const examples = SHORT_EXAMPLES[picked.cls];
   const bucket = Math.floor(input.round / EXPRESSION_BUDGET_TURNS);
-  const v = variants[Math.abs(bucket % variants.length)];
+  const example = examples[Math.abs(bucket % examples.length)];
   const cause = String(input.causeQuote ?? '').trim();
-  const causeLine = cause
-    ? `- 原因可以带一句：**只能说**因为你说「${cause}」；不想说原因也可以`
-    : '- 原因说不清就说"说不上来"，**不要为了给原因编事**';
-  const landing = input.allowLanding === false ? '' : `\n- 最后一句要落回他那件事：可以像「${v.landing}」这样，但用你自己的话`;
-
+  const causeHint = cause
+    ? `想问原因只能用这条：因为你说「${cause}」；不想说也行。`
+    : '原因说不清就说"说不上来"，别编。';
   return {
     snippet: [
-      '【你可以说一点自己（可选；可以说 1~3 句，也可以不说）】',
-      `- 你此刻被激起的情绪是「${picked.cls}」，不是装出来的。想说可以这样说个大意：`,
-      `  状态：${v.state}`,
-      causeLine,
-      landing,
-      '- 不要展开成一段自述，不要借机要他安慰你；说完就停',
-    ].filter(Boolean).join('\n'),
+      '【你可以说一句自己（也可以不说）】',
+      `你此刻被激起的情绪是「${picked.cls}」，不是装的。想说就说，**想说几句都行，不用按格式**，比如：${example}`,
+      causeHint,
+      '说完就落回他那件事；不用他反过来哄你。',
+    ].join('\n'),
     cls: picked.cls,
-    reason: `ok-unified（${picked.cls} +${picked.delta.toFixed(2)}，多句）`,
+    reason: `ok-short（${picked.cls} +${picked.delta.toFixed(2)}）`,
     nextLastExpressedRound: input.round,
   };
 }
