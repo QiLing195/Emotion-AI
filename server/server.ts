@@ -106,6 +106,8 @@ import {
 import { replayBranch, listTimelineNodes, replayEnabled } from './services/branchReplay.js';
 import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
 import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
+import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
+import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups } from './services/herFollowups.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
 } from './services/herRoom.js';
@@ -442,6 +444,25 @@ export class AIGirlfriendServer {
     const threshold = passesMotiveThreshold(selection.selected, persona.proactiveThreshold);
     const decision = describeProactiveDecision({ gates, motive: threshold });
     this._lastProactiveDecision = decision;
+
+    // v1.75 到点追问：她之前 set_followup 安排的那句话，到点由 proactive 通路发出
+    // （仍受全部 proactive 闸门约束：配额/时间窗/空闲/低谷矜持；发过即标记，不重发）
+    if (herFollowupEnabled()) {
+      const picked = pickDueFollowup(gates.allowed);
+      const first = picked.item;
+      if (first) {
+        this._proactivePending.push({
+          id: `followup_${first.id}`,
+          text: first.what,
+          createdAt: new Date().toISOString(),
+          motiveKind: 'followup',
+        });
+        rhythmController.recordProactiveSent(new Date());
+        markFollowupSent(first.id);
+        console.log(`[Proactive] (${trigger}) 发出(到点追问)：${first.what}`);
+        return { sent: true, reason: `followup_due（${picked.dueCount} 条到点）`, text: first.what };
+      }
+    }
 
     if (!gates.allowed || !threshold.ok || !selection.selected) {
       return { sent: false, reason: decision };
@@ -1193,6 +1214,14 @@ export class AIGirlfriendServer {
                     score: typeof it?.score === 'number' ? Math.round(it.score * 100) / 100 : null,
                   })).filter((x: { summary: string }) => x.summary);
                 } catch { return []; }
+              },
+              writeNote: (note: string) => {
+                if (!herNotesEnabled()) return { ok: false, reason: 'notes_disabled（ENABLE_HER_NOTES=false）' };
+                return addNote(note);
+              },
+              addFollowup: (what: string, dueInHours: number) => {
+                if (!herFollowupEnabled()) return { ok: false, reason: 'followup_disabled（ENABLE_HER_FOLLOWUP=false）' };
+                return addFollowup({ what, dueInHours });
               },
               getTime: () => {
                 const d = new Date();

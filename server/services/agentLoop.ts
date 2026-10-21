@@ -22,7 +22,7 @@ export function agentToolsEnabled(env: NodeJS.ProcessEnv = process.env): boolean
   return env.ENABLE_AGENT_TOOLS === 'true';
 }
 
-export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now';
+export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'set_followup';
 
 export interface ToolTraceEntry {
   round: number;
@@ -42,6 +42,10 @@ export interface ToolContext {
   recallMemory?: (query: string, limit?: number) => unknown;
   /** 本地时间——只读 */
   getTime?: () => unknown;
+  /** 记一条她自己的便签（唯一主动写自己状态的通路；未接则工具如实报错） */
+  writeNote?: (note: string) => { ok: boolean; reason?: string; count?: number };
+  /** 记一条"到点再问"（未接则如实报错） */
+  addFollowup?: (what: string, dueInHours: number) => { ok: boolean; reason?: string; dueAt?: number };
 }
 
 /** 给 provider 的函数声明（Gemini 的 functionDeclarations 形状） */
@@ -70,6 +74,29 @@ export function toolDeclarations(): unknown[] {
           name: 'time_now',
           description: '查看现在的日期、时间与星期（避免把"今天/明天"说错）。',
           parameters: { type: 'object', properties: {}, required: [] },
+        },
+        {
+          name: 'remember_this',
+          description: '把一件**你答应过/想记住**的事写进自己的便签（只追加、可审计）。比如"他说下周要体检，记得问"。不要用它记他的原话逐字复述。',
+          parameters: {
+            type: 'object',
+            properties: {
+              note: { type: 'string', description: '要记住的事，4~80 字，用你自己的话' },
+            },
+            required: ['note'],
+          },
+        },
+        {
+          name: 'set_followup',
+          description: '安排一条"到点再问"：到时间后你会主动发一条消息，内容就是这句话。**当他说"明天提醒我/记得问我/到时候提醒我"时，必须调用本工具排一条**，不要只在嘴上答应。',
+          parameters: {
+            type: 'object',
+            properties: {
+              what: { type: 'string', description: '到点想说的那句话（4~120 字）' },
+              dueInHours: { type: 'number', description: '几小时后发出，0.5~72；他说了具体时间就先调 time_now 算小时差' },
+            },
+            required: ['what', 'dueInHours'],
+          },
         },
         {
           name: 'recall_recent_events',
@@ -103,6 +130,19 @@ export async function executeTool(
     if (name === 'check_my_state') {
       const result = ctx.getState();
       return { ok: true, result, ms: Date.now() - t0 };
+    }
+    if (name === 'remember_this') {
+      const note = String(args?.note ?? '').trim();
+      if (!ctx.writeNote) return { ok: false, result: { error: 'notes_disabled（便签没开）' }, ms: Date.now() - t0 };
+      const r = ctx.writeNote(note);
+      return { ok: r.ok, result: r, ms: Date.now() - t0 };
+    }
+    if (name === 'set_followup') {
+      const what = String(args?.what ?? '').trim();
+      const hours = Number(args?.dueInHours ?? 0);
+      if (!ctx.addFollowup) return { ok: false, result: { error: 'followup_disabled（追问没开）' }, ms: Date.now() - t0 };
+      const r = ctx.addFollowup(what, hours);
+      return { ok: r.ok, result: r, ms: Date.now() - t0 };
     }
     if (name === 'recall_memory') {
       const q = String(args?.query ?? '').trim();

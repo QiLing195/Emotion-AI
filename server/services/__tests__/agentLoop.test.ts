@@ -12,6 +12,8 @@ const ctx = {
   getRecentEvents: (limit?: number) => Array.from({ length: Math.min(10, limit ?? 5) }, (_, i) => ({ round: i + 1, kind: 'state_change' })),
   recallMemory: (query: string, limit?: number) => Array.from({ length: Math.min(5, limit ?? 3) }, (_, i) => ({ summary: `${query} 相关记忆 ${i + 1}` })),
   getTime: () => ({ iso: '2026-10-21T14:00:00.000Z', local: '2026/10/21 22:00:00', weekday: '周三' }),
+  writeNote: (note: string) => (note.length >= 4 ? { ok: true, count: 1 } : { ok: false, reason: 'too_short' }),
+  addFollowup: (what: string, hours: number) => (hours > 0 && hours <= 72 ? { ok: true, dueAt: Date.now() + hours * 3600_000 } : { ok: false, reason: 'due_in_hours_out_of_range' }),
 };
 
 describe('开关与工具声明', () => {
@@ -23,7 +25,7 @@ describe('开关与工具声明', () => {
   it('声明里恰好有两个只读工具，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'recall_recent_events']);
+    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'set_followup', 'recall_recent_events']);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });
@@ -130,5 +132,34 @@ describe('新增只读工具：recall_memory / time_now', () => {
     const r = await executeTool('time_now', {}, ctx);
     expect(r.ok).toBe(true);
     expect(JSON.stringify(r.result)).toContain('周三');
+  });
+});
+describe('写类工具：remember_this / set_followup（必须经审计层）', () => {
+  it('remember_this 正常写入返回 ok', async () => {
+    const r = await executeTool('remember_this', { note: '他说下周体检，记得问' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('"ok":true');
+  });
+
+  it('remember_this 太短 ⇒ ok=false（不静默写垃圾）', async () => {
+    const r = await executeTool('remember_this', { note: '嗯' }, ctx);
+    expect(r.ok).toBe(false);
+  });
+
+  it('没有接审计层 ⇒ 明确报 disabled，而不是假装成功', async () => {
+    const r = await executeTool('remember_this', { note: '记一条' }, { ...ctx, writeNote: undefined });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('notes_disabled');
+  });
+
+  it('set_followup 合法时间 ⇒ ok 且带 dueAt', async () => {
+    const r = await executeTool('set_followup', { what: '明天问问面试结果', dueInHours: 12 }, ctx);
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('dueAt');
+  });
+
+  it('set_followup 时间越界 ⇒ ok=false', async () => {
+    const r = await executeTool('set_followup', { what: '回头问', dueInHours: 999 }, ctx);
+    expect(r.ok).toBe(false);
   });
 });
