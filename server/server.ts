@@ -105,6 +105,7 @@ import {
 } from './services/branchLearning.js';
 import { replayBranch, listTimelineNodes, replayEnabled } from './services/branchReplay.js';
 import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
+import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
 } from './services/herRoom.js';
@@ -1159,13 +1160,56 @@ export class AIGirlfriendServer {
           } catch (e) { console.warn('[Debug] DUMP_PROMPT 写入失败:', (e as Error).message); }
         }
 
-        let result = await this.aiEngine.generateResponse(message, userId, {
-          clientSystemPrompt: enrichedSystemPrompt,
-          clientSettings: effectiveSettings,
-          persona,
-          emotionState: turnOutput.updatedEmotionState,
-          recentMessages,
-        });
+        // v1.72 Agent 工具层：开关打开时先让她"查一下再回答"（有界 2 轮）
+        let result: { text: string };
+        if (agentToolsEnabled()) {
+          const { generateAIChatResponse } = await import('../src/lib/aiProvider.js');
+          const { separateActivation } = await import('../src/lib/emotionActivation.js');
+          const act = separateActivation(
+            turnOutput.updatedEmotionState.emotions as unknown as Record<string, number>,
+            turnOutput.updatedEmotionState.baselineEmotions as unknown as Record<string, number> | undefined,
+          );
+          const agent = await runAgentLoop({
+            systemPrompt: enrichedSystemPrompt,
+            userMessage: message,
+            recentMessages: (recentMessages ?? []).map((m: any) => ({ role: m.role, content: String(m.content ?? '') })),
+            ctx: {
+              getState: () => ({
+                emotion: { top: act.activeEmotion ?? null, delta: act.delta ?? {} },
+                lowPeriod: lowPeriodOf(turnOutput.updatedEmotionState),
+                room: loadHerRoom(),
+              }),
+              getRecentEvents: (limit?: number) => readRecentNodes(limit ?? 5),
+            },
+            callModel: async (messages, tools) => {
+              const r = await generateAIChatResponse(
+                effectiveSettings as never,
+                enrichedSystemPrompt,
+                messages as never,
+                false,
+                0.7,
+                (tools ?? undefined) as never,
+              );
+              return {
+                text: String(r?.text ?? ''),
+                functionCalls: ((r?.functionCalls ?? []) as Array<{ name?: string; args?: Record<string, unknown> }>).map(c => ({
+                  name: String(c?.name ?? ''),
+                  args: (c?.args ?? {}) as Record<string, unknown>,
+                })),
+              };
+            },
+          });
+          console.log(`[Agent] rounds=${agent.rounds} usedTools=${agent.usedTools} trace=${agent.toolTrace.map(t => `${t.tool}:${t.ok ? 'ok' : 'fail'}:${t.ms}ms`).join(',') || 'none'}`);
+          result = { text: agent.text };
+        } else {
+          result = await this.aiEngine.generateResponse(message, userId, {
+            clientSystemPrompt: enrichedSystemPrompt,
+            clientSettings: effectiveSettings,
+            persona,
+            emotionState: turnOutput.updatedEmotionState,
+            recentMessages,
+          });
+        }
 
         // ── v1.32 生成后查重：她又把上一轮那句话原样说了一遍 → 定向重写一次 ──
         //

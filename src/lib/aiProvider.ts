@@ -196,6 +196,25 @@ export async function generateEmbeddings(
   }, 3, 1000);
 }
 
+/** 把 Gemini 风格（functionDeclarations）或裸声明统一成 OpenAI tools 格式 */
+function toOpenAITools(tools?: any[]): any[] | undefined {
+  if (!tools || tools.length === 0) return undefined;
+  const out: any[] = [];
+  for (const t of tools) {
+    if (t?.functionDeclarations) {
+      for (const d of t.functionDeclarations) {
+        if (!d?.name) continue;
+        out.push({ type: 'function', function: { name: d.name, description: d.description ?? '', parameters: d.parameters ?? { type: 'object', properties: {} } } });
+      }
+    } else if (t?.type === 'function' && t.function?.name) {
+      out.push(t);
+    } else if (t?.name) {
+      out.push({ type: 'function', function: { name: t.name, description: t.description ?? '', parameters: t.parameters ?? { type: 'object', properties: {} } } });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 export async function generateAIChatResponse(
   settings: AISettings,
   systemPrompt: string,
@@ -298,6 +317,8 @@ export async function generateAIChatResponse(
         }
       }
 
+      // v1.72 OpenAI 兼容分支也支持 function calling（此前 tools 被完全忽略）
+      const openaiTools = toOpenAITools(tools);
       const response = await openai.chat.completions.create({
         model: settings.model || 'gpt-4-turbo',
         messages: [
@@ -307,8 +328,20 @@ export async function generateAIChatResponse(
         max_tokens: 600,
         response_format: isJson ? { type: "json_object" } : undefined,
         temperature,
+        ...(openaiTools ? { tools: openaiTools as any, tool_choice: 'auto' as any } : {}),
       });
-      return { text: response.choices[0].message.content || (isJson ? '{}' : '') };
+      const msg = response.choices[0]?.message as any;
+      const toolCalls = Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0
+        ? msg.tool_calls.map((tc: any) => {
+            let args: Record<string, unknown> = {};
+            try { args = JSON.parse(tc?.function?.arguments ?? '{}'); } catch { args = {}; }
+            return { name: String(tc?.function?.name ?? ''), args };
+          })
+        : undefined;
+      return {
+        text: msg?.content || (isJson ? '{}' : ''),
+        ...(toolCalls ? { functionCalls: toolCalls } : {}),
+      };
     }
   }, 3, 1000);
 }
