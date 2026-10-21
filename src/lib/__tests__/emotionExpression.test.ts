@@ -88,3 +88,19 @@ describe('不写成"情绪表演"：短句、可选、落回他', () => {
     expect(a.snippet).toBe(b.snippet);
   });
 });
+
+describe('变体轮换（按预算桶，确定性 + 相邻不重复）', () => {
+  it('相邻两次表达（相隔一个预算周期）落在不同变体', () => {
+    const a = buildEmotionExpression({ activated: { sad: 0.3 }, round: 100 });
+    const b = buildEmotionExpression({ activated: { sad: 0.3 }, round: 100 + EXPRESSION_BUDGET_TURNS });
+    const c = buildEmotionExpression({ activated: { sad: 0.3 }, round: 100 + EXPRESSION_BUDGET_TURNS * 2 });
+    const got = [a, b, c].map(r => String(r.snippet).match(/例如：(.+?)。/)?.[1] ?? '');
+    expect(new Set(got).size).toBe(3);
+  });
+
+  it('同一轮/同一输入 ⇒ 句式稳定（可复现）', () => {
+    const x = buildEmotionExpression({ activated: { joy: 0.25 }, round: 12 });
+    const y = buildEmotionExpression({ activated: { joy: 0.25 }, round: 12 });
+    expect(x.snippet).toBe(y.snippet);
+  });
+});

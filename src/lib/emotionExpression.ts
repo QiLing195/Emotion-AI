@@ -144,7 +144,9 @@ export function buildEmotionExpression(input: EmotionExpressionInput): EmotionEx
   if (!picked) return { snippet: null, cls: null, reason: 'resting_or_ambiguous' };
 
   const variants = LINES[picked.cls];
-  const idx = Math.abs((input.round + variants.length) % variants.length);
+  // 按"预算桶"轮换：相邻两次表达必然落在不同桶 ⇒ 句式不会连续重复；同轮同输入可复现
+  const bucket = Math.floor(input.round / EXPRESSION_BUDGET_TURNS);
+  const idx = Math.abs(bucket % variants.length);
   const base = variants[idx];
   // ④ 接地：原因只允许引用他的话；没有就允许"说不上来"（模板本身已含）
   const cause = String(input.causeQuote ?? '').trim();
