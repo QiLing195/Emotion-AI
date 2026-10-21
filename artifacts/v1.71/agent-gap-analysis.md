@@ -59,3 +59,36 @@
   例如她能"打开窗户/放首歌/把灯调暗"（只改她自己的状态与界面），
   这样行动层能先在她自己的世界里闭合验证，再谈外部副作用。
 ```
+
+---
+
+## 5. 按"agent = 上下文 + 记忆 + 工具 + LLM"四要素重新盘点（v1.71 补充）
+
+| 要素 | 现状 | 证据 | 判定 |
+|---|---|---|---|
+| **LLM** | 多provider封装、重试、超时、JSON模式、图片输入 | `src/lib/aiProvider.ts`：`generateAIResponse` / `generateAIChatResponse` / `generateEmbeddings`，`retryAsync(…, 3, 1000)` | ✅ **有** |
+| **上下文** | 人格底座→自我叙事→记忆→策略片段→禁令→动机块→状态/时间线原因；会话摘要 `chatSummary` 入参 | `server/server.ts` 的 `enrichedSystemPrompt` 组装（约 1000+ 行之前），`chatSummary` 参数 | ✅ **有（强）**；缺：token 预算感知与长会话压缩策略 |
+| **记忆** | 情景/图谱/语义/治理/可见性/遗忘曲线 + 学习账本 + 时间线 + 小屋 | `memories/` 下 20+ 个持久化文件（memory_graph 809KB、episodic 90KB、relationship 74KB…） | ✅ **有（强）** |
+| **工具** | `generateAIChatResponse(settings, prompt, messages, json, temp, tools?)` **接受 tools 并返回 functionCalls**；但**没有任何 tool 声明/注册/执行器**，`functionCalls` 也**无人消费**（唯一工具是内置 `googleSearch`，且受 settings 开关） | `aiProvider.ts:205/206/238-240/250/273`；全仓 `functionCalls` 只出现在 aiProvider 两行 | ❌ **只有管道，没有工具层** |
+| **Agent 循环**（think→act→observe→repeat） | 协调器里 `maxSteps/iteration/while` 命中 **0**；现有循环是"情感→动机→策略→表达"的**决策流水线**，单轮一次性生成+事后校验（接地/查重），**没有"调工具→看结果→再想"的迭代** | `server/services/aiCoordinator.ts` 全量搜索 | ❌ **没有** |
+
+### 结论（一句话）
+
+```
+这个项目在"LLM / 上下文 / 记忆"三项上比多数 agent 项目**更深**（尤其记忆与人格动力学），
+真正缺的是 **工具层 + agent 循环**：
+  · aiProvider 已经把"能接 tools、能返回 functionCalls"的管道留好了，
+    但**没有工具注册表、没有执行器、没有把 functionCalls 接回主循环**；
+⇒ 补 agent 能力的第一刀其实很轻：注册 1~3 个只读工具 + 一个最多 2 步的有界循环，
+  就能从"只会说话"变成"会查自己的记忆/状态再回答"。
+```
+
+### 建议的第一批工具（全部只读、零外部副作用）
+
+```
+1. recall_memory(query)   → 走已有 unifiedMemory 召回（她"想起来"某件事，可审计）
+2. check_my_state()       → 读 activation/mood/lowPeriod/room（她"看一眼自己现在怎么样"）
+3. room_action(action)    → 改她自己的小屋活动（唯一"写"，但只写她自己的世界）
+护栏：max 2 步；每步记 trace（工具名/入参摘要/耗时）；失败降级为"不调工具直接回"；
+     开关 ENABLE_AGENT_TOOLS 默认关，开之前先跑 A/B（回复质量不降 + 不出现"工具腔"）。
+```
