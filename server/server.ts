@@ -93,6 +93,9 @@ import {
   appendTimelineNode,
   buildStateChangeNode,
   timelineEnabled,
+  readRecentNodes,
+  buildBranchNode,
+  buildOutcomeNode,
 } from './services/emotionTimeline.js';
 import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
@@ -712,6 +715,25 @@ export class AIGirlfriendServer {
         // 不参与任何决策（读路径为空）；写失败静默。开关：ENABLE_EMOTION_TIMELINE。
         if (timelineEnabled() && turnOutput.updatedEmotionState) {
           try {
+            // Stage 3：先给**上一轮的分支**补"结果"（他这句话接住了她那句吗）
+            const recent = readRecentNodes(6);
+            const lastBranch = [...recent].reverse().find(n => n.kind === 'branch');
+            if (lastBranch && lastBranch.kind === 'branch'
+              && !recent.some(n => n.kind === 'outcome' && n.refRound === lastBranch.round)) {
+              const dv = Number(turnOutput.updatedEmotionState.taiji?.valence ?? 0)
+                - Number(currentEmotionState?.taiji?.valence ?? 0);
+              appendTimelineNode(buildOutcomeNode({
+                ts: Date.now(),
+                round: persistedRound,
+                turnId: `${userId || 'anonymous'}-${persistedRound}`,
+                segment: lastBranch.segment,
+                refRound: lastBranch.round,
+                herReply: lastBranch.branch.replyExcerpt,
+                hisNextText: message,
+                hisEmotion: emotionAnalysis.userAnalysis?.expressedEmotion ?? null,
+                herDeltaValence: dv,
+              }));
+            }
             const axes = this._relationshipState?.dimensions as unknown as Record<string, number> | undefined;
             const node = buildStateChangeNode({
               ts: Date.now(),
@@ -1538,6 +1560,32 @@ export class AIGirlfriendServer {
           console.log(`[Provenance] ⛔ 拒绝该表达：${provenanceGuard.rejectedReason}`);
           aiText = provenanceGuard.text;
         }
+        // v1.60 Stage 3（只写、默认关）：记录**她的决策分支**（有限枚举 + 路径隔离 segment）
+        if (timelineEnabled()) {
+          try {
+            const lpNow = lowPeriodOf(currentEmotionState);
+            if (lpNow.active) {
+              const snippet = String(turnOutput.strategySnippet ?? '');
+              const usedVoice = snippet.includes('当前策略：你自己这几天在低谷');
+              // 片段里「只能用这条真实原因」后面那个「…」才是原因（别把示例里的引号当原因）
+              const causeMatch = snippet.match(/只能用这条真实原因[^「]*「([^」]{2,16})」/)
+                ?? snippet.match(/因为你说「([^」]{1,16})」/);
+              appendTimelineNode(buildBranchNode({
+                ts: Date.now(),
+                round: persistedRound,
+                turnId: `${userId || 'anonymous'}-${persistedRound}`,
+                lowActive: true,
+                lowSince: lpNow.since,
+                lowTurns: Number(lpNow.turns ?? 0),
+                hisEmotion: emotionAnalysis.userAnalysis?.expressedEmotion ?? null,
+                usedVoiceSnippet: usedVoice,
+                causeQuoted: causeMatch ? causeMatch[1] : null,
+                reply: aiText,
+              }));
+            }
+          } catch { /* 观测层永不打断主流程 */ }
+        }
+
         res.json({
           // v1.11: 必须返回接地校验后的文本（此前返回 result.text，导致重写结果被丢弃）
           response: aiText,

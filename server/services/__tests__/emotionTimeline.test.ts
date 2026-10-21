@@ -8,6 +8,11 @@ import {
   appendTimelineNode,
   readRecentNodes,
   buildCauseChain,
+  classifyBranch,
+  classifyOutcome,
+  segmentOf,
+  buildBranchNode,
+  buildOutcomeNode,
   TIMELINE_MAX_BYTES,
   type EmotionTimelineNode,
 } from '../emotionTimeline.js';
@@ -105,7 +110,9 @@ describe('写入 / 滚动 / 读回', () => {
     const back = readRecentNodes(1, path);
     expect(back).toHaveLength(1);
     expect(back[0].turnId).toBe('u-1');
-    expect(back[0].trigger.source).toBe('his_word_negative');
+    const first = back[0];
+    expect(first.kind).toBe('state_change');
+    if (first.kind === 'state_change') expect(first.trigger.source).toBe('his_word_negative');
   });
 
   it('超过上限会滚动，且读回只读当前文件', () => {
@@ -183,5 +190,77 @@ describe('Stage 2：原因链（origin 取窗口内最早那条负向 = 起因�
   it('maxChain 生效（链长有上限）', () => {
     const nodes = [1, 2, 3, 4, 5].map(i => nodeAt(i, i * 100, 'sad', `第${i}件难过的事`));
     expect(buildCauseChain(nodes, { maxChain: 2 }).chain).toHaveLength(2);
+  });
+});
+
+describe('Stage 3：分支枚举 + 结果 + 路径隔离', () => {
+  it('分支分类：他没负面时——说了原因 > 只说了状态 > 没说', () => {
+    const withCause = classifyBranch({
+      usedVoiceSnippet: true, causeQuoted: '我今天被领导当众骂了一顿',
+      reply: '我这两天有点沉，今天还被领导当众骂了一顿，所以笑不太出来。', hisEmotion: 'joy',
+    });
+    expect(withCause.chosen).toBe('voice_with_cause');
+    expect(withCause.candidates).toEqual(['voice_with_cause', 'voice', 'silence']);
+
+    const stateOnly = classifyBranch({
+      usedVoiceSnippet: true, causeQuoted: null,
+      reply: '我这两天有点沉，所以接得没那么热。', hisEmotion: 'neutral',
+    });
+    expect(stateOnly.chosen).toBe('voice');
+
+    const silent = classifyBranch({
+      usedVoiceSnippet: true, causeQuoted: null,
+      reply: '真好。恭喜你——这事儿你等了一阵子了。', hisEmotion: 'joy',
+    });
+    expect(silent.chosen).toBe('silence');
+  });
+
+  it('他负面时：她说安慰话 = comfort，否则 = defer（让位）', () => {
+    expect(classifyBranch({
+      usedVoiceSnippet: false, causeQuoted: null,
+      reply: '我在这儿，你慢慢说，别硬撑。', hisEmotion: 'sad',
+    }).chosen).toBe('comfort');
+    expect(classifyBranch({
+      usedVoiceSnippet: false, causeQuoted: null,
+      reply: '堵得慌……是压着什么东西说不出来吗？', hisEmotion: 'sad',
+    }).chosen).toBe('defer');
+  });
+
+  it('结果分类：共享实词 / 他反问 = landed；无关 = missed；空 = unclear', () => {
+    expect(classifyOutcome('我这两天有点沉，被领导骂了一顿', '那你现在还难受吗？')).toBe('landed');
+    expect(classifyOutcome('我这两天有点沉', '今天天气不错，我出去走了走。')).toBe('missed');
+    expect(classifyOutcome('我这两天有点沉', '')).toBe('unclear');
+  });
+
+  it('路径隔离：一段低谷一个 segment；没有低谷 = seg_none', () => {
+    expect(segmentOf(true, 1234)).toBe('seg_1234');
+    expect(segmentOf(false, null)).toBe('seg_none');
+    expect(segmentOf(true, null)).toBe('seg_none');
+    // 不同低谷段 → 不同 segment（分支历史不互相污染）
+    expect(segmentOf(true, 111)).not.toBe(segmentOf(true, 222));
+  });
+
+  it('分支/结果节点可写入并读回（含 segment 与 refRound）', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tl-br-'));
+    const path = join(dir, 'emotion_timeline.jsonl');
+    const br = buildBranchNode({
+      ts: 10, round: 5, turnId: 'u-5', lowActive: true, lowSince: 111, lowTurns: 3,
+      hisEmotion: 'joy', usedVoiceSnippet: true, causeQuoted: null,
+      reply: '我这两天有点沉。恭喜你。',
+    });
+    const out = buildOutcomeNode({
+      ts: 11, round: 6, turnId: 'u-6', segment: br.segment, refRound: 5,
+      herReply: br.branch.replyExcerpt, hisNextText: '你现在还沉吗？', hisEmotion: 'neutral', herDeltaValence: -0.02,
+    });
+    expect(appendTimelineNode(br, path)).toBe(true);
+    expect(appendTimelineNode(out, path)).toBe(true);
+    const back = readRecentNodes(2, path);
+    expect(back[0].kind).toBe('branch');
+    expect(back[1].kind).toBe('outcome');
+    if (back[0].kind === 'branch') expect(back[0].segment).toBe('seg_111');
+    if (back[1].kind === 'outcome') {
+      expect(back[1].refRound).toBe(5);
+      expect(back[1].outcome.hisReaction).toBe('landed');
+    }
   });
 });

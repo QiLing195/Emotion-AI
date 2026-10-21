@@ -192,7 +192,7 @@ function rotateIfNeeded(path: string): void {
 }
 
 /** 追加一个节点（写失败静默；返回是否写入成功） */
-export function appendTimelineNode(node: EmotionTimelineNode, path = TIMELINE_DEFAULT_PATH): boolean {
+export function appendTimelineNode(node: TimelineRecord, path = TIMELINE_DEFAULT_PATH): boolean {
   try {
     const dir = dirname(path);
     if (dir && dir !== '.' && !existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -205,11 +205,11 @@ export function appendTimelineNode(node: EmotionTimelineNode, path = TIMELINE_DE
 }
 
 /** 读最近 k 个节点（Stage 2 的读路径；Stage 1 只用它做验证/测试） */
-export function readRecentNodes(k: number, path = TIMELINE_DEFAULT_PATH): EmotionTimelineNode[] {
+export function readRecentNodes(k: number, path = TIMELINE_DEFAULT_PATH): TimelineRecord[] {
   try {
     if (!existsSync(path)) return [];
     const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean);
-    return lines.slice(-Math.max(0, k)).map(l => JSON.parse(l) as EmotionTimelineNode);
+    return lines.slice(-Math.max(0, k)).map(l => JSON.parse(l) as TimelineRecord);
   } catch {
     return [];
   }
@@ -255,7 +255,7 @@ export interface TimelineCause {
  * @param opts.lookbackNodes 跨线前回看多少个节点（默认 3）
  */
 export function buildCauseChain(
-  nodes: EmotionTimelineNode[],
+  nodes: TimelineRecord[],
   opts: { sinceTs?: number | null; maxChain?: number; lookbackNodes?: number } = {},
 ): TimelineCause {
   const since = typeof opts.sinceTs === 'number' ? opts.sinceTs : null;
@@ -266,7 +266,9 @@ export function buildCauseChain(
     const startIdx = nodes.findIndex(n => n.ts >= since);
     from = startIdx < 0 ? 0 : Math.max(0, startIdx - lookback);
   }
-  const window = nodes.slice(from);
+  const window = nodes
+    .slice(from)
+    .filter((n): n is EmotionTimelineNode => n.kind === 'state_change');
   const negatives = window.filter(n => n.trigger.source === 'his_word_negative');
   if (negatives.length === 0) {
     return {
@@ -298,4 +300,185 @@ export function buildCauseChain(
     evidence: `origin_round=${origin.round};negatives=${negatives.length};lookback=${lookback};from=${from}`,
   };
 }
+
+// ════════════════════════════════════════════════════════════
+// Stage 3：分支节点 + 结果节点 + 路径隔离（segment）
+// ════════════════════════════════════════════════════════════
+
+/** 她这一轮的**决策分支**（有限枚举，不做自由文本 —— 自由分支无法统计/学习） */
+export type BranchKind = 'voice_with_cause' | 'voice' | 'silence' | 'defer' | 'comfort';
+
+export interface TimelineBranchNode {
+  id: string;
+  ts: number;
+  round: number;
+  turnId: string;
+  kind: 'branch';
+  /** 路径隔离：同一段低谷 = 同一个 segment（不同段/分支不共享中间状态） */
+  segment: string;
+  branch: {
+    chosen: BranchKind;
+    candidates: BranchKind[];
+    authority: 'rules' | 'jev';
+    usedVoiceSnippet: boolean;
+    causeQuoted: string | null;
+    /** 她这一轮说的原话前 80 字（outcome 要用它判断"他接住了吗"） */
+    replyExcerpt: string;
+  };
+  context: { lowActive: boolean; lowTurns: number; hisEmotion: string | null };
+}
+
+export interface TimelineOutcomeNode {
+  id: string;
+  ts: number;
+  round: number;
+  turnId: string;
+  kind: 'outcome';
+  segment: string;
+  /** 指向被评估的那条 branch 的 round */
+  refRound: number;
+  outcome: { hisReaction: 'landed' | 'missed' | 'unclear'; herDeltaValence: number; hisEmotion: string | null };
+}
+
+export type TimelineRecord = EmotionTimelineNode | TimelineBranchNode | TimelineOutcomeNode;
+
+/** 路径隔离标识：一段低谷一个 segment（没有低谷段时用 none —— 分支只在低谷期记） */
+export function segmentOf(lowActive: boolean, since: number | null | undefined): string {
+  if (!lowActive || typeof since !== 'number') return 'seg_none';
+  return `seg_${since}`;
+}
+
+const COMFORT_RE = /(抱抱|抱一下|别怕|我陪|在这儿|心疼|辛苦了|别硬撑)/;
+const SELF_STATE_RE = /我(?:这两天|今天|最近|这边|也)?[^。！？]{0,8}(沉|闷|空|难受|累|堵|缓|力气|提不起)/;
+const NEGATIVE_HIS = new Set(['sad', 'anger', 'fear', 'disgust', 'anxiety', 'loneliness', 'grief', 'frustration']);
+
+const STOP_CHARS = /[的了是我你他她？?，。！、…～\s]/g;
+
+/** 两条文本是否有 ≥minLen 个连续实字重合（用于"她有没有说出那个原因"） */
+function sharesAnchor(a: string, b: string, minLen = 3): boolean {
+  const x = String(a ?? '').replace(STOP_CHARS, '');
+  const y = String(b ?? '').replace(STOP_CHARS, '');
+  if (x.length < minLen || y.length < minLen) return false;
+  for (let len = Math.min(10, x.length); len >= minLen; len--) {
+    for (let i = 0; i + len <= x.length; i++) {
+      if (y.includes(x.slice(i, i + len))) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 分支分类（**确定性**，不调模型）：把"她这一轮的选择"归到五类。
+ * 只在她处在低谷时调用（不在低谷就不是"低位决策"）。
+ */
+export function classifyBranch(input: {
+  usedVoiceSnippet: boolean;
+  causeQuoted: string | null;
+  reply: string;
+  hisEmotion: string | null;
+}): { chosen: BranchKind; candidates: BranchKind[] } {
+  const reply = String(input.reply ?? '');
+  const hisNeg = NEGATIVE_HIS.has(String(input.hisEmotion ?? '').toLowerCase());
+  if (hisNeg) {
+    const chosen: BranchKind = COMFORT_RE.test(reply) ? 'comfort' : 'defer';
+    return { chosen, candidates: ['defer', 'comfort'] };
+  }
+  const candidates: BranchKind[] = ['voice_with_cause', 'voice', 'silence'];
+  if (input.usedVoiceSnippet) {
+    const cause = String(input.causeQuoted ?? '');
+    if (cause.length >= 2 && sharesAnchor(reply, cause, 3)) {
+      return { chosen: 'voice_with_cause', candidates };
+    }
+    if (SELF_STATE_RE.test(reply)) return { chosen: 'voice', candidates };
+    return { chosen: 'silence', candidates };
+  }
+  // 没开片段：她仍可能自己说了状态（那就是 voice，不是 silence）
+  return { chosen: SELF_STATE_RE.test(reply) ? 'voice' : 'silence', candidates };
+}
+
+/** 结果分类（**确定性**）：他下一轮有没有接住她那句话 */
+export function classifyOutcome(herReply: string, hisNextText: string): 'landed' | 'missed' | 'unclear' {
+  const her = String(herReply ?? '').trim();
+  const his = String(hisNextText ?? '').trim();
+  if (!her || !his) return 'unclear';
+  // ① 共享实词锚点：≥2 个连续实字重合（去掉高频虚词）
+  const stop = /[的了是我你他她？，。！、…～\s]/g;
+  const a = her.replace(stop, '');
+  const b = his.replace(stop, '');
+  for (let len = Math.min(8, a.length); len >= 2; len--) {
+    for (let i = 0; i + len <= a.length; i++) {
+      const sub = a.slice(i, i + len);
+      if (b.includes(sub)) return 'landed';
+    }
+  }
+  // ② 他明确回应她（问句 / 对着她说 / 表态）
+  if (/[？?]$/.test(his) || /(你|你说|你觉得|你呢|我是问)/.test(his)) return 'landed';
+  return 'missed';
+}
+
+export function buildBranchNode(input: {
+  ts: number;
+  round: number;
+  turnId: string;
+  lowActive: boolean;
+  lowSince: number | null | undefined;
+  lowTurns: number;
+  hisEmotion: string | null;
+  usedVoiceSnippet: boolean;
+  causeQuoted: string | null;
+  reply: string;
+  authority?: 'rules' | 'jev';
+}): TimelineBranchNode {
+  const { chosen, candidates } = classifyBranch({
+    usedVoiceSnippet: input.usedVoiceSnippet,
+    causeQuoted: input.causeQuoted,
+    reply: input.reply,
+    hisEmotion: input.hisEmotion,
+  });
+  return {
+    id: `tl_br_${input.round}_${input.ts}`,
+    ts: input.ts,
+    round: input.round,
+    turnId: input.turnId,
+    kind: 'branch',
+    segment: segmentOf(input.lowActive, input.lowSince),
+    branch: {
+      chosen,
+      candidates,
+      authority: input.authority ?? 'rules',
+      usedVoiceSnippet: input.usedVoiceSnippet,
+      causeQuoted: input.causeQuoted,
+      replyExcerpt: Array.from(String(input.reply ?? '')).slice(0, 80).join(''),
+    },
+    context: { lowActive: input.lowActive, lowTurns: input.lowTurns, hisEmotion: input.hisEmotion },
+  };
+}
+
+export function buildOutcomeNode(input: {
+  ts: number;
+  round: number;
+  turnId: string;
+  segment: string;
+  refRound: number;
+  herReply: string;
+  hisNextText: string;
+  hisEmotion: string | null;
+  herDeltaValence: number;
+}): TimelineOutcomeNode {
+  return {
+    id: `tl_out_${input.round}_${input.ts}`,
+    ts: input.ts,
+    round: input.round,
+    turnId: input.turnId,
+    kind: 'outcome',
+    segment: input.segment,
+    refRound: input.refRound,
+    outcome: {
+      hisReaction: classifyOutcome(input.herReply, input.hisNextText),
+      herDeltaValence: round4(Number(input.herDeltaValence) || 0),
+      hisEmotion: input.hisEmotion,
+    },
+  };
+}
+
 
