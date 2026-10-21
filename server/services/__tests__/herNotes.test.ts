@@ -63,7 +63,7 @@ describe('到点追问（set_followup 的落地层）', () => {
   it('校验：时间 0.5~72 小时，内容 4~120 字', () => {
     expect(validateFollowup('回头问问面试结果', 12).ok).toBe(true);
     expect(validateFollowup('回头问问面试结果', 0.1).ok).toBe(false);
-    expect(validateFollowup('回头问问面试结果', 100).ok).toBe(false);
+    expect(validateFollowup('回头问问面试结果', 400).ok).toBe(false);
     expect(validateFollowup('嗯', 5).ok).toBe(false);
   });
 
@@ -142,5 +142,21 @@ describe('具体时间（dueAtLocal）—— 修"明天下午三点被算成 +3h
     const now = new Date(2026, 9, 21, 22, 0, 0, 0).getTime();
     expect(addFollowup({ what: '回头问一句面试结果', dueInHours: 3, dueAtLocal: '2026-10-21T10:00', now, path }).ok).toBe(false);
     expect(addFollowup({ what: '回头问一句面试结果', dueInHours: 3, dueAtLocal: '2026-11-30T10:00', now, path }).ok).toBe(false);
+  });
+});
+describe('文本时间兜底（v1.79）：没给合法时间但话里带时间', () => {
+  it('"明天下午三点"⇒ 自动按文本排上', () => {
+    const path = tmp();
+    const now = new Date(2026, 9, 21, 23, 0, 0, 0).getTime();
+    const r = addFollowup({ what: '明天下午三点提醒他问面试结果', dueInHours: 0, now, path });
+    expect(r.ok).toBe(true);
+    expect(new Date(r.dueAt!).getDate()).toBe(22);
+    expect(new Date(r.dueAt!).getHours()).toBe(15);
+  });
+
+  it('话里没有时间且 dueInHours 非法 ⇒ 如实失败', () => {
+    const path = tmp();
+    const r = addFollowup({ what: '记得问问他那件事', dueInHours: 0, now: Date.now(), path });
+    expect(r.ok).toBe(false);
   });
 });

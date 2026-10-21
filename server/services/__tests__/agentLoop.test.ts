@@ -14,7 +14,12 @@ const ctx = {
   recallMemory: (query: string, limit?: number) => Array.from({ length: Math.min(5, limit ?? 3) }, (_, i) => ({ summary: `${query} 相关记忆 ${i + 1}` })),
   getTime: () => ({ iso: '2026-10-21T14:00:00.000Z', local: '2026/10/21 22:00:00', weekday: '周三' }),
   writeNote: (note: string) => (note.length >= 4 ? { ok: true, count: 1 } : { ok: false, reason: 'too_short' }),
-  addFollowup: (what: string, hours: number) => (hours > 0 && hours <= 72 ? { ok: true, dueAt: Date.now() + hours * 3600_000 } : { ok: false, reason: 'due_in_hours_out_of_range' }),
+  addFollowup: (what: string, hours: number, dueAtLocal?: string | null) => {
+    if (dueAtLocal) return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAtLocal)
+      ? { ok: true, dueAt: Date.now() + 3600_000 }
+      : { ok: false, reason: 'due_at_local_unparsable' };
+    return hours > 0 && hours <= 72 ? { ok: true, dueAt: Date.now() + hours * 3600_000 } : { ok: false, reason: 'due_in_hours_out_of_range' };
+  },
   readNotes: (limit?: number) => Array.from({ length: Math.min(10, limit ?? 5) }, (_, i) => ({ note: `便签 ${i + 1}` })),
   getWeather: (city: string) => ({ ok: true, city, temperatureC: 8.8, description: '晴' }),
   searchMap: (place: string) => ({ ok: true, query: place, places: [{ name: place, lat: 1, lon: 2 }] }),
@@ -228,5 +233,43 @@ describe('翻便签：read_my_notes', () => {
   it('limit 被夹到 1~10', async () => {
     const big = await executeTool('read_my_notes', { limit: 999 }, ctx);
     expect((big.result as unknown[]).length).toBe(10);
+  });
+});
+describe('remember_this 联动：带时间就顺手排一条到点提醒（v1.79）', () => {
+  it('带 dueAtLocal ⇒ 便签 + followup 都成功', async () => {
+    const r = await executeTool('remember_this', { note: '下周三他要体检，记得问结果', dueAtLocal: '2026-10-28T10:00' }, ctx);
+    expect(r.ok).toBe(true);
+    const payload = r.result as { followup?: { ok: boolean; dueAt?: number } };
+    expect(payload.followup?.ok).toBe(true);
+    expect(typeof payload.followup?.dueAt).toBe('number');
+  });
+
+  it('不带时间 ⇒ 只记便签，不排提醒', async () => {
+    const r = await executeTool('remember_this', { note: '他不太喜欢吵闹的地方' }, ctx);
+    expect(r.ok).toBe(true);
+    expect((r.result as { followup?: unknown }).followup).toBeUndefined();
+  });
+
+  it('时间不合法 ⇒ 便签仍保存，但明确告知提醒没排上', async () => {
+    const r = await executeTool('remember_this', { note: '下周三体检记得问', dueAtLocal: '明天下午' }, ctx);
+    expect(r.ok).toBe(true);
+    const payload = r.result as { followup?: { ok: boolean; reason?: string } };
+    expect(payload.followup?.ok).toBe(false);
+    expect(String(payload.followup?.reason)).toBeTruthy();
+  });
+});
+describe('remember_this 文本时间自动联动（v1.79）', () => {
+  it('便签里有"下周三" ⇒ 自动排一条提醒（source=parsed_from_note）', async () => {
+    const r = await executeTool('remember_this', { note: '下周三他要体检，记得问结果' }, ctx);
+    expect(r.ok).toBe(true);
+    const payload = r.result as { followup?: { ok: boolean; source?: string } };
+    expect(payload.followup?.ok).toBe(true);
+    expect(payload.followup?.source).toBe('parsed_from_note');
+  });
+
+  it('便签里只有"今天"（非未来）⇒ 不排提醒，避免误触发', async () => {
+    const r = await executeTool('remember_this', { note: '他今天心情不太好，别惹他' }, ctx);
+    expect(r.ok).toBe(true);
+    expect((r.result as { followup?: unknown }).followup).toBeUndefined();
   });
 });

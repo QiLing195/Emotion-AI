@@ -14,10 +14,15 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { parseCnTime, toLocalIso } from './cnTimeParse.js';
 
 export const HER_FOLLOWUPS_PATH = 'memories/her_followups.json';
 export const MAX_PENDING = 20;
 export const MAX_AGE_MS = 7 * 24 * 3_600_000;
+/** 可排的最远时间：14 天（"下周三"这类 6~7 天后的提醒要能排上） */
+export const MAX_HORIZON_HOURS = 14 * 24;
+/** 最近可排：0.5 小时（避免"马上提醒"变成骚扰） */
+export const MIN_HORIZON_HOURS = 0.5;
 
 export function herFollowupEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.ENABLE_HER_FOLLOWUP === 'true';
@@ -81,7 +86,7 @@ export function validateFollowup(what: string, dueInHours: number): { ok: boolea
     return { ok: false, what: text, dueInHours, reason: 'meta_description' };
   }
   const hours = Number(dueInHours);
-  if (!Number.isFinite(hours) || hours < 0.5 || hours > 72) {
+  if (!Number.isFinite(hours) || hours < MIN_HORIZON_HOURS || hours > MAX_HORIZON_HOURS) {
     return { ok: false, what: text, dueInHours, reason: 'due_in_hours_out_of_range(0.5~72)' };
   }
   return { ok: true, what: text, dueInHours: hours };
@@ -100,13 +105,26 @@ export function addFollowup(input: {
     dueAtFromLocal = parseDueAtLocal(input.dueAtLocal);
     if (dueAtFromLocal === null) return { ok: false, reason: 'due_at_local_unparsable（要 YYYY-MM-DDTHH:mm）' };
     const hours = (dueAtFromLocal - now) / 3_600_000;
-    if (hours < 0.1 || hours > 72) return { ok: false, reason: `due_at_local_out_of_range（${hours.toFixed(1)}h，需 0.1~72h）` };
+    if (hours < 0.1 || hours > MAX_HORIZON_HOURS) return { ok: false, reason: "due_at_local_out_of_range（" + hours.toFixed(1) + "h，需 0.1~" + MAX_HORIZON_HOURS + "h）" };
   }
 
-  // 没有具体时间时才走 dueInHours
-  const v = dueAtFromLocal === null
+  // 先按模型给的时间校验
+  let v = dueAtFromLocal === null
     ? validateFollowup(input.what, input.dueInHours)
     : { ok: true as const, what: String(input.what ?? '').trim(), dueInHours: 0 };
+
+  // v1.79 文本兜底：**只有当模型给的时间不合法**时，才从话里解析中文时间（避免覆盖合法输入）
+  if (!v.ok && dueAtFromLocal === null) {
+    const parsed = parseCnTime(String(input.what ?? ''), now);
+    if (parsed) {
+      const hours = (parsed.dueAt - now) / 3_600_000;
+      if (hours >= 0.1 && hours <= MAX_HORIZON_HOURS) {
+        dueAtFromLocal = parsed.dueAt;
+        input = { ...input, dueAtLocal: toLocalIso(parsed.dueAt) };
+        v = { ok: true as const, what: String(input.what ?? '').trim(), dueInHours: 0 };
+      }
+    }
+  }
   if (!v.ok) return { ok: false, reason: (v as { reason?: string }).reason };
   if (dueAtFromLocal !== null && (v.what.length < 4 || v.what.length > 120)) {
     return { ok: false, reason: 'length_out_of_range(4~120)' };

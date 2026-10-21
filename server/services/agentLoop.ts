@@ -15,6 +15,9 @@
  *   · 默认关：`ENABLE_AGENT_TOOLS=true` 才进入；关着时行为与旧版逐字节相同（单测钉住"只调一次模型"）。
  */
 
+import { MAX_HORIZON_HOURS } from './herFollowups.js';
+import { parseCnTime, toLocalIso } from './cnTimeParse.js';
+
 export const MAX_AGENT_ROUNDS = 2;      // 最多 2 轮**工具**调用
 export const MAX_MODEL_CALLS = 3;      // 2 轮工具 + 1 次收尾生成（总模型调用上限）
 export const MAX_TOOL_CALLS = 4;
@@ -89,6 +92,7 @@ export function toolDeclarations(): unknown[] {
             type: 'object',
             properties: {
               note: { type: 'string', description: '要记住的事，4~80 字，用你自己的话' },
+              dueAtLocal: { type: 'string', description: '这件事如果有**明确时间**（如"下周三""明天下午三点"），把时间填这里（YYYY-MM-DDTHH:mm）。我会**同时帮你排一条到点提醒**；不填也行（只记便签）' },
             },
             required: ['note'],
           },
@@ -112,7 +116,7 @@ export function toolDeclarations(): unknown[] {
             properties: {
               what: { type: 'string', description: '到点想说的那句话（4~120 字）' },
               dueAtLocal: { type: 'string', description: '他说了具体时间就填这里，格式 YYYY-MM-DDTHH:mm（本地时间，如 2026-10-23T15:00）。**优先用它，别自己算小时**' },
-              dueInHours: { type: 'number', description: '没说具体时间时才用：几小时后发出，0.5~72' },
+              dueInHours: { type: 'number', description: '没说具体时间时才用：几小时后发出，0.5~336（14 天内）' },
             },
             required: ['what', 'dueInHours'],
           },
@@ -186,9 +190,34 @@ export async function executeTool(
     }
     if (name === 'remember_this') {
       const note = String(args?.note ?? '').trim();
+      const dueAtLocal = args?.dueAtLocal == null ? null : String(args.dueAtLocal);
       if (!ctx.writeNote) return { ok: false, result: { error: 'notes_disabled（便签没开）' }, ms: Date.now() - t0 };
       const r = ctx.writeNote(note);
-      return { ok: r.ok, result: r, ms: Date.now() - t0 };
+      // v1.79 联动：记便签时若带明确时间，顺手排一条"到点提醒"（模型不用自己算小时）
+      //   ① 模型给了 dueAtLocal ⇒ 用它
+      //   ② 没给，但便签文本里**有未来时间词**（下周三/明天/10月28日…）⇒ 本地解析后用它
+      //      只认未来时间词，避免"他今天心情不好"这种被误排成提醒
+      let followup: { ok: boolean; reason?: string; dueAt?: number; source?: string } | null = null;
+      if (r.ok && ctx.addFollowup) {
+        let targetLocal: string | null = dueAtLocal;
+        let source = 'dueAtLocal';
+        if (!targetLocal && /(下下?\s*(?:周|星期|礼拜)|明天|后天|大后天|\d{1,2}\s*月\s*\d{1,2}\s*[日号])/.test(note)) {
+          const parsed = parseCnTime(note);
+          if (parsed && parsed.dueAt > Date.now() && parsed.dueAt - Date.now() <= MAX_HORIZON_HOURS * 3_600_000) {
+            targetLocal = toLocalIso(parsed.dueAt);
+            source = 'parsed_from_note';
+          }
+        }
+        if (targetLocal) {
+          const res = ctx.addFollowup(note, 0, targetLocal);
+          followup = { ...res, source };
+        }
+      }
+      return {
+        ok: r.ok,
+        result: { ...r, ...(followup ? { followup } : {}) },
+        ms: Date.now() - t0,
+      };
     }
     if (name === 'read_my_notes') {
       const raw = Number(args?.limit ?? 5);
