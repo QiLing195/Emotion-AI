@@ -23,7 +23,7 @@ export function agentToolsEnabled(env: NodeJS.ProcessEnv = process.env): boolean
   return env.ENABLE_AGENT_TOOLS === 'true';
 }
 
-export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'set_followup';
+export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'set_followup' | 'get_weather' | 'search_map';
 
 export interface ToolTraceEntry {
   round: number;
@@ -47,6 +47,10 @@ export interface ToolContext {
   writeNote?: (note: string) => { ok: boolean; reason?: string; count?: number };
   /** 记一条"到点再问"（未接则如实报错） */
   addFollowup?: (what: string, dueInHours: number, dueAtLocal?: string | null) => { ok: boolean; reason?: string; dueAt?: number };
+  /** 联网：天气（未接/失败都返回 { ok:false }） */
+  getWeather?: (city: string) => Promise<unknown> | unknown;
+  /** 联网：地名检索 */
+  searchMap?: (place: string) => Promise<unknown> | unknown;
 }
 
 /** 给 provider 的函数声明（Gemini 的 functionDeclarations 形状） */
@@ -101,6 +105,28 @@ export function toolDeclarations(): unknown[] {
           },
         },
         {
+          name: 'get_weather',
+          description: '查某个城市现在的天气（温度/体感/湿度/风/天气）。他提到出门、天气、冷不冷热不热时可以用。查不到就如实说查不到。',
+          parameters: {
+            type: 'object',
+            properties: {
+              city: { type: 'string', description: '城市名，比如"北京""杭州"（不要带"市"也可以）' },
+            },
+            required: ['city'],
+          },
+        },
+        {
+          name: 'search_map',
+          description: '查一个地名在哪里（省份/国家/经纬度）。注意：这是**地名库**检索，不是完整地图 POI——具体店铺/门牌查不到时如实说。',
+          parameters: {
+            type: 'object',
+            properties: {
+              place: { type: 'string', description: '要查的地名，比如"西湖""鼓浪屿"' },
+            },
+            required: ['place'],
+          },
+        },
+        {
           name: 'recall_recent_events',
           description: '查看最近发生的事（我们之间最近几轮的状态变化与触发），用于避免记错或答非所问。',
           parameters: {
@@ -132,6 +158,18 @@ export async function executeTool(
     if (name === 'check_my_state') {
       const result = ctx.getState();
       return { ok: true, result, ms: Date.now() - t0 };
+    }
+    if (name === 'get_weather') {
+      const city = String(args?.city ?? '').trim();
+      if (!ctx.getWeather) return { ok: false, result: { error: 'external_tools_disabled（联网工具没开）' }, ms: Date.now() - t0 };
+      const r = await ctx.getWeather(city);
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
+    }
+    if (name === 'search_map') {
+      const place = String(args?.place ?? '').trim();
+      if (!ctx.searchMap) return { ok: false, result: { error: 'external_tools_disabled（联网工具没开）' }, ms: Date.now() - t0 };
+      const r = await ctx.searchMap(place);
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
     }
     if (name === 'remember_this') {
       const note = String(args?.note ?? '').trim();

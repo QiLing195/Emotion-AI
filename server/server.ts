@@ -108,6 +108,7 @@ import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
 import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups } from './services/herFollowups.js';
+import { getWeather, searchPlace, externalToolsEnabled } from './services/externalLookup.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
 } from './services/herRoom.js';
@@ -1223,6 +1224,12 @@ export class AIGirlfriendServer {
                 if (!herFollowupEnabled()) return { ok: false, reason: 'followup_disabled（ENABLE_HER_FOLLOWUP=false）' };
                 return addFollowup({ what, dueInHours, dueAtLocal: dueAtLocal ?? null });
               },
+              getWeather: (city: string) => (externalToolsEnabled()
+                ? getWeather(city)
+                : { ok: false, error: 'external_tools_disabled（ENABLE_AGENT_EXTERNAL_TOOLS=false）' }),
+              searchMap: (place: string) => (externalToolsEnabled()
+                ? searchPlace(place)
+                : { ok: false, error: 'external_tools_disabled（ENABLE_AGENT_EXTERNAL_TOOLS=false）' }),
               getTime: () => {
                 const d = new Date();
                 const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];

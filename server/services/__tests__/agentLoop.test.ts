@@ -15,6 +15,8 @@ const ctx = {
   getTime: () => ({ iso: '2026-10-21T14:00:00.000Z', local: '2026/10/21 22:00:00', weekday: '周三' }),
   writeNote: (note: string) => (note.length >= 4 ? { ok: true, count: 1 } : { ok: false, reason: 'too_short' }),
   addFollowup: (what: string, hours: number) => (hours > 0 && hours <= 72 ? { ok: true, dueAt: Date.now() + hours * 3600_000 } : { ok: false, reason: 'due_in_hours_out_of_range' }),
+  getWeather: (city: string) => ({ ok: true, city, temperatureC: 8.8, description: '晴' }),
+  searchMap: (place: string) => ({ ok: true, query: place, places: [{ name: place, lat: 1, lon: 2 }] }),
 };
 
 describe('开关与工具声明', () => {
@@ -26,7 +28,7 @@ describe('开关与工具声明', () => {
   it('声明里恰好有两个只读工具，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'set_followup', 'recall_recent_events']);
+    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'set_followup', 'get_weather', 'search_map', 'recall_recent_events']);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });
@@ -182,5 +184,30 @@ describe('写类工具：remember_this / set_followup（必须经审计层）', 
   it('set_followup 时间越界 ⇒ ok=false', async () => {
     const r = await executeTool('set_followup', { what: '回头问', dueInHours: 999 }, ctx);
     expect(r.ok).toBe(false);
+  });
+});
+describe('联网工具：get_weather / search_map', () => {
+  it('get_weather 正常返回结构化天气', async () => {
+    const r = await executeTool('get_weather', { city: '北京' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('8.8');
+  });
+
+  it('search_map 正常返回地名与坐标', async () => {
+    const r = await executeTool('search_map', { place: '杭州' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('杭州');
+  });
+
+  it('没接联网层 ⇒ 明确报 disabled，不假装有结果', async () => {
+    const r = await executeTool('get_weather', { city: '北京' }, { ...ctx, getWeather: undefined });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('external_tools_disabled');
+  });
+
+  it('上游失败（ok=false）⇒ 工具 ok 也为 false（她能如实说查不到）', async () => {
+    const r = await executeTool('get_weather', { city: '不存在' }, { ...ctx, getWeather: () => ({ ok: false, error: '没找到' }) });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('没找到');
   });
 });
