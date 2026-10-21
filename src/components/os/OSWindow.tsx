@@ -21,6 +21,8 @@ interface OSWindowProps {
   onClose: () => void;
   onMinimize: () => void;
   onToggleMax: () => void;
+  /** 拖动/缩放结束后的最终几何（供窗口管理器做吸附与持久化） */
+  onCommit?: (g: { x: number; y: number; w: number; h: number }) => void;
   children: ReactNode;
 }
 
@@ -33,11 +35,13 @@ const DOCK_H = 74;      // 底部 Dock 预留
  */
 export default function OSWindow({
   title, icon, accent = 'from-rose-400/70 to-orange-300/60',
-  state, focused, onFocus, onClose, onMinimize, onToggleMax, children,
+  state, focused, onFocus, onClose, onMinimize, onToggleMax, onCommit, children,
 }: OSWindowProps) {
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
   const resizeRef = useRef<{ sx: number; sy: number; w: number; h: number } | null>(null);
   const [live, setLive] = useState<WinState>(state);
+  const liveRef = useRef(live);
+  useEffect(() => { liveRef.current = live; }, [live]);
 
   // 跟随外部状态（最大化/恢复/移动由管理器决定）
   useEffect(() => { setLive(state); }, [state]);
@@ -65,10 +69,15 @@ export default function OSWindow({
   }, []);
 
   const onPointerUp = useCallback(() => {
+    const wasDragging = Boolean(dragRef.current || resizeRef.current);
     dragRef.current = null;
     resizeRef.current = null;
-    setLive(s => { onFocus(); return s; });
-  }, [onFocus]);
+    onFocus();
+    if (wasDragging && onCommit) {
+      const g = liveRef.current;
+      onCommit({ x: g.x, y: g.y, w: g.w, h: g.h });
+    }
+  }, [onFocus, onCommit]);
 
   const onResizePointerDown = useCallback((e: ReactPointerEvent) => {
     e.stopPropagation();

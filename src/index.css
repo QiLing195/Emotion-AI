@@ -190,3 +190,31 @@ body { margin: 0; background: #0b0d17; overflow: hidden; }
 .os-window ::-webkit-scrollbar { width: 8px; height: 8px; }
 .os-window ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 8px; }
 .os-window ::-webkit-scrollbar-track { background: transparent; }
+
+/* ════════════════════════════════════════════════════════════
+   v1.61 OS 深色皮肤：在应用窗口子树内重映射暖色令牌（不改组件源码）
+   ════════════════════════════════════════════════════════════ */
+.os-app-dark {
+  color-scheme: dark;
+  --color-surface-50: #0f1222;
+  --color-surface-100: #131730;
+  --color-surface-200: #171c38;
+  --color-surface-300: #1c2243;
+  --color-surface-400: #242c52;
+  --color-slate-50: #0f1424;
+  --color-slate-100: #151b30;
+  --color-slate-200: #1d2440;
+  --color-slate-300: #2b3355;
+  --color-slate-400: #8a94b8;
+  --color-slate-500: #a3adcc;
+  --color-slate-600: #c3cbe4;
+  --color-slate-700: #dbe1f2;
+  --color-slate-800: #eef1fb;
+  --color-slate-900: #f7f9ff;
+  --color-moon-400: #9aa6cc;
+  --color-rose-50: #2a1420;
+  --color-rose-100: #3a1a2b;
+}
+.os-app-dark ::-webkit-scrollbar { width: 8px; height: 8px; }
+.os-app-dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 8px; }
+.os-app-dark ::-webkit-scrollbar-track { background: transparent; }

@@ -128,6 +128,7 @@ export default function TimelineApp() {
             return (
               <button
                 key={`${n.kind}-${n.ts}-${n.round}`}
+                data-testid={`tl-node-${n.kind}-${n.round}`}
                 onClick={() => { setSelected(n.round); setReplay(null); }}
                 className={`mb-1.5 block w-full rounded-lg border px-2.5 py-2 text-left transition ${isSel ? 'border-rose-300/50 bg-rose-400/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.07]'}`}
               >
@@ -150,6 +151,7 @@ export default function TimelineApp() {
           <span className="text-[12px] font-semibold">详情与分叉回放</span>
           {selectedNode?.kind === 'branch' && (
             <button
+              data-testid="tl-replay"
               onClick={() => selected !== null && void runReplay(selected)}
               disabled={replayBusy}
               className="ml-auto rounded-md bg-rose-500/80 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-rose-500 disabled:opacity-50"
@@ -183,7 +185,7 @@ export default function TimelineApp() {
                     ))}
                   </div>
                   {shown.map(c => (
-                    <div key={c.choice} className="mb-2 rounded-md border border-white/10 bg-white/[0.03] p-2">
+                    <div key={c.choice} data-testid={`tl-cand-${c.choice}`} className="mb-2 rounded-md border border-white/10 bg-white/[0.03] p-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-slate-100">{CHOICE_LABEL[c.choice] ?? c.choice}</span>
                         <span className="text-[10px] text-slate-400">权重 {c.learnedWeight.toFixed(2)} · 样本 {c.graduatedSamples}</span>

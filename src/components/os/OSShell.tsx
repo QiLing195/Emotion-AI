@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import OSWindow, { type WinState } from './OSWindow';
 
 export interface OSAppDef {
@@ -14,6 +14,8 @@ export interface OSAppDef {
 
 const TASKBAR_H = 30;
 const DOCK_H = 74;
+const GEO_KEY = 'os.windows.v1';
+const SNAP_EDGE = 24;
 
 function useClock(): string {
   const [now, setNow] = useState(() => new Date());
@@ -30,17 +32,21 @@ function useClock(): string {
  */
 export default function OSShell({ apps }: { apps: OSAppDef[] }) {
   const [wins, setWins] = useState<Record<string, WinState>>(() => {
+    // 几何持久化：刷新后窗口还在原来的位置（open/minimized 状态不持久化，避免"打开却找不到"）
+    let saved: Record<string, { x?: number; y?: number; w?: number; h?: number; maximized?: boolean }> = {};
+    try { saved = JSON.parse(localStorage.getItem(GEO_KEY) ?? '{}') as typeof saved; } catch { saved = {}; }
     const init: Record<string, WinState> = {};
     let z = 10;
     for (const a of apps) {
+      const s = saved[a.id] ?? {};
       init[a.id] = {
         open: Boolean(a.defaultOpen),
         minimized: false,
-        maximized: false,
-        x: a.window.x,
-        y: a.window.y,
-        w: a.window.w,
-        h: a.window.h,
+        maximized: Boolean(s.maximized),
+        x: Number.isFinite(s.x) ? Number(s.x) : a.window.x,
+        y: Number.isFinite(s.y) ? Number(s.y) : a.window.y,
+        w: Number.isFinite(s.w) ? Number(s.w) : a.window.w,
+        h: Number.isFinite(s.h) ? Number(s.h) : a.window.h,
         z: z++,
       };
     }
@@ -97,6 +103,37 @@ export default function OSShell({ apps }: { apps: OSAppDef[] }) {
     return () => window.removeEventListener('os:open', handler as EventListener);
   }, [wins, open]);
 
+  // 几何持久化（位置/大小/最大化；不存 z 序）
+  useEffect(() => {
+    try {
+      const slim: Record<string, { x: number; y: number; w: number; h: number; maximized: boolean }> = {};
+      for (const id of Object.keys(wins)) {
+        const w = wins[id] as WinState;
+        slim[id] = { x: w.x, y: w.y, w: w.w, h: w.h, maximized: w.maximized };
+      }
+      localStorage.setItem(GEO_KEY, JSON.stringify(slim));
+    } catch { /* 隐私模式等场景忽略 */ }
+  }, [wins]);
+
+  // 拖到边缘吸附：顶部→最大化；左右→半屏
+  const commitGeometry = useCallback((id: string, g: { x: number; y: number; w: number; h: number }) => {
+    setWins(prev => {
+      const cur = prev[id];
+      if (!cur) return prev;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const fullH = vh - TASKBAR_H - DOCK_H;
+      let next: WinState = { ...cur, x: g.x, y: g.y, w: g.w, h: g.h, maximized: false };
+      if (g.y <= TASKBAR_H + 8) {
+        next = { ...next, maximized: true };
+      } else if (g.x <= SNAP_EDGE) {
+        next = { ...next, x: 0, y: TASKBAR_H, w: Math.round(vw / 2), h: fullH };
+      } else if (g.x + g.w >= vw - SNAP_EDGE) {
+        next = { ...next, x: Math.round(vw / 2), y: TASKBAR_H, w: Math.round(vw / 2), h: fullH };
+      }
+      return { ...prev, [id]: next };
+    });
+  }, []);
   const topZ = useMemo(() => Object.keys(wins).reduce((m, k) => Math.max(m, wins[k].z), 0), [wins]);
 
   return (
@@ -130,7 +167,7 @@ export default function OSShell({ apps }: { apps: OSAppDef[] }) {
       {/* 窗口层 */}
       <main className="contents">
         {apps.map(app => (
-          <Fragment key={app.id}>
+          <div key={app.id} style={{ display: 'contents' }}>
           <OSWindow
             title={app.title}
             icon={app.icon}
@@ -141,10 +178,11 @@ export default function OSShell({ apps }: { apps: OSAppDef[] }) {
             onClose={() => close(app.id)}
             onMinimize={() => minimize(app.id)}
             onToggleMax={() => toggleMax(app.id)}
+            onCommit={geom => commitGeometry(app.id, geom)}
           >
             {app.content}
           </OSWindow>
-          </Fragment>
+          </div>
         ))}
 
         {/* 桌面提示 */}
@@ -161,7 +199,8 @@ export default function OSShell({ apps }: { apps: OSAppDef[] }) {
             const running = w.open && !w.minimized;
             return (
               <button
-                    onClick={() => toggleFromDock(app.id)}
+                key={app.id}
+                onClick={() => toggleFromDock(app.id)}
                 className="group relative flex flex-col items-center gap-1"
                 title={app.title}
                 aria-label={app.title}

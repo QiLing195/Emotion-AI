@@ -189,7 +189,7 @@ export default function App() {
       defaultOpen: true,
       window: { x: 64, y: 56, w: 1010, h: 660 },
       content: (
-        <div className="flex h-full min-h-0 bg-[#0f1120]">
+        <div className="os-app-dark flex h-full min-h-0 bg-[#0f1120]">
           <div className="w-[268px] shrink-0 overflow-y-auto border-r border-white/10">
             <ModelPanel
               showSettings={false}
@@ -234,7 +234,7 @@ export default function App() {
       window: { x: 260, y: 90, w: 760, h: 600 },
       content: (
         <Suspense fallback={<PanelFallback label="设置" />}>
-          <div className="h-full overflow-y-auto bg-[#f6f3f0] text-slate-800">
+          <div className="os-app-dark h-full overflow-y-auto">
             <SettingsView />
           </div>
         </Suspense>
@@ -248,7 +248,7 @@ export default function App() {
       window: { x: 380, y: 120, w: 720, h: 580 },
       content: (
         <Suspense fallback={<PanelFallback label="人格" />}>
-          <div className="h-full overflow-y-auto bg-[#f6f3f0] text-slate-800">
+          <div className="os-app-dark h-full overflow-y-auto">
             <PersonalityView />
           </div>
         </Suspense>
