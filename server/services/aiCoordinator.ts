@@ -38,6 +38,7 @@ import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../.
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
 import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
 import { forcedBranch } from './replaySandbox.js';
+import { buildEmotionExpression, emotionExpressionEnabled } from '../../src/lib/emotionExpression.js';
 import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from './branchLearning.js';
 
 /**
@@ -46,6 +47,10 @@ import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from
  */
 let selfStateSinkCause: LowPeriodCause | null = null;
 let selfStateSinkSince: number | null = null;
+/** v1.64 统一情绪表达：上次表达的轮次（预算门） */
+let lastEmotionExpressedRound: number | null = null;
+/** 当前轮次（表达预算用；processTurn 入口更新一次） */
+let emotionExprTurn = 0;
 /** 上一轮他的原话 + 情绪（沉因要引"真正把深度推过 0.12 的那句"） */
 let selfStatePrevStimulus: { userText: string; hisEmotion: string } | null = null;
 let selfStateCurStimulus: { userText: string; hisEmotion: string } | null = null;
@@ -435,6 +440,25 @@ export class AICoordinator {
       }
       console.log(`[Replay] 沙盒强制分支=${forced}（片段已按分支替换）`);
     }
+    // v1.64 统一情绪表达：任意情绪都可以"说一句自己"（可选 + 预算 + 接地；只读状态，不写回）
+    if (emotionExpressionEnabled() && extras.updatedEmotionState) {
+      try {
+        const act = activationOf(extras.updatedEmotionState);
+        const expr = buildEmotionExpression({
+          activated: (act.delta ?? {}) as Record<string, number>,
+          hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
+          lowEstablished: Boolean(lowReading?.established),
+          causeQuote: selfStateCause?.topic ?? null,
+          round: emotionExprTurn,
+          lastExpressedRound: lastEmotionExpressedRound,
+        });
+        if (expr.snippet) {
+          strategySnippet += `\n\n${expr.snippet}`;
+          lastEmotionExpressedRound = expr.nextLastExpressedRound ?? lastEmotionExpressedRound;
+          console.log(`[EmotionExpr] 表达许可: ${expr.reason}`);
+        }
+      } catch { /* 表达层永不打断主流程 */ }
+    }
     if (hasOverrides(arbitrationOutput)) {
     console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
     }
@@ -519,6 +543,7 @@ export class AICoordinator {
     const t0 = Date.now();
     this.turnCounter++;
     const roundNumber = input.roundNumber ?? this.turnCounter;
+    emotionExprTurn = roundNumber;
 
     // ── Phase 2: 反馈学习 — 用上轮效价变化量推断策略效果 ──
     // 上轮用户消息导致的 AI 效价变化反映了用户情绪走向：
