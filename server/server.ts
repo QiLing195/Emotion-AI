@@ -1219,9 +1219,9 @@ export class AIGirlfriendServer {
                 if (!herNotesEnabled()) return { ok: false, reason: 'notes_disabled（ENABLE_HER_NOTES=false）' };
                 return addNote(note);
               },
-              addFollowup: (what: string, dueInHours: number) => {
+              addFollowup: (what: string, dueInHours: number, dueAtLocal?: string | null) => {
                 if (!herFollowupEnabled()) return { ok: false, reason: 'followup_disabled（ENABLE_HER_FOLLOWUP=false）' };
-                return addFollowup({ what, dueInHours });
+                return addFollowup({ what, dueInHours, dueAtLocal: dueAtLocal ?? null });
               },
               getTime: () => {
                 const d = new Date();

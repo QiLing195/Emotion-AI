@@ -18,6 +18,7 @@ import {
   loadFollowups,
   markFollowupSent,
   pickDueFollowup,
+  parseDueAtLocal,
   validateFollowup,
 } from '../herFollowups.js';
 
@@ -118,5 +119,28 @@ describe('到点追问的接管判定（纯函数，供 proactive 用）', () =>
   it('闸门放行但没有到点项 ⇒ 不接管（交回动机生成）', () => {
     const path = tmp();
     expect(pickDueFollowup(true, Date.now(), path).take).toBe(false);
+  });
+});
+describe('具体时间（dueAtLocal）—— 修"明天下午三点被算成 +3h"', () => {
+  it('能解析本地时间字符串；坏格式 ⇒ null', () => {
+    const ms = parseDueAtLocal('2026-10-23T15:00');
+    expect(ms).toBe(new Date(2026, 9, 23, 15, 0, 0, 0).getTime());
+    expect(parseDueAtLocal('明天下午三点')).toBeNull();
+    expect(parseDueAtLocal('')).toBeNull();
+  });
+
+  it('给了具体时间 ⇒ 用时间字符串，不用 dueInHours', () => {
+    const path = tmp();
+    const now = new Date(2026, 9, 21, 22, 0, 0, 0).getTime();
+    const r = addFollowup({ what: '下午三点了——面试结果有消息了吗？', dueInHours: 3, dueAtLocal: '2026-10-22T15:00', now, path });
+    expect(r.ok).toBe(true);
+    expect(r.dueAt).toBe(new Date(2026, 9, 22, 15, 0, 0, 0).getTime());
+  });
+
+  it('具体时间已过去/太远 ⇒ 拒绝并说明范围', () => {
+    const path = tmp();
+    const now = new Date(2026, 9, 21, 22, 0, 0, 0).getTime();
+    expect(addFollowup({ what: '回头问一句面试结果', dueInHours: 3, dueAtLocal: '2026-10-21T10:00', now, path }).ok).toBe(false);
+    expect(addFollowup({ what: '回头问一句面试结果', dueInHours: 3, dueAtLocal: '2026-11-30T10:00', now, path }).ok).toBe(false);
   });
 });

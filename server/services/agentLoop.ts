@@ -15,7 +15,8 @@
  *   · 默认关：`ENABLE_AGENT_TOOLS=true` 才进入；关着时行为与旧版逐字节相同（单测钉住"只调一次模型"）。
  */
 
-export const MAX_AGENT_ROUNDS = 2;
+export const MAX_AGENT_ROUNDS = 2;      // 最多 2 轮**工具**调用
+export const MAX_MODEL_CALLS = 3;      // 2 轮工具 + 1 次收尾生成（总模型调用上限）
 export const MAX_TOOL_CALLS = 4;
 
 export function agentToolsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -45,7 +46,7 @@ export interface ToolContext {
   /** 记一条她自己的便签（唯一主动写自己状态的通路；未接则工具如实报错） */
   writeNote?: (note: string) => { ok: boolean; reason?: string; count?: number };
   /** 记一条"到点再问"（未接则如实报错） */
-  addFollowup?: (what: string, dueInHours: number) => { ok: boolean; reason?: string; dueAt?: number };
+  addFollowup?: (what: string, dueInHours: number, dueAtLocal?: string | null) => { ok: boolean; reason?: string; dueAt?: number };
 }
 
 /** 给 provider 的函数声明（Gemini 的 functionDeclarations 形状） */
@@ -93,7 +94,8 @@ export function toolDeclarations(): unknown[] {
             type: 'object',
             properties: {
               what: { type: 'string', description: '到点想说的那句话（4~120 字）' },
-              dueInHours: { type: 'number', description: '几小时后发出，0.5~72；他说了具体时间就先调 time_now 算小时差' },
+              dueAtLocal: { type: 'string', description: '他说了具体时间就填这里，格式 YYYY-MM-DDTHH:mm（本地时间，如 2026-10-23T15:00）。**优先用它，别自己算小时**' },
+              dueInHours: { type: 'number', description: '没说具体时间时才用：几小时后发出，0.5~72' },
             },
             required: ['what', 'dueInHours'],
           },
@@ -140,8 +142,9 @@ export async function executeTool(
     if (name === 'set_followup') {
       const what = String(args?.what ?? '').trim();
       const hours = Number(args?.dueInHours ?? 0);
+      const dueAtLocal = args?.dueAtLocal == null ? null : String(args.dueAtLocal);
       if (!ctx.addFollowup) return { ok: false, result: { error: 'followup_disabled（追问没开）' }, ms: Date.now() - t0 };
-      const r = ctx.addFollowup(what, hours);
+      const r = ctx.addFollowup(what, hours, dueAtLocal);
       return { ok: r.ok, result: r, ms: Date.now() - t0 };
     }
     if (name === 'recall_memory') {
@@ -210,16 +213,18 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
   let totalCalls = 0;
   let lastText = '';
   let rounds = 0;
+  let modelCalls = 0;
 
+  // 最多 maxRounds 轮**工具**调用；每轮之后如果模型不再要工具就直接收尾，
+  // 工具轮用尽后再给一次**不带工具**的收尾生成（让"工具失败后还能改口/补救"）。
   for (let round = 1; round <= maxRounds; round++) {
     rounds = round;
-    // 最后一轮不再给工具（有界收尾，避免"还想查"）
-    const tools = round < maxRounds ? toolDeclarations() : null;
-    const out = await input.callModel(messages, tools);
+    modelCalls++;
+    const out = await input.callModel(messages, toolDeclarations());
     if (typeof out?.text === 'string' && out.text.trim()) lastText = out.text;
 
     const calls = Array.isArray(out?.functionCalls) ? out.functionCalls : [];
-    if (!calls.length || round >= maxRounds) {
+    if (!calls.length) {
       return { text: lastText || (out?.text ?? ''), rounds, toolTrace, usedTools: toolTrace.length > 0 };
     }
 
@@ -238,6 +243,12 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
       });
       console.log(`[AgentTool] r${round} ${name} ok=${exec.ok} ${exec.ms}ms ${clip(JSON.stringify(exec.result), 120)}`);
     }
+  }
+
+  // 收尾：不再给工具（有界），允许她基于工具结果说人话
+  if (modelCalls < MAX_MODEL_CALLS) {
+    const out = await input.callModel(messages, null);
+    if (typeof out?.text === 'string' && out.text.trim()) lastText = out.text;
   }
   return { text: lastText, rounds, toolTrace, usedTools: toolTrace.length > 0 };
 }

@@ -61,6 +61,18 @@ export function saveFollowups(store: FollowupStore, path = HER_FOLLOWUPS_PATH): 
   }
 }
 
+/** 解析本地时间字符串（YYYY-MM-DDTHH:mm 或 YYYY-MM-DD HH:mm）→ 毫秒；失败返回 null */
+export function parseDueAtLocal(input: string | null | undefined): number | null {
+  const s = String(input ?? '').trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m;
+  const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), 0, 0);
+  const ms = dt.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
 export function validateFollowup(what: string, dueInHours: number): { ok: boolean; what: string; dueInHours: number; reason?: string } {
   const text = String(what ?? '').replace(/\s+/g, ' ').trim();
   if (!text) return { ok: false, what: '', dueInHours, reason: 'empty' };
@@ -77,16 +89,32 @@ export function validateFollowup(what: string, dueInHours: number): { ok: boolea
 
 /** 记一条"到点再问"。超过未发上限时**拒绝**（不静默丢弃，让她知道可以说"记不下了"） */
 export function addFollowup(input: {
-  what: string; dueInHours: number; now?: number; path?: string;
+  what: string; dueInHours: number; dueAtLocal?: string | null; now?: number; path?: string;
 }): { ok: boolean; reason?: string; dueAt?: number; pending?: number } {
-  const v = validateFollowup(input.what, input.dueInHours);
-  if (!v.ok) return { ok: false, reason: v.reason };
   const now = input.now ?? Date.now();
   const path = input.path ?? HER_FOLLOWUPS_PATH;
+
+  // 优先用"他说出口的具体时间"（本地时间字符串）——避免模型把"明天下午三点"算成 +3h
+  let dueAtFromLocal: number | null = null;
+  if (input.dueAtLocal) {
+    dueAtFromLocal = parseDueAtLocal(input.dueAtLocal);
+    if (dueAtFromLocal === null) return { ok: false, reason: 'due_at_local_unparsable（要 YYYY-MM-DDTHH:mm）' };
+    const hours = (dueAtFromLocal - now) / 3_600_000;
+    if (hours < 0.1 || hours > 72) return { ok: false, reason: `due_at_local_out_of_range（${hours.toFixed(1)}h，需 0.1~72h）` };
+  }
+
+  // 没有具体时间时才走 dueInHours
+  const v = dueAtFromLocal === null
+    ? validateFollowup(input.what, input.dueInHours)
+    : { ok: true as const, what: String(input.what ?? '').trim(), dueInHours: 0 };
+  if (!v.ok) return { ok: false, reason: (v as { reason?: string }).reason };
+  if (dueAtFromLocal !== null && (v.what.length < 4 || v.what.length > 120)) {
+    return { ok: false, reason: 'length_out_of_range(4~120)' };
+  }
   const store = loadFollowups(path);
   const pending = store.items.filter(i => !i.cancelled && i.sentAt === null && now - i.createdAt < MAX_AGE_MS);
   if (pending.length >= MAX_PENDING) return { ok: false, reason: `pending_full（已排 ${pending.length} 条，先等它们说完）` };
-  const dueAt = now + v.dueInHours * 3_600_000;
+  const dueAt = dueAtFromLocal ?? (now + v.dueInHours * 3_600_000);
   const item: Followup = {
     id: `fu_${now}_${Math.random().toString(36).slice(2, 8)}`,
     what: v.what, dueAt, createdAt: now, sentAt: null, cancelled: false,

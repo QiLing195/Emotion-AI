@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   MAX_AGENT_ROUNDS,
+  MAX_MODEL_CALLS,
   agentToolsEnabled,
   executeTool,
   runAgentLoop,
@@ -83,17 +84,37 @@ describe('有界循环', () => {
     expect(out.text).toBe('有点闷。');
   });
 
-  it('第二轮仍请求工具 ⇒ 不再执行（有界），用最后一轮文本收尾', async () => {
+  it('两轮都请求工具 ⇒ 两轮都执行，然后无工具收尾（总模型调用 3 次）', async () => {
     let calls = 0;
     const out = await runAgentLoop({
       systemPrompt: 's', userMessage: 'x', recentMessages: [], ctx,
-      callModel: async () => { calls++; return { text: `第${calls}次`, functionCalls: [{ name: 'check_my_state' }] }; },
+      callModel: async (_m, tools) => {
+        calls++;
+        // 前两次（工具轮）继续要工具；收尾（tools=null）给文本
+        return tools
+          ? { text: '', functionCalls: [{ name: 'check_my_state' }] }
+          : { text: '好了。' };
+      },
     });
-    expect(calls).toBe(MAX_AGENT_ROUNDS);
+    expect(calls).toBe(MAX_MODEL_CALLS);
     expect(out.rounds).toBe(MAX_AGENT_ROUNDS);
-    expect(out.text).toBe(`第${MAX_AGENT_ROUNDS}次`);
-    // 只在第一轮真执行了工具
-    expect(out.toolTrace.every(t => t.round === 1)).toBe(true);
+    expect(out.toolTrace.map(t => t.round)).toEqual([1, 2]);
+    expect(out.text).toBe('好了。');
+  });
+
+  it('第一轮工具失败后仍有一次收尾机会（不把失败当最终答复）', async () => {
+    let calls = 0;
+    const out = await runAgentLoop({
+      systemPrompt: 's', userMessage: 'x', recentMessages: [], ctx,
+      callModel: async (_m, tools) => {
+        calls++;
+        if (calls === 1) return { text: '', functionCalls: [{ name: 'set_followup', args: { what: 'x', dueInHours: 999 } }] };
+        return { text: calls === 2 ? '' : '那我换个说法：明天三点我提醒你。', functionCalls: calls === 2 ? [{ name: 'set_followup', args: { what: '明天三点提醒你面试结果', dueInHours: 16 } }] : undefined };
+      },
+    });
+    expect(out.toolTrace[0].ok).toBe(false);
+    expect(out.toolTrace[1].ok).toBe(true);
+    expect(out.text).toContain('明天三点');
   });
 
   it('工具失败也回灌（她能看到"没查到"），循环不中断', async () => {
