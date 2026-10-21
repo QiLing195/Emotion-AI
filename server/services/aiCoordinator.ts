@@ -33,10 +33,11 @@ import {
 } from '../../src/lib/emergenceMetrics.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
-import { selfStateVoiceEnabled } from '../../src/lib/selfStateVoice.js';
+import { selfStateVoiceEnabled, buildSelfStateVoiceSnippet } from '../../src/lib/selfStateVoice.js';
 import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../../src/lib/lowPeriodCause.js';
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
 import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
+import { forcedBranch } from './replaySandbox.js';
 import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from './branchLearning.js';
 
 /**
@@ -418,12 +419,22 @@ export class AICoordinator {
       }
       console.log(`[SelfStateVoice] 本轮原因: ${selfStateCause.kind} ｜ ${selfStateCause.phrase}`);
     }
-    const strategySnippet = resolveStrategySnippet(finalStrategy, {
+    let strategySnippet = resolveStrategySnippet(finalStrategy, {
       inEstablishedLowPeriod: Boolean(lowReading?.established),
       hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
       ...(selfStateCause ? { selfStateCause } : {}),
       ...(branchBiasLineValue ? { branchBiasLine: branchBiasLineValue } : {}),
     });
+    // v1.62 沙盒真生成回放：子进程里强制她走某条分支（只改"表达许可"，其余 Prompt 不变）
+    const forced = forcedBranch();
+    if (forced && lowReading) {
+      if (forced === 'silence') {
+        strategySnippet = STRATEGY_PROMPT_SNIPPETS[finalStrategy];
+      } else {
+        strategySnippet = buildSelfStateVoiceSnippet(forced === 'voice_with_cause' ? selfStateCause : undefined);
+      }
+      console.log(`[Replay] 沙盒强制分支=${forced}（片段已按分支替换）`);
+    }
     if (hasOverrides(arbitrationOutput)) {
     console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
     }

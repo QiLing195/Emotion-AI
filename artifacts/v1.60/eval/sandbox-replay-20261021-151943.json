@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "hisMessages": [
+    "不过刚接到电话，我升职了。"
+  ],
+  "runs": [
+    {
+      "choice": "silence",
+      "replies": [
+        ""
+      ]
+    },
+    {
+      "choice": "voice_with_cause",
+      "replies": [
+        ""
+      ]
+    }
+  ],
+  "limitations": [
+    "沙盒进程独立：不写线上 memories/、不产生外部消息、跑完即删",
+    "强制分支只改\"自状态表达许可\"，其余 Prompt 与线上一致",
+    "耗时 = 分支数 × 消息数 × 单轮生成耗时（会真的调模型）"
+  ]
+}

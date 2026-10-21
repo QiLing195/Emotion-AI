@@ -104,6 +104,7 @@ import {
   saveBranchLedger,
 } from './services/branchLearning.js';
 import { replayBranch, listTimelineNodes, replayEnabled } from './services/branchReplay.js';
+import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
 import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
 } from '../src/lib/memoryGrounding.js';
@@ -1822,6 +1823,16 @@ export class AIGirlfriendServer {
       res.json(result);
     });
 
+    // v1.62 沙盒真生成回放：复制 memories 到临时目录、起隔离进程、同一句话分别走不同分支
+    this.app.post('/api/replay/sandbox', async (req, res) => {
+      if (!sandboxEnabled()) { res.status(404).json({ error: 'sandbox_disabled（需 ENABLE_SANDBOX_REPLAY=true）' }); return; }
+      const body = (req.body ?? {}) as { choices?: string[]; hisMessages?: string[] };
+      const result = await runSandboxReplay({
+        ...(Array.isArray(body.choices) && body.choices.length ? { choices: body.choices as never[] } : {}),
+        hisMessages: Array.isArray(body.hisMessages) ? body.hisMessages.map(String) : [],
+      });
+      res.json(result);
+    });
     this.app.get('/state', (req, res) => {
       const es = this.aiEngine.emotionState;
       const t = es?.taiji;

@@ -62,6 +62,11 @@ export default function TimelineApp() {
   const [replay, setReplay] = useState<ReplayResult | null>(null);
   const [replayBusy, setReplayBusy] = useState(false);
   const [onlyChoice, setOnlyChoice] = useState<string | null>(null);
+  // v1.62 沙盒真生成
+  const [sbMsg, setSbMsg] = useState('不过刚接到电话，我升职了。');
+  const [sbChoices, setSbChoices] = useState<string[]>(['silence', 'voice_with_cause']);
+  const [sbBusy, setSbBusy] = useState(false);
+  const [sbResult, setSbResult] = useState<null | { ok: boolean; reason?: string; runs: Array<{ choice: string; replies: string[]; error?: string }> }>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,6 +107,23 @@ export default function TimelineApp() {
     }
   }, []);
 
+  const runSandbox = useCallback(async () => {
+    setSbBusy(true);
+    setSbResult(null);
+    try {
+      const r = await fetch('/api/replay/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choices: sbChoices, hisMessages: [sbMsg] }),
+      });
+      const data = await r.json();
+      setSbResult(data);
+    } catch (e) {
+      setSbResult({ ok: false, reason: e instanceof Error ? e.message : '沙盒失败', runs: [] });
+    } finally {
+      setSbBusy(false);
+    }
+  }, [sbChoices, sbMsg]);
   const shown = replay ? (onlyChoice ? replay.candidates.filter(c => c.choice === onlyChoice) : replay.candidates) : [];
 
   return (
@@ -202,6 +224,62 @@ export default function TimelineApp() {
               )}
             </div>
           )}
+
+          {/* v1.62 沙盒真生成回放：同一句话、不同分支 → 真实回复对比 */}
+          <div className="mt-3 rounded-lg border border-fuchsia-300/20 bg-fuchsia-400/[0.06] p-2.5">
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              <span className="rounded bg-fuchsia-400/15 px-1.5 py-[1px] text-[10px] text-fuchsia-200">沙盒真生成</span>
+              <span className="text-[10px] text-slate-400">复制记忆到临时目录、起隔离进程（会真的调模型）</span>
+            </div>
+            <textarea
+              value={sbMsg}
+              onChange={e => setSbMsg(e.target.value)}
+              data-testid="sb-msg"
+              rows={2}
+              placeholder="输入他的下一句话"
+              className="w-full resize-none rounded-md border border-white/15 bg-black/30 px-2 py-1.5 text-[11px] text-slate-200 outline-none focus:border-fuchsia-300/40"
+            />
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {(['silence', 'voice', 'voice_with_cause'] as const).map(c => {
+                const on = sbChoices.includes(c);
+                return (
+                  <button
+                    key={c}
+                    data-testid={`sb-choice-${c}`}
+                    onClick={() => setSbChoices(prev => {
+                      const next = prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c];
+                      return next.slice(0, 2);
+                    })}
+                    className={`rounded border px-1.5 py-[1px] text-[10px] ${on ? 'border-fuchsia-300/50 bg-fuchsia-400/15 text-fuchsia-100' : 'border-white/15 text-slate-300 hover:bg-white/10'}`}
+                  >
+                    {CHOICE_LABEL[c] ?? c}
+                  </button>
+                );
+              })}
+              <button
+                data-testid="sb-run"
+                onClick={() => void runSandbox()}
+                disabled={sbBusy || sbChoices.length === 0 || !sbMsg.trim()}
+                className="ml-auto rounded-md bg-fuchsia-500/80 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-fuchsia-500 disabled:opacity-50"
+              >
+                {sbBusy ? '生成中…（每分支约 5s）' : '跑沙盒对比'}
+              </button>
+            </div>
+            {sbResult && (
+              <div className="mt-2 space-y-1.5">
+                {!sbResult.ok && <div className="text-[11px] text-amber-200">沙盒不可用：{sbResult.reason ?? '未知'}（需 ENABLE_SANDBOX_REPLAY=true）</div>}
+                {sbResult.runs.map(run => (
+                  <div key={run.choice} data-testid={`sb-run-${run.choice}`} className="rounded-md border border-white/10 bg-black/25 p-2">
+                    <div className="text-[10px] text-fuchsia-200">{CHOICE_LABEL[run.choice] ?? run.choice}</div>
+                    {run.error && <div className="text-[10px] text-amber-200">错误：{run.error}</div>}
+                    {run.replies.map((rep, i) => (
+                      <div key={i} className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-slate-200">{rep || '（空）'}</div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
