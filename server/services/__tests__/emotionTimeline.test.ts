@@ -7,6 +7,7 @@ import {
   buildStateChangeNode,
   appendTimelineNode,
   readRecentNodes,
+  buildCauseChain,
   TIMELINE_MAX_BYTES,
   type EmotionTimelineNode,
 } from '../emotionTimeline.js';
@@ -135,5 +136,52 @@ describe('写入 / 滚动 / 读回', () => {
     expect(readRecentNodes(2, path).map(n => n.turnId)).toEqual(['u-3', 'u-4']);
     expect(existsSync(path)).toBe(true);
     expect(statSync(path).size).toBeGreaterThan(0);
+  });
+});
+
+describe('Stage 2：原因链（origin 取窗口内最早那条负向 = 起因事件）', () => {
+  function nodeAt(round: number, ts: number, hisEmotion: string, userText: string): EmotionTimelineNode {
+    return buildStateChangeNode({
+      ts, round, turnId: `u-${round}`, userText, hisEmotion,
+      before: freshState(), after: freshState(),
+    });
+  }
+
+  it('多条负向 ⇒ origin 是最早那条（事件），latest 是最后那条', () => {
+    const nodes = [
+      nodeAt(1, 100, 'neutral', '在吗'),
+      nodeAt(2, 200, 'sad', '我今天被领导当众骂了一顿'),
+      nodeAt(3, 300, 'sad', '心里堵得慌'),
+      nodeAt(4, 400, 'joy', '我升职了'),
+    ];
+    const c = buildCauseChain(nodes);
+    expect(c.kind).toBe('his_word');
+    expect(c.quoted).toBe('我今天被领导当众骂了一顿');   // 起因 = 最早
+    expect(c.round).toBe(2);
+    expect(c.latestQuoted).toBe('心里堵得慌');            // 最近一条另存
+    expect(c.chain).toHaveLength(2);                      // 正向不入链
+  });
+
+  it('sinceTs 过滤掉上一段低谷的节点（分支/低谷路径隔离的基础）', () => {
+    const nodes = [
+      nodeAt(2, 200, 'sad', '上一段低谷的旧事'),
+      nodeAt(9, 900, 'sad', '这一段低谷的起因'),
+      nodeAt(10, 1000, 'sad', '这一段更近的情绪句'),
+    ];
+    const c = buildCauseChain(nodes, { sinceTs: 500, lookbackNodes: 0 });
+    expect(c.quoted).toBe('这一段低谷的起因');
+    expect(c.round).toBe(9);
+    expect(c.chain).toHaveLength(2);
+  });
+
+  it('没有负向节点 ⇒ unknown（不编原因）', () => {
+    const c = buildCauseChain([nodeAt(1, 100, 'joy', '我升职了'), nodeAt(2, 200, 'neutral', '在吗')]);
+    expect(c.kind).toBe('unknown');
+    expect(c.quoted).toBeNull();
+  });
+
+  it('maxChain 生效（链长有上限）', () => {
+    const nodes = [1, 2, 3, 4, 5].map(i => nodeAt(i, i * 100, 'sad', `第${i}件难过的事`));
+    expect(buildCauseChain(nodes, { maxChain: 2 }).chain).toHaveLength(2);
   });
 });

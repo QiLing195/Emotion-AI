@@ -36,6 +36,7 @@ import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, para
 import { selfStateVoiceEnabled } from '../../src/lib/selfStateVoice.js';
 import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../../src/lib/lowPeriodCause.js';
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
+import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
 
 /**
  * v1.60「沉因现场记录」的进程内缓冲。
@@ -385,7 +386,22 @@ export class AICoordinator {
           console.log('[SelfStateVoice] 沉因记录: 无（本轮他的情绪不是负向 / 没有可用原话）');
         }
       }
-      selfStateCause = selfStateSinkCause ?? deriveLowPeriodCause({
+      // Stage 2：**优先用时间线的原因链**（跨重启、不过期；origin 取窗口内最早那条负向 = 起因事件）。
+      // 没有时间线才回落内存现场记录（a3 的教训：现场记录会被"最近一句情绪话"覆盖）。
+      let timelineCause: LowPeriodCause | undefined;
+      if (timelineEnabled()) {
+        const chain = buildCauseChain(readRecentNodes(10), { sinceTs: lowReading.since });
+        if (chain.kind === 'his_word' && chain.quoted) {
+          timelineCause = {
+            kind: 'his_word',
+            phrase: `因为你说「${chain.quoted}」，我听着也跟着沉下去了`,
+            evidence: `timeline:${chain.evidence}`,
+            topic: chain.quoted,
+          };
+          console.log(`[Timeline] 原因链 origin=round${chain.round}「${chain.quoted}」｜链长 ${chain.chain.length}｜最近 round${chain.latestRound}「${chain.latestQuoted ?? '-'}」`);
+        }
+      }
+      selfStateCause = timelineCause ?? selfStateSinkCause ?? deriveLowPeriodCause({
         rumination: extras.updatedEmotionState.internal?.rumination,
         motivePool: extras.updatedEmotionState.internal?.motive?.pool,
       });

@@ -214,3 +214,88 @@ export function readRecentNodes(k: number, path = TIMELINE_DEFAULT_PATH): Emotio
     return [];
   }
 }
+
+// ════════════════════════════════════════════════════════════
+// Stage 2：原因链（读最近 K 个节点，取"最早那起因"+"最近一次变化"）
+// ════════════════════════════════════════════════════════════
+
+export interface CauseChainEntry {
+  round: number;
+  ts: number;
+  source: string;
+  quoted: string | null;
+  deltaValence: number;
+}
+
+export interface TimelineCause {
+  kind: 'his_word' | 'unknown';
+  /** **最早那条负向引文**（= 起因事件），双保险地也保留最近一条 */
+  quoted: string | null;
+  round: number | null;
+  latestQuoted: string | null;
+  latestRound: number | null;
+  chain: CauseChainEntry[];
+  evidence: string;
+}
+
+/**
+ * 从最近节点里构建"原因链"。
+ *
+ * 为什么取**最早**而不是最近：a3 实测（5 段）中"最近一次负向"往往是他的情绪句
+ * （"心里堵得慌/什么都不想干"），而不是起因事件（"被领导当众骂了"）—— 后者才是她真正说得出、
+ * 且对用户有意义的原因。所以 origin 取窗口内**最早**的那条负向引文，chain 保留到最近的演化。
+ *
+ * ⚠️ 为什么还要 `lookbackNodes`：Stage 2 首跑（5 段）日志证明**起因事件常常落在低谷跨线之前**
+ * —— 他先说"被领导当众骂了一顿"（深度还没过 0.12），下一句"心里堵得慌"才把深度推过线。
+ * 若窗口从 `sinceTs` 才开始，起因事件就被滤掉，origin 退化成情绪句（实测 5/5 如此）。
+ * 所以要回看跨线前的若干个节点。
+ *
+ * @param nodes 最近的节点（调用方用 readRecentNodes 读，按时间升序）
+ * @param opts.sinceTs 当前这段低谷的起点（用于定位窗口中心；null = 不过滤）
+ * @param opts.lookbackNodes 跨线前回看多少个节点（默认 3）
+ */
+export function buildCauseChain(
+  nodes: EmotionTimelineNode[],
+  opts: { sinceTs?: number | null; maxChain?: number; lookbackNodes?: number } = {},
+): TimelineCause {
+  const since = typeof opts.sinceTs === 'number' ? opts.sinceTs : null;
+  const maxChain = Math.max(1, Math.min(5, opts.maxChain ?? 3));
+  const lookback = Math.max(0, Math.min(10, opts.lookbackNodes ?? 3));
+  let from = 0;
+  if (since !== null) {
+    const startIdx = nodes.findIndex(n => n.ts >= since);
+    from = startIdx < 0 ? 0 : Math.max(0, startIdx - lookback);
+  }
+  const window = nodes.slice(from);
+  const negatives = window.filter(n => n.trigger.source === 'his_word_negative');
+  if (negatives.length === 0) {
+    return {
+      kind: 'unknown',
+      quoted: null,
+      round: null,
+      latestQuoted: null,
+      latestRound: null,
+      chain: [],
+      evidence: `no_negative_node(since=${since ?? 'any'},from=${from})`,
+    };
+  }
+  const chain = negatives.slice(-maxChain).map(n => ({
+    round: n.round,
+    ts: n.ts,
+    source: n.trigger.source,
+    quoted: n.trigger.quoted,
+    deltaValence: round4(n.delta.valence),
+  }));
+  const origin = negatives[0];                    // 窗口内**最早**的负向 = 起因
+  const latest = negatives[negatives.length - 1];
+  return {
+    kind: 'his_word',
+    quoted: origin.trigger.quoted,
+    round: origin.round,
+    latestQuoted: latest.trigger.quoted,
+    latestRound: latest.round,
+    chain,
+    evidence: `origin_round=${origin.round};negatives=${negatives.length};lookback=${lookback};from=${from}`,
+  };
+}
+
