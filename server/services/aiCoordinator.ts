@@ -38,6 +38,8 @@ import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../.
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
 import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
 import { forcedBranch } from './replaySandbox.js';
+import { lowExitProbeEnabled, recordLowExitProbe } from './lowExitProbe.js';
+import { positiveActivationOf } from '../../src/lib/lowExitProbe.js';
 import { buildEmotionExpression, emotionExpressionEnabled, buildUnifiedPermit, unifiedExpressionEnabled, detectAsksAboutHer } from '../../src/lib/emotionExpression.js';
 import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from './branchLearning.js';
 
@@ -358,6 +360,27 @@ export class AICoordinator {
     // 表达式故意不折行：折了行，"挂了开关"就只写在注释里，而注释挡不住接线。
     // v1.60：低谷读数只读一行（接线守卫要求这一行同时挂着三个开关名）。
     const lowReading = (lowPeriodStanceEnabled() || lowPeriodRestraintEnabled() || selfStateVoiceEnabled()) ? lowPeriodOf(extras.updatedEmotionState) : null;
+    // v1.70 低谷"能不能自己出来"—— **只读探针**（默认关）：
+    // 不调用 lowPeriodOf（避免触碰接线守卫），直接读状态里的 lowPeriod 字段，只记录不行动。
+    if (lowExitProbeEnabled() && extras.updatedEmotionState?.lowPeriod) {
+      try {
+        const s = extras.updatedEmotionState.lowPeriod as unknown as {
+          since: number | null; lastDepth?: number; peakDepth?: number; lastDelta?: number;
+        };
+        const d = Number(s.lastDelta ?? 0);
+        const phase = d > 0.01 ? 'sinking' : d < -0.01 ? 'climbing' : 'holding';
+        const act = activationOf(extras.updatedEmotionState);
+        recordLowExitProbe({
+          round: emotionExprTurn,
+          active: s.since !== null,
+          depth: Number(s.lastDepth ?? 0),
+          peakDepth: Number(s.peakDepth ?? 0),
+          phase,
+          delta: d,
+          activationDelta: (act.delta ?? {}) as Record<string, number>,
+        });
+      } catch { /* 观测层永不打断主流程 */ }
+    }
     // v1.60：「沉因现场记录」—— 在"她沉 / 沉得更深"的那一轮，用**这一轮他那句话**当原因。
     //
     // 为什么必须现场记录（两条实测教训）：
