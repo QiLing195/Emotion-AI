@@ -103,6 +103,7 @@ import {
   recordBranchOutcome,
   saveBranchLedger,
 } from './services/branchLearning.js';
+import { replayBranch, listTimelineNodes, replayEnabled } from './services/branchReplay.js';
 import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
 } from '../src/lib/memoryGrounding.js';
@@ -1801,6 +1802,26 @@ export class AIGirlfriendServer {
     });
 
     // ── State endpoint (frontend startup) ──
+    // ── v1.60 Stage C：时间线浏览 + 沙盒分叉回放（**只读、零 LLM、零状态变更**，默认关）──
+    // 用户问的"回放"在这里落地成安全形态：不回档、不写文件、不产生消息。
+    this.app.get('/api/timeline', (req, res) => {
+      if (!replayEnabled()) { res.status(404).json({ error: 'replay_disabled（需 ENABLE_TIMELINE_REPLAY=true）' }); return; }
+      const limit = Number(req.query.limit ?? 50);
+      const before = req.query.before !== undefined ? Number(req.query.before) : undefined;
+      res.json({ ok: true, nodes: listTimelineNodes(Number.isFinite(limit) ? limit : 50, Number.isFinite(before) ? before : undefined) });
+    });
+
+    this.app.post('/api/replay/branch', (req, res) => {
+      if (!replayEnabled()) { res.status(404).json({ error: 'replay_disabled（需 ENABLE_TIMELINE_REPLAY=true）' }); return; }
+      const body = (req.body ?? {}) as { fromRound?: number; choices?: string[]; hisNextText?: string };
+      const result = replayBranch({
+        ...(typeof body.fromRound === 'number' ? { fromRound: body.fromRound } : {}),
+        ...(Array.isArray(body.choices) && body.choices.length ? { choices: body.choices as never[] } : {}),
+        ...(typeof body.hisNextText === 'string' ? { hisNextText: body.hisNextText } : {}),
+      });
+      res.json(result);
+    });
+
     this.app.get('/state', (req, res) => {
       const es = this.aiEngine.emotionState;
       const t = es?.taiji;
