@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   appraiseEvent,
+  positiveAmplifyEnabled,
   applyAppraisal,
   topicAnchor,
   APPRAISAL_MIN_INTENSITY,
@@ -188,5 +189,52 @@ describe('applyAppraisal — 施加到状态（纯函数）', () => {
     // 太短 / 空
     expect(topicAnchor('面试', '面')).toBeNull();
     expect(topicAnchor('', '面试')).toBeNull();
+  });
+});
+
+describe('v1.69 正向补偿（默认关；只重新分配正向幅度，不动负向）', () => {
+  const prev = process.env.ENABLE_POSITIVE_AMPLIFY;
+  afterEach(() => {
+    if (prev === undefined) delete process.env.ENABLE_POSITIVE_AMPLIFY;
+    else process.env.ENABLE_POSITIVE_AMPLIFY = prev;
+  });
+
+  it('开关默认关', () => {
+    delete process.env.ENABLE_POSITIVE_AMPLIFY;
+    expect(positiveAmplifyEnabled()).toBe(false);
+    process.env.ENABLE_POSITIVE_AMPLIFY = 'true';
+    expect(positiveAmplifyEnabled()).toBe(true);
+  });
+
+  it('他报喜：开时 calm/joy 明显大于关时', () => {
+    const input = { userEmotion: 'joy', userIntensity: 0.8, recentTurns: [], motivePool: [] } as never;
+    delete process.env.ENABLE_POSITIVE_AMPLIFY;
+    const off = appraiseEvent(input);
+    process.env.ENABLE_POSITIVE_AMPLIFY = 'true';
+    const on = appraiseEvent(input);
+    const pick = (r: typeof off, k: string) => {
+      const rd = r.readings.find(x => x.emotions && (x.emotions as Record<string, number>)[k] !== undefined);
+      return rd ? Number((rd.emotions as Record<string, number>)[k]) : 0;
+    };
+    expect(pick(on, 'calm')).toBeGreaterThan(pick(off, 'calm'));
+    expect(pick(on, 'joy')).toBeGreaterThan(pick(off, 'joy'));
+  });
+
+  it('他难过：开/关的负向 reading 完全一致（不放大负向）', () => {
+    const input = { userEmotion: 'sad', userIntensity: 0.8, recentTurns: [], motivePool: [] } as never;
+    delete process.env.ENABLE_POSITIVE_AMPLIFY;
+    const off = appraiseEvent(input);
+    process.env.ENABLE_POSITIVE_AMPLIFY = 'true';
+    const on = appraiseEvent(input);
+    expect(JSON.stringify(on.readings)).toBe(JSON.stringify(off.readings));
+  });
+
+  it('总量仍受 APPRAISAL_TOTAL_CAP 约束', () => {
+    process.env.ENABLE_POSITIVE_AMPLIFY = 'true';
+    const on = appraiseEvent({ userEmotion: 'joy', userIntensity: 1, recentTurns: [], motivePool: [] } as never);
+    // 上限作用在**聚合后**的情绪向量上（readings 是未缩放的原始值）
+    const aggregated = (on as unknown as { emotions?: Record<string, number> }).emotions ?? {};
+    const abs = Object.values(aggregated).reduce((s, v) => s + Math.abs(Number(v)), 0);
+    expect(abs).toBeLessThanOrEqual(0.15 + 1e-6);
   });
 });

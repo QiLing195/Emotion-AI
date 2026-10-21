@@ -58,6 +58,18 @@ export const STOP_ANCHORS = new Set([
 export const APPRAISAL_TOTAL_CAP = 0.15;
 /** 心疼 / 替他高兴 的基础权重 */
 export const APPRAISAL_FOR_HIM_WEIGHT = 0.05;
+
+/**
+ * v1.69 正向补偿（**默认关**）：他报喜时，让她**自己的**正向情绪更明显。
+ *
+ * 为什么：负向有三条通路叠加（传染 + for_him 心疼 + 牵挂），正向只有两路轻推
+ * （for_him 的 calm 0.04k / love 0.02k），所以观感上"她总是沉"。
+ * 本开关只**重新分配**正向 reading 的幅度（总量仍受 APPRAISAL_TOTAL_CAP=0.15 约束），
+ * 不加新通路、不改负向、不改动力学常数。
+ */
+export function positiveAmplifyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ENABLE_POSITIVE_AMPLIFY === 'true';
+}
 /** 碰到她牵挂之事的基础权重（再乘以那条动机的紧迫度 salience） */
 export const APPRAISAL_CONCERN_WEIGHT = 0.07;
 
@@ -185,7 +197,9 @@ export function appraiseEvent(input: AppraisalInput): AppraisalResult {
         kind: 'for_him',
         stance: 'glad',
         reason: `他挺好（${src.userEmotion} ${intensity.toFixed(2)}）→ 我替他高兴、也安心`,
-        emotions: { calm: APPRAISAL_FOR_HIM_WEIGHT * 0.8 * k, love: APPRAISAL_FOR_HIM_WEIGHT * 0.4 * k },
+        emotions: positiveAmplifyEnabled()
+      ? { calm: APPRAISAL_FOR_HIM_WEIGHT * 2.0 * k, love: APPRAISAL_FOR_HIM_WEIGHT * 0.8 * k, joy: APPRAISAL_FOR_HIM_WEIGHT * 1.2 * k }
+      : { calm: APPRAISAL_FOR_HIM_WEIGHT * 0.8 * k, love: APPRAISAL_FOR_HIM_WEIGHT * 0.4 * k },
         valence: 0.03 * k,
         arousal: 0.01 * k,
       });
@@ -221,7 +235,9 @@ export function appraiseEvent(input: AppraisalInput): AppraisalResult {
         stance: 'relieved',
         reason: `他说的正是我挂着的 ${ev}（都提到「${hit.anchor}」），而且是好消息 → 我松一口气`,
         evidence: hit.motive.content,
-        emotions: { calm: k * 0.8, joy: k * 0.5 },
+        emotions: positiveAmplifyEnabled()
+      ? { calm: k * 1.0, joy: k * 0.9 }
+      : { calm: k * 0.8, joy: k * 0.5 },
         valence: 0.04 * s,
         arousal: 0.01 * s,
       });
