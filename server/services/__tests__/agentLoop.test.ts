@@ -10,6 +10,8 @@ import {
 const ctx = {
   getState: () => ({ emotion: { top: 'sad', delta: 0.18 }, lowPeriod: { active: true, turns: 3 }, room: { activity: '在听一首老歌' } }),
   getRecentEvents: (limit?: number) => Array.from({ length: Math.min(10, limit ?? 5) }, (_, i) => ({ round: i + 1, kind: 'state_change' })),
+  recallMemory: (query: string, limit?: number) => Array.from({ length: Math.min(5, limit ?? 3) }, (_, i) => ({ summary: `${query} 相关记忆 ${i + 1}` })),
+  getTime: () => ({ iso: '2026-10-21T14:00:00.000Z', local: '2026/10/21 22:00:00', weekday: '周三' }),
 };
 
 describe('开关与工具声明', () => {
@@ -21,7 +23,7 @@ describe('开关与工具声明', () => {
   it('声明里恰好有两个只读工具，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_recent_events']);
+    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'recall_recent_events']);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });
@@ -101,5 +103,32 @@ describe('有界循环', () => {
     });
     expect(out.toolTrace[0].ok).toBe(false);
     expect(out.text).toBe('嗯，我不太确定。');
+  });
+});
+
+describe('新增只读工具：recall_memory / time_now', () => {
+  it('recall_memory 有结果时返回记忆摘要', async () => {
+    const r = await executeTool('recall_memory', { query: '面试', limit: 2 }, ctx);
+    expect(r.ok).toBe(true);
+    expect((r.result as unknown[]).length).toBe(2);
+    expect(JSON.stringify(r.result)).toContain('面试');
+  });
+
+  it('recall_memory 没结果时如实说"没检索到"（不是编）', async () => {
+    const r = await executeTool('recall_memory', { query: '不存在的话题' }, { ...ctx, recallMemory: () => [] });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('没检索到');
+  });
+
+  it('recall_memory 缺少 query ⇒ ok=false', async () => {
+    const r = await executeTool('recall_memory', {}, ctx);
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('missing_query');
+  });
+
+  it('time_now 返回本地时间与星期', async () => {
+    const r = await executeTool('time_now', {}, ctx);
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('周三');
   });
 });

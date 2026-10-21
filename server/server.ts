@@ -1180,6 +1180,25 @@ export class AIGirlfriendServer {
                 room: loadHerRoom(),
               }),
               getRecentEvents: (limit?: number) => readRecentNodes(limit ?? 5),
+              recallMemory: (query: string, limit?: number) => {
+                try {
+                  const r = recall(episodicStore, {
+                    text: query,
+                    emotionState: turnOutput.updatedEmotionState,
+                    maxResults: Math.max(1, Math.min(5, limit ?? 3)),
+                  } as never);
+                  return (r.items ?? []).slice(0, 5).map((it: any) => ({
+                    summary: String(it?.eventSummary ?? it?.summary ?? it?.narrativeFragment ?? '').slice(0, 120),
+                    when: it?.timestamp ?? it?.createdAt ?? null,
+                    score: typeof it?.score === 'number' ? Math.round(it.score * 100) / 100 : null,
+                  })).filter((x: { summary: string }) => x.summary);
+                } catch { return []; }
+              },
+              getTime: () => {
+                const d = new Date();
+                const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+                return { iso: d.toISOString(), local: d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }), weekday: wd };
+              },
             },
             callModel: async (messages, tools) => {
               const r = await generateAIChatResponse(

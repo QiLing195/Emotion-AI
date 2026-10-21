@@ -22,7 +22,7 @@ export function agentToolsEnabled(env: NodeJS.ProcessEnv = process.env): boolean
   return env.ENABLE_AGENT_TOOLS === 'true';
 }
 
-export type ToolName = 'check_my_state' | 'recall_recent_events';
+export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now';
 
 export interface ToolTraceEntry {
   round: number;
@@ -38,6 +38,10 @@ export interface ToolContext {
   getState: () => unknown;
   /** 最近的事件/时间线节点——只读 */
   getRecentEvents: (limit?: number) => unknown;
+  /** 按话题检索记忆——只读（没接就返回 []，工具会如实说"没查到"） */
+  recallMemory?: (query: string, limit?: number) => unknown;
+  /** 本地时间——只读 */
+  getTime?: () => unknown;
 }
 
 /** 给 provider 的函数声明（Gemini 的 functionDeclarations 形状） */
@@ -48,6 +52,23 @@ export function toolDeclarations(): unknown[] {
         {
           name: 'check_my_state',
           description: '查看我自己此刻的状态：被激起的情绪、心情底色、是否在低谷、此刻在小屋里做什么。回答涉及"你现在怎么样/你的心情/你在做什么"之前应该先查一次。',
+          parameters: { type: 'object', properties: {}, required: [] },
+        },
+        {
+          name: 'recall_memory',
+          description: '按话题检索我过去的记忆（他说过的事、我们经历过的事）。回答"你还记得…吗/之前说过…吗"之前应该先查一次；查不到就说记不太清，不要编。',
+          parameters: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: '要检索的话题关键词，比如"面试""生日""海边"' },
+              limit: { type: 'number', description: '最多几条，默认 3，最多 5' },
+            },
+            required: ['query'],
+          },
+        },
+        {
+          name: 'time_now',
+          description: '查看现在的日期、时间与星期（避免把"今天/明天"说错）。',
           parameters: { type: 'object', properties: {}, required: [] },
         },
         {
@@ -82,6 +103,22 @@ export async function executeTool(
     if (name === 'check_my_state') {
       const result = ctx.getState();
       return { ok: true, result, ms: Date.now() - t0 };
+    }
+    if (name === 'recall_memory') {
+      const q = String(args?.query ?? '').trim();
+      if (!q) return { ok: false, result: { error: 'missing_query（要检索什么？）' }, ms: Date.now() - t0 };
+      const limit = Math.max(1, Math.min(5, Number(args?.limit ?? 3) || 3));
+      const items = ctx.recallMemory ? ctx.recallMemory(q, limit) : [];
+      const arr = Array.isArray(items) ? items.slice(0, limit) : [];
+      return {
+        ok: true,
+        result: arr.length > 0 ? arr : { found: 0, note: `记忆里没检索到与「${q}」相关的事` },
+        ms: Date.now() - t0,
+      };
+    }
+    if (name === 'time_now') {
+      const now = ctx.getTime ? ctx.getTime() : { iso: new Date().toISOString() };
+      return { ok: true, result: now, ms: Date.now() - t0 };
     }
     if (name === 'recall_recent_events') {
       const raw = Number(args?.limit ?? 5);
