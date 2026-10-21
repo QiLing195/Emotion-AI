@@ -90,6 +90,11 @@ import {
   type JevAction,
 } from './services/jevShadow.js';
 import {
+  appendTimelineNode,
+  buildStateChangeNode,
+  timelineEnabled,
+} from './services/emotionTimeline.js';
+import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
 } from '../src/lib/memoryGrounding.js';
 import {
@@ -702,6 +707,26 @@ export class AIGirlfriendServer {
           // v1.33：`undefined` = 这轮没问 Laya（默认），`null` = 问了没拿到意见 → 用规则
           layaVerdict,
         });
+
+        // v1.60 Stage 1（**只写、默认关**）：情感状态时间线节点 —— 一行一个"状态变化"事实。
+        // 不参与任何决策（读路径为空）；写失败静默。开关：ENABLE_EMOTION_TIMELINE。
+        if (timelineEnabled() && turnOutput.updatedEmotionState) {
+          try {
+            const axes = this._relationshipState?.dimensions as unknown as Record<string, number> | undefined;
+            const node = buildStateChangeNode({
+              ts: Date.now(),
+              round: persistedRound,
+              turnId: `${userId || 'anonymous'}-${persistedRound}`,
+              userText: message,
+              hisEmotion: emotionAnalysis.userAnalysis?.expressedEmotion ?? null,
+              hisIntensity: (emotionAnalysis.userAnalysis as unknown as { intensity?: number } | undefined)?.intensity ?? null,
+              before: currentEmotionState,
+              after: turnOutput.updatedEmotionState,
+              relationshipAxes: axes ?? null,
+            });
+            if (!appendTimelineNode(node)) console.warn('[Timeline] 节点写入失败（已忽略，不影响对话）');
+          } catch { /* 观测层永不打断主流程 */ }
+        }
 
         // 构建情绪模式注入文本
         const dominantEmotion = turnOutput.updatedEmotionState
