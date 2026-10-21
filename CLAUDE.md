@@ -154,6 +154,9 @@ server/services/ ← 后端服务层
 
 ## 关键特性开关
 
+> **v1.62 上线默认值（本机 `.env`，不随仓库分发）**：`ENABLE_SELF_STATE_VOICE=true`／`ENABLE_EMOTION_TIMELINE=true`／`ENABLE_TIMELINE_REPLAY=true`；`ENABLE_BRANCH_BIAS`／`ENABLE_SANDBOX_REPLAY`／`ENABLE_JEV_DECISION` 仍为 false。
+> 依据与回退见 `artifacts/v1.62/release-defaults.md`。代码里的默认值**没有**改（仍是 `=== 'true'`），所以仓库分发 / 新机器行为不变。
+
 | 开关 | 文件 | 用途 |
 |------|------|------|
 | `USE_EMOTION_OPTIMIZER` | emotionOptimizer.ts | 设为 false 回退 v4.0 |
