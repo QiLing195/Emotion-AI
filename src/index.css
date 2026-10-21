@@ -218,3 +218,24 @@ body { margin: 0; background: #0b0d17; overflow: hidden; }
 .os-app-dark ::-webkit-scrollbar { width: 8px; height: 8px; }
 .os-app-dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 8px; }
 .os-app-dark ::-webkit-scrollbar-track { background: transparent; }
+
+/* v1.61b：聊天/设置/人格窗口里剩余的**硬编码浅色**（令牌覆盖不到的部分） */
+.os-app-dark .bg-white { background-color: #171b2c; }
+.os-app-dark .bg-white\/80 { background-color: rgba(23, 27, 44, 0.8); }
+.os-app-dark .bg-\[\#f2f2f7\] { background-color: #12162a; }
+.os-app-dark .bg-slate-50 { background-color: #0f1424; }
+.os-app-dark .bg-slate-100 { background-color: #151b30; }
+.os-app-dark .bg-green-50 { background-color: #0f231b; }
+.os-app-dark .bg-red-50 { background-color: #2a1418; }
+.os-app-dark .bg-amber-50 { background-color: #2a2210; }
+.os-app-dark .bg-indigo-50 { background-color: #141a33; }
+.os-app-dark .bg-rose-50 { background-color: #2a1420; }
+.os-app-dark .bg-coral-50 { background-color: #2a1b16; }
+.os-app-dark .hover\:bg-slate-100:hover { background-color: #1b2340; }
+.os-app-dark .hover\:bg-rose-50\/50:hover { background-color: rgba(58, 26, 43, 0.5); }
+
+/* v1.61c：自定义 @utility 的深色覆盖（glass 家族写死了浅色，令牌管不到） */
+.os-app-dark .glass { background: rgba(23, 27, 44, 0.55); border-color: rgba(255, 255, 255, 0.1); }
+.os-app-dark .glass-strong { background: rgba(23, 27, 44, 0.72); border-color: rgba(255, 255, 255, 0.12); }
+.os-app-dark .glass-warm { background: rgba(28, 24, 38, 0.6); border-color: rgba(255, 255, 255, 0.1); }
+.os-app-dark .msg-ai { background: linear-gradient(135deg, rgba(38, 32, 54, 0.92), rgba(30, 26, 44, 0.96)); color: #e8ebf6; }
