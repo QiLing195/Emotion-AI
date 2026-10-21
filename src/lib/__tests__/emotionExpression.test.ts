@@ -4,6 +4,7 @@ import {
   EXPRESSION_DEADZONE,
   buildEmotionExpression,
   buildUnifiedPermit,
+  detectAsksAboutHer,
   unifiedExpressionEnabled,
   emotionExpressionEnabled,
 } from '../emotionExpression.js';
@@ -140,5 +141,39 @@ describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
     const sa = String(a.snippet).match(/状态：(.+)/)?.[1] ?? '';
     const sb = String(b.snippet).match(/状态：(.+)/)?.[1] ?? '';
     expect(sa).not.toBe(sb);
+  });
+});
+describe('v1.66 问必答（他明确问她时可突破预算一次）', () => {
+  it('识别"在问她"的句子，不误伤普通闲聊', () => {
+    for (const s of ['你今天心情怎么样？', '你现在在做什么？', '你呢？', '你最近还好吗？']) {
+      expect(detectAsksAboutHer(s), s).toBe(true);
+    }
+    for (const s of ['我今天被领导骂了', '那就好', '我先去忙了']) {
+      expect(detectAsksAboutHer(s), s).toBe(false);
+    }
+  });
+
+  it('预算未到 + 他在问她 ⇒ 允许表达（问必答）', () => {
+    const r = buildUnifiedPermit({
+      activated: { sad: 0.3 }, round: 100, lastExpressedRound: 99, hisAsksAboutHer: true,
+    });
+    expect(r.snippet).not.toBeNull();
+    expect(r.reason).toContain('ok-unified');
+  });
+
+  it('预算未到 + 他没问 ⇒ 仍然拦（保持不表演）', () => {
+    const r = buildUnifiedPermit({
+      activated: { sad: 0.3 }, round: 100, lastExpressedRound: 99, hisAsksAboutHer: false,
+    });
+    expect(r.snippet).toBeNull();
+    expect(r.reason).toContain('budget');
+  });
+
+  it('他明确负面时，即使问她也不说（安全门优先）', () => {
+    const r = buildUnifiedPermit({
+      activated: { sad: 0.3 }, round: 100, hisAsksAboutHer: true, hisEmotion: 'sad',
+    });
+    expect(r.snippet).toBeNull();
+    expect(r.reason).toBe('his_negative_defer');
   });
 });

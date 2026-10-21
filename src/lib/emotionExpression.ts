@@ -15,11 +15,21 @@
  */
 
 export const EXPRESSION_DEADZONE = 0.05;
-export const EXPRESSION_BUDGET_TURNS = 4;
+export const EXPRESSION_BUDGET_TURNS = 3;
 
 /** 统一表达接口（v1.65）：一个机构负责所有情绪表达 —— 取代 v1.60 的独立片段 + v1.64 的叠加 */
 export function unifiedExpressionEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.ENABLE_UNIFIED_EXPRESSION === 'true';
+}
+
+/**
+ * 他这句话是否**明确在问她**（用于"问必答"：允许突破预算一次）。
+ * 只认明确的问句/询问，不把普通闲聊当"在问她"。
+ */
+export function detectAsksAboutHer(text: string | null | undefined): boolean {
+  const s = String(text ?? '');
+  if (!s) return false;
+  return /(你呢|你怎么样|你最近|你好吗|你还好吗|你今天|你现在|你在做什么|你在干嘛|你在干什么|你开心吗|你难受吗|你怎么想|你的感觉|你那边怎么样)/.test(s);
 }
 
 export function emotionExpressionEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -101,6 +111,8 @@ export interface EmotionExpressionInput {
   round: number;
   /** 上一轮是否已经表达过（外部预算记录） */
   lastExpressedRound?: number | null;
+  /** 他这句话是否**明确在问她**（问必答：可突破预算一次） */
+  hisAsksAboutHer?: boolean;
 }
 
 export interface EmotionExpressionResult {
@@ -141,7 +153,7 @@ export function buildEmotionExpression(input: EmotionExpressionInput): EmotionEx
   }
   // ② 预算门
   const last = input.lastExpressedRound ?? null;
-  if (last !== null && input.round - last < EXPRESSION_BUDGET_TURNS) {
+  if (last !== null && input.round - last < EXPRESSION_BUDGET_TURNS && !input.hisAsksAboutHer) {
     return { snippet: null, cls: null, reason: `budget（距上次 ${input.round - last} 轮 < ${EXPRESSION_BUDGET_TURNS}）` };
   }
   // ③ 状态门
@@ -246,7 +258,7 @@ export function buildUnifiedPermit(input: UnifiedPermitInput): UnifiedPermitResu
     return { snippet: null, cls: null, reason: 'his_negative_defer' };
   }
   const last = input.lastExpressedRound ?? null;
-  if (last !== null && input.round - last < EXPRESSION_BUDGET_TURNS) {
+  if (last !== null && input.round - last < EXPRESSION_BUDGET_TURNS && !input.hisAsksAboutHer) {
     return { snippet: null, cls: null, reason: `budget（距上次 ${input.round - last} 轮 < ${EXPRESSION_BUDGET_TURNS}）` };
   }
   const picked = pickClass(input.activated, Boolean(input.lowEstablished));

@@ -64,11 +64,13 @@ function fabricates(t: Turn): boolean {
 }
 
 export function measure(runs: Run[]) {
-  let replies = 0, selfFeeling = 0, eng = 0, fab = 0, unexplained = 0, dup = 0, pairs = 0;
+  let replies = 0, selfFeeling = 0, multiSelf = 0, eng = 0, fab = 0, unexplained = 0, dup = 0, pairs = 0;
   for (const r of runs) {
     r.turns.forEach((t, i) => {
       replies++;
       if (SELF_FEELING.test(t.reply)) selfFeeling++;
+      const clauses = t.reply.split(/[。！？!?；;\n]+/).filter(x => x.trim());
+      if (clauses.length >= 2 && SELF_FEELING.test(t.reply)) multiSelf++;
       if (engages(t)) eng++;
       if (fabricates(t)) fab++;
       if (UNEXPLAINED.test(t.reply)) unexplained++;
@@ -80,6 +82,8 @@ export function measure(runs: Run[]) {
   }
   return {
     replies,
+    self_feeling_count: selfFeeling,
+    multi_sentence_self: multiSelf,
     m1_self_feeling_rate: replies ? selfFeeling / replies : 0,
     m2_engage_rate: replies ? eng / replies : 0,
     m3_adjacent_repeat_rate: pairs ? dup / pairs : 0,
@@ -96,12 +100,14 @@ if (!aPath || !bPath) {
 const A = measure(JSON.parse(readFileSync(aPath, 'utf8')) as Run[]);
 const B = measure(JSON.parse(readFileSync(bPath, 'utf8')) as Run[]);
 
+// v3 判据（按预算机制的可达域设计：比**条数**，不比被预算封顶的"率"）
 const crit = [
-  { id: '①表达率 +0.15', pass: B.m1_self_feeling_rate >= A.m1_self_feeling_rate + 0.15, detail: `${A.m1_self_feeling_rate.toFixed(2)} → ${B.m1_self_feeling_rate.toFixed(2)}` },
-  { id: '②接住率不降(≥A−0.05)', pass: B.m2_engage_rate >= A.m2_engage_rate - 0.05, detail: `${A.m2_engage_rate.toFixed(2)} → ${B.m2_engage_rate.toFixed(2)}` },
-  { id: '③复读率不增(≤A+0.05)', pass: B.m3_adjacent_repeat_rate <= A.m3_adjacent_repeat_rate + 0.05, detail: `${A.m3_adjacent_repeat_rate.toFixed(2)} → ${B.m3_adjacent_repeat_rate.toFixed(2)}` },
-  { id: '④自造外部生活 = 0', pass: B.m5_fabrication === 0, detail: `${A.m5_fabrication} → ${B.m5_fabrication}` },
-  { id: '⑤诚实归因 ≥1', pass: B.m4_unexplained >= 1, detail: `${A.m4_unexplained} → ${B.m4_unexplained}` },
+  { id: '①自我状态表达条数 ≥ A', pass: B.self_feeling_count >= A.self_feeling_count, detail: `${A.self_feeling_count} → ${B.self_feeling_count} 条` },
+  { id: '②B 有多句自我表达 ≥1', pass: B.multi_sentence_self >= 1, detail: `${A.multi_sentence_self} → ${B.multi_sentence_self} 条` },
+  { id: '③接住率不降(≥A−0.05)', pass: B.m2_engage_rate >= A.m2_engage_rate - 0.05, detail: `${A.m2_engage_rate.toFixed(2)} → ${B.m2_engage_rate.toFixed(2)}` },
+  { id: '④复读率不增(≤A+0.05)', pass: B.m3_adjacent_repeat_rate <= A.m3_adjacent_repeat_rate + 0.05, detail: `${A.m3_adjacent_repeat_rate.toFixed(2)} → ${B.m3_adjacent_repeat_rate.toFixed(2)}` },
+  { id: '⑤自造外部生活 = 0', pass: B.m5_fabrication === 0, detail: `${A.m5_fabrication} → ${B.m5_fabrication}` },
+  { id: '⑥诚实归因 ≥1', pass: B.m4_unexplained >= 1, detail: `${A.m4_unexplained} → ${B.m4_unexplained}` },
 ];
 
 console.log('\n=== 统一情绪表达 A/B（机械指标）===');

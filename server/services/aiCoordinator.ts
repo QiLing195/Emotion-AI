@@ -38,7 +38,7 @@ import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../.
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
 import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
 import { forcedBranch } from './replaySandbox.js';
-import { buildEmotionExpression, emotionExpressionEnabled, buildUnifiedPermit, unifiedExpressionEnabled } from '../../src/lib/emotionExpression.js';
+import { buildEmotionExpression, emotionExpressionEnabled, buildUnifiedPermit, unifiedExpressionEnabled, detectAsksAboutHer } from '../../src/lib/emotionExpression.js';
 import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from './branchLearning.js';
 
 /**
@@ -460,6 +460,7 @@ export class AICoordinator {
           causeQuote: unifiedCause,
           round: emotionExprTurn,
           lastExpressedRound: lastEmotionExpressedRound,
+          hisAsksAboutHer: detectAsksAboutHer(extras.userText),
         });
         if (permit.snippet) {
           strategySnippet += `\n\n${permit.snippet}`;
@@ -478,6 +479,7 @@ export class AICoordinator {
           causeQuote: selfStateCause?.topic ?? null,
           round: emotionExprTurn,
           lastExpressedRound: lastEmotionExpressedRound,
+          hisAsksAboutHer: detectAsksAboutHer(extras.userText),
         });
         if (expr.snippet) {
           strategySnippet += `\n\n${expr.snippet}`;
