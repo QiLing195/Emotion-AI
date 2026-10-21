@@ -1,7 +1,7 @@
 // ── OS 桌面外壳（v1.61）：壁纸 + 菜单栏 + Dock + 多窗口 ──
 // 每个应用是一个可拖动/缩放/最小化的窗口；聊天、媒体、时间线与回放、设置、人格各占一窗。
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { MessageCircle, Camera, History, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { MessageCircle, Camera, History, Settings as SettingsIcon, Sparkles, HeartPulse } from 'lucide-react';
 import { useAIBrainStore } from './store/useAIBrainStore';
 import { db } from './firebase';
 import { doc, getDoc, setDoc, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
@@ -10,6 +10,7 @@ import ModelPanel from './components/ModelPanel';
 import ChatView from './views/ChatView';
 import OSShell, { type OSAppDef } from './components/os/OSShell';
 import TimelineApp from './components/os/TimelineApp';
+import HerStateApp from './components/os/HerStateApp';
 const MediaPanel = lazy(() => import('./components/MediaPanel'));
 const SettingsView = lazy(() => import('./views/SettingsView'));
 const PersonalityView = lazy(() => import('./views/PersonalityView'));
@@ -225,6 +226,15 @@ export default function App() {
       defaultOpen: true,
       window: { x: 120, y: 118, w: 900, h: 560 },
       content: <TimelineApp />,
+    },
+    {
+      id: 'herstate',
+      title: '她现在',
+      icon: <HeartPulse size={20} />,
+      accent: 'from-emerald-400/80 to-teal-300/70',
+      defaultOpen: true,
+      window: { x: 1176, y: 470, w: 420, h: 470 },
+      content: <HerStateApp />,
     },
     {
       id: 'settings',

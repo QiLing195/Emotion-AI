@@ -106,6 +106,10 @@ import {
 import { replayBranch, listTimelineNodes, replayEnabled } from './services/branchReplay.js';
 import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
 import {
+  herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
+} from './services/herRoom.js';
+import { separateActivation } from '../src/lib/emotionActivation.js';
+import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
 } from '../src/lib/memoryGrounding.js';
 import {
@@ -719,6 +723,23 @@ export class AIGirlfriendServer {
           layaVerdict,
         });
 
+        // v1.63 她的小屋：每轮推进"她此刻在做什么"（持久化事实；白名单外的外部生活不许编）
+        if (herRoomEnabled() && turnOutput.updatedEmotionState) {
+          try {
+            const act = separateActivation(
+              turnOutput.updatedEmotionState.emotions as unknown as Record<string, number>,
+              turnOutput.updatedEmotionState.baselineEmotions as unknown as Record<string, number> | undefined,
+            );
+            const top = Object.entries(act.delta ?? {}).filter(([, v]) => Number(v) > 0).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? null;
+            const room = advanceHerRoom(loadHerRoom(), {
+              now: Date.now(),
+              round: persistedRound,
+              topEmotion: top,
+              lowActive: Boolean(lowPeriodOf(currentEmotionState)?.established),
+            });
+            if (!saveHerRoom(room)) console.warn('[HerRoom] 小屋状态写入失败（已忽略）');
+          } catch { /* 观测层永不打断主流程 */ }
+        }
         // v1.60 Stage 1（**只写、默认关**）：情感状态时间线节点 —— 一行一个"状态变化"事实。
         // 不参与任何决策（读路径为空）；写失败静默。开关：ENABLE_EMOTION_TIMELINE。
         if (timelineEnabled() && turnOutput.updatedEmotionState) {
@@ -1110,6 +1131,10 @@ export class AIGirlfriendServer {
         if (activationStateBlockEnabled()) {
           const herStateHint = activationHint(turnOutput.updatedEmotionState);
           if (herStateHint) enrichedSystemPrompt += `\n\n${herStateHint}`;
+        }        // v1.63 她的小屋：只允许她引用"此刻在小屋里做什么"这一条事实
+        if (herRoomEnabled()) {
+          const roomLine = herRoomPromptLine(loadHerRoom());
+          if (roomLine) enrichedSystemPrompt += `\n\n${roomLine}`;
         }
 
         // ── v1.29 策略片段挪到**真正的末尾** ──
@@ -1832,6 +1857,26 @@ export class AIGirlfriendServer {
         hisMessages: Array.isArray(body.hisMessages) ? body.hisMessages.map(String) : [],
       });
       res.json(result);
+    });
+    // v1.63 她的实时状态（只读）：情绪 + 心情 + 小屋活动 + 低谷
+    this.app.get('/api/her-state', (req, res) => {
+      const es = this.aiEngine.emotionState as (Parameters<typeof lowPeriodOf>[0] & { emotions?: Record<string, number> }) | undefined;
+      let top: string | null = null;
+      let topDelta = 0;
+      if (es?.emotions) {
+        const act = separateActivation(es.emotions, (es as unknown as { baselineEmotions?: Record<string, number> }).baselineEmotions);
+        const first = Object.entries(act.delta ?? {}).filter(([, v]) => Number(v) > 0).sort((a, b) => Number(b[1]) - Number(a[1]))[0];
+        if (first) { top = first[0]; topDelta = Number(first[1]); }
+      }
+      const lp = es ? lowPeriodOf(es) : null;
+      res.json({
+        ok: true,
+        roomEnabled: herRoomEnabled(),
+        room: herRoomView(loadHerRoom()),
+        emotion: { top, delta: Math.round(topDelta * 1000) / 1000 },
+        lowPeriod: lp ? { active: Boolean(lp.active), established: Boolean(lp.established), turns: Number(lp.turns ?? 0), phase: String(lp.phase ?? 'none') } : null,
+        now: Date.now(),
+      });
     });
     this.app.get('/state', (req, res) => {
       const es = this.aiEngine.emotionState;
