@@ -33,7 +33,7 @@ export type JsonGetter = (url: string, headers?: Record<string, string>) => Prom
 
 async function curlJson(url: string, headers: Record<string, string> = {}): Promise<unknown> {
   const out = join(tmpdir(), `ea-ext-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
-  const args = ['-sS', '-L', '--max-time', String(Math.ceil(EXTERNAL_TIMEOUT_MS / 1000)), '-o', out, url];
+  const args = ['-sS', '-L', '-4', '--connect-timeout', '3', '--max-time', String(Math.ceil(EXTERNAL_TIMEOUT_MS / 1000)), '-o', out, url];
   const ua = headers['User-Agent'] ?? 'EmotionAI/1.0 (local companion app)';
   args.unshift('-A', ua);
   if (headers['Accept']) args.unshift('-H', `Accept: ${headers['Accept']}`);
@@ -52,14 +52,25 @@ async function curlJson(url: string, headers: Record<string, string> = {}): Prom
   }
 }
 
+/** 本进程内 Node 一旦连不上外网就记住，后续直接走 curl（避免每次白等超时） */
+let nodeFetchUnavailable = false;
+
 export async function defaultJsonGetter(url: string, headers: Record<string, string> = {}): Promise<unknown> {
+  if (nodeFetchUnavailable) return curlJson(url, headers);
   try {
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(EXTERNAL_TIMEOUT_MS) });
+    // Node 只在 1.5s 内连上才算可用；连不上就本进程后续直接走 curl
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(1500) });
     if (!res.ok) throw new Error(`http_${res.status}`);
     return (await res.json()) as unknown;
   } catch {
-    return curlJson(url, headers);          // Node 连不上就回退 curl
+    nodeFetchUnavailable = true;
+    return curlJson(url, headers);
   }
+}
+
+/** 测试/诊断：读当前是否已判定 Node 网络不可用 */
+export function isNodeFetchUnavailable(): boolean {
+  return nodeFetchUnavailable;
 }
 
 const cache = new Map<string, { ts: number; value: unknown }>();
@@ -116,11 +127,16 @@ export interface WeatherResult {
 interface GeoHit { name: string; country?: string; latitude: number; longitude: number }
 
 async function geocode(city: string, f: JsonGetter): Promise<GeoHit | null> {
+  const cacheKey = 'geo:' + city;
+  const cachedGeo = cacheGet<GeoHit>(cacheKey);
+  if (cachedGeo) return cachedGeo;
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh&format=json`;
   const data = (await f(url)) as { results?: Array<{ name?: string; country?: string; latitude?: number; longitude?: number }> };
   const hit = data.results?.[0];
   if (!hit || typeof hit.latitude !== 'number' || typeof hit.longitude !== 'number') return null;
-  return { name: String(hit.name ?? city), country: hit.country ? String(hit.country) : undefined, latitude: hit.latitude, longitude: hit.longitude };
+  const out: GeoHit = { name: String(hit.name ?? city), country: hit.country ? String(hit.country) : undefined, latitude: hit.latitude, longitude: hit.longitude };
+  cacheSet(cacheKey, out);
+  return out;
 }
 
 /** 查天气：城市名（中文/英文都行）→ 当前天气 */

@@ -23,7 +23,7 @@ export function agentToolsEnabled(env: NodeJS.ProcessEnv = process.env): boolean
   return env.ENABLE_AGENT_TOOLS === 'true';
 }
 
-export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'set_followup' | 'get_weather' | 'search_map';
+export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'read_my_notes' | 'set_followup' | 'get_weather' | 'search_map';
 
 export interface ToolTraceEntry {
   round: number;
@@ -51,6 +51,8 @@ export interface ToolContext {
   getWeather?: (city: string) => Promise<unknown> | unknown;
   /** 联网：地名检索 */
   searchMap?: (place: string) => Promise<unknown> | unknown;
+  /** 翻她自己的便签（未接则返回 []） */
+  readNotes?: (limit?: number) => unknown;
 }
 
 /** 给 provider 的函数声明（Gemini 的 functionDeclarations 形状） */
@@ -89,6 +91,17 @@ export function toolDeclarations(): unknown[] {
               note: { type: 'string', description: '要记住的事，4~80 字，用你自己的话' },
             },
             required: ['note'],
+          },
+        },
+        {
+          name: 'read_my_notes',
+          description: '翻一下自己写过的便签（之前记下的、答应过要记住的事）。他问"你还记着我什么吗/上次那事"时可以看。',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', description: '看几条，默认 5，最多 10' },
+            },
+            required: [],
           },
         },
         {
@@ -176,6 +189,17 @@ export async function executeTool(
       if (!ctx.writeNote) return { ok: false, result: { error: 'notes_disabled（便签没开）' }, ms: Date.now() - t0 };
       const r = ctx.writeNote(note);
       return { ok: r.ok, result: r, ms: Date.now() - t0 };
+    }
+    if (name === 'read_my_notes') {
+      const raw = Number(args?.limit ?? 5);
+      const limit = Math.max(1, Math.min(10, Number.isFinite(raw) ? raw : 5));
+      const notes = ctx.readNotes ? ctx.readNotes(limit) : [];
+      const arr = Array.isArray(notes) ? notes : [];
+      return {
+        ok: true,
+        result: arr.length > 0 ? arr : { found: 0, note: '便签是空的（还没记过什么）' },
+        ms: Date.now() - t0,
+      };
     }
     if (name === 'set_followup') {
       const what = String(args?.what ?? '').trim();

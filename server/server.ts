@@ -1220,6 +1220,7 @@ export class AIGirlfriendServer {
                 if (!herNotesEnabled()) return { ok: false, reason: 'notes_disabled（ENABLE_HER_NOTES=false）' };
                 return addNote(note);
               },
+              readNotes: (limit?: number) => (herNotesEnabled() ? listHerNotes(limit ?? 5) : []),
               addFollowup: (what: string, dueInHours: number, dueAtLocal?: string | null) => {
                 if (!herFollowupEnabled()) return { ok: false, reason: 'followup_disabled（ENABLE_HER_FOLLOWUP=false）' };
                 return addFollowup({ what, dueInHours, dueAtLocal: dueAtLocal ?? null });
