@@ -38,7 +38,7 @@ import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../.
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
 import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
 import { forcedBranch } from './replaySandbox.js';
-import { buildEmotionExpression, emotionExpressionEnabled } from '../../src/lib/emotionExpression.js';
+import { buildEmotionExpression, emotionExpressionEnabled, buildUnifiedPermit, unifiedExpressionEnabled } from '../../src/lib/emotionExpression.js';
 import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from './branchLearning.js';
 
 /**
@@ -440,8 +440,35 @@ export class AICoordinator {
       }
       console.log(`[Replay] 沙盒强制分支=${forced}（片段已按分支替换）`);
     }
-    // v1.64 统一情绪表达：任意情绪都可以"说一句自己"（可选 + 预算 + 接地；只读状态，不写回）
-    if (emotionExpressionEnabled() && extras.updatedEmotionState) {
+    // v1.65 统一表达接口（**一个机构**）：一个出口负责所有情绪表达，且允许 1~3 句。
+    // 开时：a) 策略片段回到 base（不再由 v1.60 片段替换，避免两个"可以说"互相稀释）
+    //       b) 表达许可由 buildUnifiedPermit 生成 → 只追加一次；旧路径不进入
+    if (unifiedExpressionEnabled() && extras.updatedEmotionState) {
+      try {
+        strategySnippet = STRATEGY_PROMPT_SNIPPETS[finalStrategy];
+        // 原因：只从时间线取（他的话），与表达许可开关解耦
+        let unifiedCause: string | null = null;
+        if (timelineEnabled()) {
+          const chain = buildCauseChain(readRecentNodes(10), { sinceTs: lowReading?.since });
+          if (chain.kind === 'his_word' && chain.quoted) unifiedCause = chain.quoted;
+        }
+        const act = activationOf(extras.updatedEmotionState);
+        const permit = buildUnifiedPermit({
+          activated: (act.delta ?? {}) as Record<string, number>,
+          hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
+          lowEstablished: Boolean(lowReading?.established),
+          causeQuote: unifiedCause,
+          round: emotionExprTurn,
+          lastExpressedRound: lastEmotionExpressedRound,
+        });
+        if (permit.snippet) {
+          strategySnippet += `\n\n${permit.snippet}`;
+          lastEmotionExpressedRound = permit.nextLastExpressedRound ?? lastEmotionExpressedRound;
+          console.log(`[UnifiedExpr] 表达许可: ${permit.reason}`);
+        }
+      } catch { /* 表达层永不打断主流程 */ }
+    } else if (emotionExpressionEnabled() && extras.updatedEmotionState) {
+      // 旧接口（v1.64，叠加式）——仅当统一接口关时保留，用于对照与回退
       try {
         const act = activationOf(extras.updatedEmotionState);
         const expr = buildEmotionExpression({

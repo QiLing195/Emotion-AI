@@ -3,6 +3,8 @@ import {
   EXPRESSION_BUDGET_TURNS,
   EXPRESSION_DEADZONE,
   buildEmotionExpression,
+  buildUnifiedPermit,
+  unifiedExpressionEnabled,
   emotionExpressionEnabled,
 } from '../emotionExpression.js';
 
@@ -102,5 +104,41 @@ describe('变体轮换（按预算桶，确定性 + 相邻不重复）', () => {
     const x = buildEmotionExpression({ activated: { joy: 0.25 }, round: 12 });
     const y = buildEmotionExpression({ activated: { joy: 0.25 }, round: 12 });
     expect(x.snippet).toBe(y.snippet);
+  });
+});
+describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
+  it('开关独立：ENABLE_UNIFIED_EXPRESSION', () => {
+    expect(unifiedExpressionEnabled({} as NodeJS.ProcessEnv)).toBe(false);
+    expect(unifiedExpressionEnabled({ ENABLE_UNIFIED_EXPRESSION: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+  });
+
+  it('许可里明确"可以说 1~3 句"，并给出状态句 + 落回他', () => {
+    const r = buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100 });
+    expect(r.snippet).toContain('1~3 句');
+    expect(r.snippet).toContain('状态：');
+    expect(r.snippet).toContain('落回他那件事');
+    expect(r.cls).toBe('sad');
+  });
+
+  it('有接地原因 ⇒ 只许引这一条；没有 ⇒ 说不上来不许编', () => {
+    const withCause = buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100, causeQuote: '被领导当众骂了一顿' });
+    expect(withCause.snippet).toContain('被领导当众骂了一顿');
+    expect(withCause.snippet).toContain('只能');
+    const noCause = buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100 });
+    expect(noCause.snippet).toContain('不要为了给原因编事');
+  });
+
+  it('安全门/预算门与旧接口一致', () => {
+    expect(buildUnifiedPermit({ activated: { sad: 0.3 }, hisEmotion: 'sad', round: 100 }).reason).toBe('his_negative_defer');
+    expect(buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100, lastExpressedRound: 99 }).reason).toContain('budget');
+    expect(buildUnifiedPermit({ activated: { joy: 0.01 }, round: 100 }).reason).toBe('resting_or_ambiguous');
+  });
+
+  it('相邻预算桶 ⇒ 状态句不同（多句也在轮换）', () => {
+    const a = buildUnifiedPermit({ activated: { joy: 0.3 }, round: 100 });
+    const b = buildUnifiedPermit({ activated: { joy: 0.3 }, round: 100 + EXPRESSION_BUDGET_TURNS });
+    const sa = String(a.snippet).match(/状态：(.+)/)?.[1] ?? '';
+    const sb = String(b.snippet).match(/状态：(.+)/)?.[1] ?? '';
+    expect(sa).not.toBe(sb);
   });
 });
