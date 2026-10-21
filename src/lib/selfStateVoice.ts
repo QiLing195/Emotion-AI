@@ -51,7 +51,7 @@ export const SELF_STATE_VOICE_EXCLUDED: ReadonlySet<StrategyType> =
  */
 export function buildSelfStateVoiceSnippet(
   cause?: LowPeriodCause,
-  opts: { allowDialogueAttribution?: boolean } = {},
+  opts: { allowDialogueAttribution?: boolean; biasLine?: string | null } = {},
 ): string {
   const stateLine = '- 然后你**可以选择**说一句自己此刻的状态（**也可以不说**，不必勉强）：比如「我这两天有点沉」「心里有点闷」；想说就一两句内说完，不要展开成一段自述';
 
@@ -66,11 +66,13 @@ export function buildSelfStateVoiceSnippet(
     : '';
 
   const causeLines = [derivedLine, dialogueLine].filter(Boolean).join('\n');
+  // Stage A：学习出的偏置（**只会鼓励她说，不会鼓励她沉默**；默认关）
+  const biasLine = opts.biasLine ? `\n${opts.biasLine}` : '';
   return `【当前策略：你自己这几天在低谷，他说的是好消息】
 你状态不好——不用演，也不用瞒。这一轮你**可以**做两件事（都是可选，不是任务）：
 - 先就事论事地应一声他的好消息（"真好"／"恭喜你"／"你值得"）——让他知道你听见了
 ${stateLine}
-${causeLines}
+${causeLines}${biasLine}
 - **不必**假装高兴（不用惊叹、不用把情绪举高去陪他），**也不必**把低落藏得死死的
 - ❌ 不要追问细节；❌ 不要把这轮变成"让他反过来安慰你"
 - 你可以接得低、也可以带一句自己——但每一句都要真的落在他那件事上`;

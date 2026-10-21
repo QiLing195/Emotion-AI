@@ -681,7 +681,7 @@ export const LOW_PERIOD_RESTRAINT_SNIPPET = `【当前策略：你自己这几�
  */
 export function resolveStrategySnippet(
   strategy: StrategyType,
-  opts: { inEstablishedLowPeriod?: boolean; hisEmotion?: string | null; selfStateCause?: LowPeriodCause } = {},
+  opts: { inEstablishedLowPeriod?: boolean; hisEmotion?: string | null; selfStateCause?: LowPeriodCause; branchBiasLine?: string | null } = {},
 ): string {
   const base = STRATEGY_PROMPT_SNIPPETS[strategy];
   if (!opts.inEstablishedLowPeriod) return base;
@@ -703,7 +703,7 @@ export function resolveStrategySnippet(
     })) {
       // 操纵证据：只有开关开着且条件全过才到这里 ⇒ 日志即"这一轮真的换了片段"
       console.log('[Strategy] 自我状态表达许可片段已启用（v1.60 ENABLE_SELF_STATE_VOICE）');
-      return buildSelfStateVoiceSnippet(opts.selfStateCause, { allowDialogueAttribution: causeFromDialogueEnabled() });
+      return buildSelfStateVoiceSnippet(opts.selfStateCause, { allowDialogueAttribution: causeFromDialogueEnabled(), biasLine: opts.branchBiasLine ?? null });
     }
     if (hisPositive) {
       return lowPeriodStanceEnabled() ? LOW_PERIOD_STANCE_SNIPPET : base;

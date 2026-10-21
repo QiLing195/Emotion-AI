@@ -37,6 +37,7 @@ import { selfStateVoiceEnabled } from '../../src/lib/selfStateVoice.js';
 import { deriveLowPeriodCause, deriveSinkCause, type LowPeriodCause } from '../../src/lib/lowPeriodCause.js';
 import { LOW_PERIOD_SINK } from '../../src/lib/lowPeriod.js';
 import { timelineEnabled, readRecentNodes, buildCauseChain } from './emotionTimeline.js';
+import { branchBiasEnabled, loadBranchLedger, branchScores, buildBiasLine } from './branchLearning.js';
 
 /**
  * v1.60「沉因现场记录」的进程内缓冲。
@@ -358,6 +359,8 @@ export class AICoordinator {
     //   ② "允许她从对话记录自行归因"的近路**两臂 0/5 无效** ⇒ 模型不会在表达时自发重构"因为哪句话"。
     // 现场记录天然有据（引文摘自他的话）且不会过期；池子派生降级为兜底。
     let selfStateCause: LowPeriodCause | undefined;
+    /** Stage A：学习出的偏置行（默认关；只鼓励说、不鼓励沉默） */
+    let branchBiasLineValue: string | null = null;
     if (selfStateVoiceEnabled() && lowReading) {
       // 维护"上一轮他的原话"（同一轮里片段会算两次，用文本判断是否为新一轮）
       const stimulusNow = {
@@ -405,12 +408,21 @@ export class AICoordinator {
         rumination: extras.updatedEmotionState.internal?.rumination,
         motivePool: extras.updatedEmotionState.internal?.motive?.pool,
       });
+      // Stage A：有界学习出来的偏置（只鼓励说、不鼓励沉默；默认关）
+      if (branchBiasEnabled()) {
+        const bias = buildBiasLine(branchScores(loadBranchLedger()));
+        if (bias) {
+          branchBiasLineValue = bias;
+          console.log(`[StageA] 学到偏置：${bias.replace(/\n/g, ' ')}`);
+        }
+      }
       console.log(`[SelfStateVoice] 本轮原因: ${selfStateCause.kind} ｜ ${selfStateCause.phrase}`);
     }
     const strategySnippet = resolveStrategySnippet(finalStrategy, {
       inEstablishedLowPeriod: Boolean(lowReading?.established),
       hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
       ...(selfStateCause ? { selfStateCause } : {}),
+      ...(branchBiasLineValue ? { branchBiasLine: branchBiasLineValue } : {}),
     });
     if (hasOverrides(arbitrationOutput)) {
     console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);

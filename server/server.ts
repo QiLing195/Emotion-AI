@@ -98,6 +98,12 @@ import {
   buildOutcomeNode,
 } from './services/emotionTimeline.js';
 import {
+  branchBiasEnabled,
+  loadBranchLedger,
+  recordBranchOutcome,
+  saveBranchLedger,
+} from './services/branchLearning.js';
+import {
   buildGroundingCorpus, checkMemoryGrounding, buildRewriteInstruction, stripUngroundedClaims,
 } from '../src/lib/memoryGrounding.js';
 import {
@@ -722,7 +728,7 @@ export class AIGirlfriendServer {
               && !recent.some(n => n.kind === 'outcome' && n.refRound === lastBranch.round)) {
               const dv = Number(turnOutput.updatedEmotionState.taiji?.valence ?? 0)
                 - Number(currentEmotionState?.taiji?.valence ?? 0);
-              appendTimelineNode(buildOutcomeNode({
+              const outcomeNode = buildOutcomeNode({
                 ts: Date.now(),
                 round: persistedRound,
                 turnId: `${userId || 'anonymous'}-${persistedRound}`,
@@ -732,7 +738,16 @@ export class AIGirlfriendServer {
                 hisNextText: message,
                 hisEmotion: emotionAnalysis.userAnalysis?.expressedEmotion ?? null,
                 herDeltaValence: dv,
-              }));
+              });
+              appendTimelineNode(outcomeNode);
+              // v1.60 Stage A（默认关）：把"选择 → 结果"记进有界学习账本
+              if (branchBiasEnabled()) {
+                try {
+                  const ledger = loadBranchLedger();
+                  recordBranchOutcome(lastBranch.branch.chosen, outcomeNode.outcome.hisReaction, ledger);
+                  saveBranchLedger(ledger);
+                } catch { /* 学习层永不打断主流程 */ }
+              }
             }
             const axes = this._relationshipState?.dimensions as unknown as Record<string, number> | undefined;
             const node = buildStateChangeNode({
