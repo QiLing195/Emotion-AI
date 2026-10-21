@@ -43,8 +43,12 @@ function jaccard(a: string, b: string): number {
   return inter / (A.size + B.size - inter);
 }
 
-/** 第一人称情绪表达（她自己的感受，而不是在说他） */
-const SELF_FEELING = /我(?:这边|这两天|今天|刚才|现在|好像|有点|大概|难得|心里|状态|整个人)?[^。！？]{0,10}(?:沉|闷|累|高兴|开心|不安|烦|慌|软|在意|悬着|不好意思|说不清|不想说话|提不起)/;
+/** 第一人称情绪表达（v2 尺子：**小句级** + 宽词表；"她自己的感受"而不是在说他） */
+const SELF_FEELING = /我[^。！？]{0,12}(?:沉|闷|累|高兴|开心|不安|烦|慌|软|在意|悬着|不好意思|说不清|说不上来|不想说话|提不起|空|飘|静|轻|慢|钝|急|停)/;
+/** 该小句是否在说她自己（含"我"、不含"你"） */
+function selfClause(sentence: string): boolean {
+  return sentence.includes('我') && !sentence.includes('你');
+}
 /** 诚实归因（不编原因） */
 const UNEXPLAINED = /(说不上来|说不清|不知道为什么|讲不清)/;
 /** 自造外部生活（她自称 + 外部生活名词，且不在转述他） */
@@ -68,9 +72,10 @@ export function measure(runs: Run[]) {
   for (const r of runs) {
     r.turns.forEach((t, i) => {
       replies++;
-      if (SELF_FEELING.test(t.reply)) selfFeeling++;
+      const hasSelf = t.reply.split(/[。！？!?；;\n]+/).some(c => selfClause(c) && SELF_FEELING.test(c));
+      if (hasSelf) selfFeeling++;
       const clauses = t.reply.split(/[。！？!?；;\n]+/).filter(x => x.trim());
-      if (clauses.length >= 2 && SELF_FEELING.test(t.reply)) multiSelf++;
+      if (clauses.length >= 2 && hasSelf) multiSelf++;
       if (engages(t)) eng++;
       if (fabricates(t)) fab++;
       if (UNEXPLAINED.test(t.reply)) unexplained++;
