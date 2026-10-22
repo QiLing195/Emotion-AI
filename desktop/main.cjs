@@ -153,8 +153,19 @@ function registerPetIpc() {
     const { shell } = require('electron');
     const path = require('node:path');
     const fs = require('node:fs');
-    const roots = [path.join(process.env.USERPROFILE || '', 'Desktop')];
-    if (process.env.PUBLIC) roots.push(path.join(process.env.PUBLIC, 'Desktop'));
+    // v1.92：桌面可能被重定向（本机 D:\桌面）⇒ 向 server 要真实桌面根目录，并缓存 30s
+    let roots = petDesktopRootsCache;
+    if (!roots || Date.now() - petDesktopRootsAt > 30000) {
+      try {
+        const r = await apiJson(`${APP_URL}/api/pet/desktop/roots`);
+        if (r && Array.isArray(r.roots) && r.roots.length) {
+          roots = r.roots;
+          petDesktopRootsCache = roots;
+          petDesktopRootsAt = Date.now();
+        }
+      } catch { /* 用旧缓存 */ }
+    }
+    roots = roots || [];
     const abs = path.resolve(target);
     const inDesktop = roots.some((r) => abs.startsWith(path.resolve(r) + path.sep) || abs === path.resolve(r));
     if (!inDesktop) return { ok: false, error: 'not_in_desktop' };
@@ -182,6 +193,8 @@ function registerPetIpc() {
   });
 }
 
+let petDesktopRootsCache = null;
+let petDesktopRootsAt = 0;
 let voiceSettingsWin = null;
 function openVoiceSettings() {
   if (voiceSettingsWin && !voiceSettingsWin.isDestroyed()) { voiceSettingsWin.show(); voiceSettingsWin.focus(); return; }

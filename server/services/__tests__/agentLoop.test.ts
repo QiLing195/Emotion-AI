@@ -31,10 +31,14 @@ describe('开关与工具声明', () => {
     expect(agentToolsEnabled({ ENABLE_AGENT_TOOLS: 'true' } as NodeJS.ProcessEnv)).toBe(true);
   });
 
-  it('声明里恰好有两个只读工具，且都带说明', () => {
+  it('工具声明清单完整，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'read_my_desktop', 'open_desktop_item', 'look_at_my_screen', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events']);
+    expect(names).toEqual([
+      'check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup',
+      'read_my_desktop', 'open_desktop_item', 'move_desktop_item', 'rename_desktop_item', 'recall_desktop_events',
+      'look_at_my_screen', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events',
+    ]);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });

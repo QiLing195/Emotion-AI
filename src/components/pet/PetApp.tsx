@@ -32,7 +32,7 @@ interface PetState {
   room: { enabled: boolean; active: boolean; label: string | null; minutes: number };
   screen: { policy: string; lastCaptureAt: number | null; lastCaptureOk: boolean | null; capturesToday: number };
   pendingApproval?: boolean;
-  pendingDesktopAction?: { id: string; path: string; name: string; reason: string; createdAt: number } | null;
+  pendingDesktopAction?: { id: string; kind: 'open' | 'move' | 'rename'; path: string; name: string; reason: string; targetName?: string; createdAt: number } | null;
   policies?: string[];
   voice?: { enabled: boolean; running: boolean; ready: boolean; seq: number };
 }
@@ -107,6 +107,7 @@ export default function PetApp() {
   const [frameIdx, setFrameIdx] = useState(0);
   const [awake, setAwake] = useState(false);
   const [voiceLabel, setVoiceLabel] = useState('');
+  const [undoAt, setUndoAt] = useState<number | null>(null);
   const bubbleTimer = useRef<number | null>(null);
   const actionTimer = useRef<number | null>(null);
   const lastTouch = useRef<number>(Date.now());
@@ -286,6 +287,22 @@ export default function PetApp() {
   const resolved = resolveSprite(spriteTarget, available);
   const imageMode = probed && available.size > 0;
   const activeSprite = resolved ?? 'idle';
+  // 她"随口提一句"的主动消息（桌面回声等）：轮询待投递队列，用气泡显示
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await fetch('/api/proactive/pending');
+        if (!r.ok || !alive) return;
+        const d = await r.json() as { messages?: Array<{ text?: string }> };
+        for (const m of d.messages ?? []) {
+          if (m.text) say(m.text, 12000);
+        }
+      } catch { /* server 不在就静默 */ }
+    };
+    const t = window.setInterval(tick, 12000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [say]);
   // 帧（可选多帧）
   useEffect(() => {
     let alive = true;
@@ -412,16 +429,43 @@ export default function PetApp() {
         </div>
       )}
 
-      {/* 桌面图标授权卡（她想打开你桌面上的东西时才出现） */}
+      {/* 桌面图标授权卡（她想打开/移动/重命名你桌面上的东西时才出现） */}
       {s?.pendingDesktopAction && (
         <div className="mb-1 w-[268px] rounded-2xl border border-sky-300/40 bg-[#12202e]/92 p-2.5 text-center shadow-lg backdrop-blur">
-          <div className="text-[12px] text-sky-100">她想打开桌面上的：</div>
-          <div className="mt-0.5 break-all text-[11px] font-medium text-white">{s.pendingDesktopAction.name}</div>
+          <div className="text-[12px] text-sky-100">
+            {s.pendingDesktopAction.kind === 'move' ? '她想把桌面上的这个移走：'
+              : s.pendingDesktopAction.kind === 'rename' ? '她想把桌面上的这个改名：'
+              : '她想打开桌面上的：'}
+          </div>
+          <div className="mt-0.5 break-all text-[11px] font-medium text-white">
+            {s.pendingDesktopAction.name}
+            {s.pendingDesktopAction.kind === 'move' && s.pendingDesktopAction.targetName && (
+              <span className="text-slate-300"> → {s.pendingDesktopAction.targetName}</span>
+            )}
+            {s.pendingDesktopAction.kind === 'rename' && s.pendingDesktopAction.targetName && (
+              <span className="text-slate-300"> → {s.pendingDesktopAction.targetName}</span>
+            )}
+          </div>
           <div className="mt-2 flex gap-2">
             <button className="flex-1 rounded-lg bg-emerald-500/90 py-1 text-[11px] font-medium text-white" onClick={async () => {
-              const r = await window.petWindow?.openPath(s.pendingDesktopAction!.path);
-              await fetch('/api/pet/desktop/ack', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: Boolean(r?.ok) }) });
-              say(r?.ok ? '打开了。' : (r?.error === 'blocked_type' ? '这个类型不能直接打开。' : '没打开成功。'), 2600);
+              const act = s.pendingDesktopAction!;
+              if (act.kind === 'open') {
+                const r = await window.petWindow?.openPath(act.path);
+                if (r?.ok) {
+                  await fetch('/api/pet/desktop/opened', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: act.name }) });
+                } else {
+                  await fetch('/api/pet/desktop/ack', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: false }) });
+                }
+                say(r?.ok ? '打开了。' : (r?.error === 'blocked_type' ? '这个类型不能直接打开。' : '没打开成功。'), 2600);
+              } else {
+                const r = await fetch('/api/pet/desktop/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: act.id }) });
+                const d = await r.json() as { ok?: boolean; reason?: string; undoAvailable?: boolean };
+                if (d.undoAvailable) {
+                  setUndoAt(Date.now());
+                  window.setTimeout(() => setUndoAt(null), 20000);
+                }
+                say(d.ok ? '弄好了，不满意可以撤销。' : ('没弄成：' + (d.reason ?? '未知原因')), 3200);
+              }
               void refresh();
             }}>允许</button>
             <button className="flex-1 rounded-lg bg-white/10 py-1 text-[11px] text-slate-200" onClick={async () => {
@@ -430,6 +474,20 @@ export default function PetApp() {
               void refresh();
             }}>拒绝</button>
           </div>
+        </div>
+      )}
+
+      {/* 撤销小条（移动/重命名后 20 秒内可撤销） */}
+      {undoAt && (
+        <div className="mb-1 flex items-center gap-2 rounded-full bg-black/35 px-3 py-1 text-[10px] text-slate-200 backdrop-blur">
+          已改好了
+          <button className="rounded-full bg-white/15 px-2 py-[1px] text-[10px] text-white" onClick={async () => {
+            const r = await fetch('/api/pet/desktop/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            const d = await r.json() as { ok?: boolean; reason?: string };
+            say(d.ok ? '撤销了。' : ('撤销失败：' + (d.reason ?? '')), 2600);
+            setUndoAt(null);
+            void refresh();
+          }}>撤销</button>
         </div>
       )}
 

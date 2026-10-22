@@ -100,3 +100,43 @@ describe('桌面图标（只读列表 + 打开策略）', () => {
     expect(openPolicy({ kind: 'other', ext: '.xyz' }).canOpen).toBe(false);
   });
 });
+
+describe('桌面移动/重命名/撤销（v1.91，安全边界与无副作用路径）', () => {
+  it('不存在的项 → 明确 not found，不产生待确认动作', async () => {
+    const d = await import('../desktopItems.js');
+    d.clearPendingDesktopAction();
+    const r = d.requestMoveDesktopItem('绝对不存在的项xyz', '绝对不存在的文件夹xyz');
+    expect(r.ok).toBe(false);
+    expect(d.getPendingDesktopAction()).toBeNull();
+  });
+
+  it('没有待确认动作时 execute 明确报错（不误操作）', async () => {
+    const d = await import('../desktopItems.js');
+    d.clearPendingDesktopAction();
+    const r = d.executePendingDesktopAction();
+    expect(r.ok).toBe(false);
+    expect(String(r.reason)).toContain('没有待确认');
+  });
+
+  it('没有可撤销动作时 undo 明确报错', async () => {
+    const d = await import('../desktopItems.js');
+    const r = d.undoLastDesktopAction();
+    expect(r.ok).toBe(false);
+    expect(String(r.reason)).toContain('没有可撤销');
+  });
+
+  it('桌面事件记录可读（最近在前）', async () => {
+    const d = await import('../desktopItems.js');
+    const evs = d.readDesktopEvents(5);
+    expect(Array.isArray(evs)).toBe(true);
+    for (let i = 1; i < evs.length; i++) expect(evs[i - 1].ts).toBeGreaterThanOrEqual(evs[i].ts);
+  });
+
+  it('真实桌面根目录能解析出来（重定向桌面也支持）', async () => {
+    const d = await import('../desktopItems.js');
+    d.resetDesktopRootsCacheForTests();
+    const roots = d.desktopRoots();
+    expect(Array.isArray(roots)).toBe(true);
+    expect(roots.length).toBeGreaterThan(0);
+  });
+});

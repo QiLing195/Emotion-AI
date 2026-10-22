@@ -113,7 +113,7 @@ import { readRecentActivity, startActivitySampler, stopActivitySampler, activity
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled } from './services/mcpClient.js';
 import { startVoiceSampler, stopVoiceSampler, restartVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
 import { loadVoiceConfig, saveVoiceConfig } from './services/voiceConfig.js';
-import { listDesktopForModel, getPendingDesktopAction, clearPendingDesktopAction, requestOpenDesktopItem, isDesktopPath } from './services/desktopItems.js';
+import { listDesktopForModel, getPendingDesktopAction, clearPendingDesktopAction, requestOpenDesktopItem, isDesktopPath, desktopRoots, requestMoveDesktopItem, requestRenameDesktopItem, executePendingDesktopAction, undoLastDesktopAction, hasUndoableDesktopAction, recordDesktopOpen, readDesktopEvents } from './services/desktopItems.js';
 import { decideCapture, writeCaptureRequest, readCaptureRequest, clearCaptureRequest, readCaptureResult, clearCaptureResult, loadPetSettings, savePetSettings, grantScreenSession, SCREEN_POLICIES, readCaptureAudit, auditCapture, cleanupOldScreens, SCREEN_DIR, revokeScreenSession, CAPTURE_RESULT_PATH, type ScreenPolicy } from './services/screenWatch.js';
 import { buildPetState } from './services/petState.js';
 import { runOcr, compactOcrText } from './services/ocr.js';
@@ -399,6 +399,49 @@ export class AIGirlfriendServer {
         next();
       }
     });
+  }
+
+  /**
+   * v1.91 桌面回声：他刚让她帮忙开了/整理了一个桌面图标，
+   * 过一小会儿她想**随口**提一句（不是提醒、不是复述动作）。
+   * 只走"她自己的话"，生成失败就不发；同一时间只挂一个。
+   */
+  private _desktopEchoTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleDesktopEcho(name: string, kindLabel: string): void {
+    if (this._desktopEchoTimer) clearTimeout(this._desktopEchoTimer);
+    this._desktopEchoTimer = setTimeout(() => {
+      this._desktopEchoTimer = null;
+      void (async () => {
+        try {
+          const settings = this.readAISettings();
+          if (!settings?.apiKey) return;
+          const state = this.aiEngine.emotionState;
+          const raw = await generateAIResponse(
+            settings,
+            '你是一个有自己生活的女朋友。他刚在电脑桌面上请你帮了个小忙，过了一小会儿，你想随口提一句。'
+              + '用你自己的话、按你此刻的心情说，不要复述"你刚才打开了/整理了…"这类元描述，不要像提醒、不要像客服。只输出一句话（不超过 30 字）。',
+            buildProactivePrompt({
+              motive: { content: `桌面上的「${name}」（${kindLabel}）` } as never,
+              moodDescription: describeMood(state?.internal?.mood, Date.now()),
+              relationshipStageLabel: this._relationshipState?.stage,
+              recentUserTexts: [],
+            }),
+            false,
+            0.9,
+          );
+          const text = sanitizeProactiveMessage(typeof raw === 'string' ? raw : '') ?? '';
+          if (!text) return;
+          this._proactivePending.push({
+            id: `desktop_echo_${Date.now()}`,
+            text,
+            createdAt: new Date().toISOString(),
+            motiveKind: 'desktop_echo',
+          });
+          console.log(`[Desktop] 桌面回声已入队：${text.slice(0, 20)}`);
+        } catch { /* 回声失败不影响主流程 */ }
+      })();
+    }, Number(process.env.DESKTOP_ECHO_DELAY_MS) > 0 ? Number(process.env.DESKTOP_ECHO_DELAY_MS) : 70_000);
   }
 
   /**
@@ -1290,6 +1333,9 @@ export class AIGirlfriendServer {
               },
               getDesktop: (limit?: number) => listDesktopForModel(limit ?? 40),
               requestOpenDesktop: (query: string) => requestOpenDesktopItem(query),
+              requestMoveDesktop: (query: string, targetFolder: string) => requestMoveDesktopItem(query, targetFolder),
+              requestRenameDesktop: (query: string, newName: string) => requestRenameDesktopItem(query, newName),
+              getDesktopEvents: (limit?: number) => readDesktopEvents(limit ?? 8),
               mcp: mcpClientEnabled() ? {
                 declarations: () => getMcpToolDeclarations(),
                 call: (name: string, args: Record<string, unknown>) => callMcpTool(name, args),
@@ -2186,10 +2232,44 @@ export class AIGirlfriendServer {
       res.json({ ok: true });
     });
 
+    // 真实桌面根目录（Electron 主进程打开文件前也用它做路径校验）
+    this.app.get('/api/pet/desktop/roots', (req, res) => {
+      res.json({ ok: true, roots: desktopRoots() });
+    });
     // 调试/观测：桌面图标只读列表（不含绝对路径）
     this.app.get('/api/pet/desktop/list', (req, res) => {
       const limit = Number(req.query.limit ?? 40);
       res.json(listDesktopForModel(Number.isFinite(limit) ? limit : 40));
+    });
+
+    // v1.91 桌面动作：移动/重命名（桌宠页点「允许」后调用；执行成功会记事件 + 排一条"随口提一句"）
+    this.app.post('/api/pet/desktop/execute', (req, res) => {
+      const r = executePendingDesktopAction();
+      if (r.ok && r.kind && r.kind !== 'open') {
+        this.scheduleDesktopEcho(r.to || r.from || '', r.kind === 'move' ? '刚移到' : '刚重命名成');
+      }
+      res.json({ ...r, undoAvailable: hasUndoableDesktopAction() });
+    });
+
+    // 撤销上一次移动/重命名（5 分钟内有效）
+    this.app.post('/api/pet/desktop/undo', (req, res) => {
+      res.json({ ...undoLastDesktopAction(), undoAvailable: hasUndoableDesktopAction() });
+    });
+
+    // 桌宠页在 Electron 成功打开后回写（记录事件 + 排一条"随口提一句"）
+    this.app.post('/api/pet/desktop/opened', (req, res) => {
+      const name = String(req.body?.name ?? '').trim();
+      if (!name) return res.status(400).json({ ok: false, error: 'bad_name' });
+      clearPendingDesktopAction();
+      recordDesktopOpen(name);
+      this.scheduleDesktopEcho(name, '刚打开');
+      res.json({ ok: true });
+    });
+
+    // 最近桌面操作记录（她也能用工具 recall_desktop_events 读）
+    this.app.get('/api/pet/desktop/events', (req, res) => {
+      const limit = Number(req.query.limit ?? 10);
+      res.json({ ok: true, events: readDesktopEvents(Number.isFinite(limit) ? limit : 10) });
     });
 
     this.app.get('/state', (req, res) => {

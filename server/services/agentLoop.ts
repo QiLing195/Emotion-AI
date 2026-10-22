@@ -64,6 +64,12 @@ export interface ToolContext {
   getDesktop?: (limit?: number) => unknown;
   /** 请求打开桌面上的某个东西（需要他点允许；返回 needsApproval） */
   requestOpenDesktop?: (query: string) => unknown;
+  /** 请求把桌面上的东西移动到另一个桌面文件夹（需要授权） */
+  requestMoveDesktop?: (query: string, targetFolder: string) => unknown;
+  /** 请求重命名桌面上的东西（需要授权） */
+  requestRenameDesktop?: (query: string, newName: string) => unknown;
+  /** 只读：最近桌面操作记录（打开/移动/重命名/撤销） */
+  getDesktopEvents?: (limit?: number) => unknown;
   /** 外部 MCP server 的工具（声明 + 调用；没接就完全不出现） */
   mcp?: {
     declarations: () => Promise<Array<{ name: string; description: string; parameters: unknown }>> | Array<{ name: string; description: string; parameters: unknown }>;
@@ -150,6 +156,39 @@ export function toolDeclarations(extra: Array<{ name: string; description: strin
             type: 'object',
             properties: { name: { type: 'string', description: '要打开的东西的名字（桌面上显示的名字，可省略扩展名）' } },
             required: ['name'],
+          },
+        },
+        {
+          name: 'move_desktop_item',
+          description: '请求把桌面上的某个图标**移动到桌面上另一个文件夹**（需要他点授权；移动后可撤销）。',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '要移动的东西的名字' },
+              targetFolder: { type: 'string', description: '目标文件夹名字（必须在桌面上）' },
+            },
+            required: ['name', 'targetFolder'],
+          },
+        },
+        {
+          name: 'rename_desktop_item',
+          description: '请求**重命名桌面上的某个图标**（需要他点授权；重命名后可撤销）。扩展名会自动保留，不用自己加。',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '桌面上的东西现在的名字' },
+              newName: { type: 'string', description: '新名字（不含扩展名也行）' },
+            },
+            required: ['name', 'newName'],
+          },
+        },
+        {
+          name: 'recall_desktop_events',
+          description: '回想**最近他在桌面上做过/你帮他做过的事**（打开、移动、重命名、撤销的时间与名字）。想接着聊"你刚才打开的/刚整理的东西"时用。',
+          parameters: {
+            type: 'object',
+            properties: { limit: { type: 'number', description: '看几条，默认 8，最多 30' } },
+            required: [],
           },
         },
         {
@@ -241,6 +280,22 @@ export async function executeTool(
       if (!ctx.requestOpenDesktop) return { ok: false, result: { error: 'desktop_disabled（桌面打开没接）' }, ms: Date.now() - t0 };
       const r = await ctx.requestOpenDesktop(String(args?.name ?? ''));
       return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
+    }
+    if (name === 'move_desktop_item') {
+      if (!ctx.requestMoveDesktop) return { ok: false, result: { error: 'desktop_disabled（桌面移动没接）' }, ms: Date.now() - t0 };
+      const r = await ctx.requestMoveDesktop(String(args?.name ?? ''), String(args?.targetFolder ?? ''));
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
+    }
+    if (name === 'rename_desktop_item') {
+      if (!ctx.requestRenameDesktop) return { ok: false, result: { error: 'desktop_disabled（桌面重命名没接）' }, ms: Date.now() - t0 };
+      const r = await ctx.requestRenameDesktop(String(args?.name ?? ''), String(args?.newName ?? ''));
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
+    }
+    if (name === 'recall_desktop_events') {
+      if (!ctx.getDesktopEvents) return { ok: false, result: { error: 'desktop_disabled（桌面记录没接）' }, ms: Date.now() - t0 };
+      const rawLimit = Number(args?.limit ?? 8);
+      const lim = Number.isFinite(rawLimit) ? Math.max(1, Math.min(30, Math.round(rawLimit))) : 8;
+      return { ok: true, result: { ok: true, events: ctx.getDesktopEvents(lim) }, ms: Date.now() - t0 };
     }
     if (name === 'look_at_my_screen') {
       if (!ctx.lookAtScreen) return { ok: false, result: { error: 'screen_disabled（屏幕观察没接）' }, ms: Date.now() - t0 };
