@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 
 /**
- * 「她现在」OS 应用（v1.63）：实时显示她的情绪 + 小屋活动 + 低谷。
+ * 「她现在」OS 应用（v1.63，v1.93 合并）：实时显示
+ *   ① 此刻情绪 + 低谷  ② 她的小屋（真实活动）
+ *   ③ **她记着的事 + 她看到的活动**（合并成一张卡：心里挂着的 / 眼前看到的）
  * 数据：GET /api/her-state（只读，3s 轮询）。
  */
+interface ActivityRow { title: string; process: string; minutesAgo: number; ts: number }
+
 interface HerState {
   ok: boolean;
   roomEnabled: boolean;
@@ -22,6 +26,12 @@ interface HerState {
     followupEnabled: boolean;
     notes: Array<{ note: string; agoMinutes: number }>;
     upcoming: Array<{ what: string; dueAt: number; inMinutes: number; due: boolean }>;
+  };
+  /** v1.93 她看到的活动（只读、标题级） */
+  activity?: {
+    enabled: boolean;
+    entries: ActivityRow[];
+    note?: string;
   };
   now?: number;
 }
@@ -72,9 +82,13 @@ export default function HerStateApp() {
   const now = s?.now ?? Date.now();
   const top = s?.emotion.top ?? null;
   const lp = s?.lowPeriod;
+  const remembered = s?.remembered;
+  const activity = s?.activity;
+  const hasRemembered = Boolean(remembered && (remembered.notesEnabled || remembered.followupEnabled) &&
+    (remembered.notes.length > 0 || remembered.upcoming.length > 0));
 
   return (
-    <div className="flex h-full flex-col gap-3 bg-[#0f1120]/70 p-4 text-slate-200">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto bg-[#0f1120]/70 p-4 text-slate-200">
       {err && <div className="rounded-lg border border-amber-300/30 bg-amber-400/10 p-2 text-[11px] text-amber-200">{err}</div>}
 
       {/* 此刻情绪 */}
@@ -102,7 +116,7 @@ export default function HerStateApp() {
       </div>
 
       {/* 小屋 */}
-      <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
         <div className="flex items-center justify-between">
           <div className="text-[10px] uppercase tracking-widest text-slate-400">她的小屋</div>
           <div className="text-[10px] text-slate-500">{s?.roomEnabled ? '真实活动 · 非编造' : '小屋未开启'}</div>
@@ -116,7 +130,7 @@ export default function HerStateApp() {
             {s.room.history.length > 0 && (
               <div className="mt-3 border-t border-white/10 pt-2">
                 <div className="mb-1 text-[10px] text-slate-500">之前</div>
-                {s.room.history.slice().reverse().slice(0, 4).map((h, i) => (
+                {s.room.history.slice().reverse().slice(0, 3).map((h, i) => (
                   <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-400">
                     <span className="truncate">{h.label}</span>
                     <span className="shrink-0 text-[10px] text-slate-500">{ago(h.since, now)}</span>
@@ -134,43 +148,68 @@ export default function HerStateApp() {
         )}
       </div>
 
-      {/* 她记着的事（只读） */}
+      {/* ★ v1.93 合并卡：她记着的事（心里）＋ 她看到的活动（眼前） */}
       <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
         <div className="flex items-center justify-between">
-          <div className="text-[10px] uppercase tracking-widest text-slate-400">她记着的事</div>
+          <div className="text-[10px] uppercase tracking-widest text-slate-400">她记着的事 · 她看到的活动</div>
           <div className="text-[10px] text-slate-500">只读 · 不发消息</div>
         </div>
-        {(!s?.remembered || (!s.remembered.notesEnabled && !s.remembered.followupEnabled)) ? (
-          <div className="mt-2 text-[11px] text-slate-500">便签与"到点提醒"都还没开启。</div>
-        ) : (
-          <>
-            {s.remembered.upcoming.length > 0 ? (
-              <div className="mt-2">
-                <div className="mb-1 text-[10px] text-slate-500">心里挂着、还没到点</div>
-                {s.remembered.upcoming.map((u, i) => (
-                  <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
-                    <span className="truncate">{u.what}</span>
-                    <span className={`shrink-0 text-[10px] ${u.due ? 'text-rose-300' : 'text-slate-500'}`}>{dueText(u)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {s.remembered.notes.length > 0 ? (
-              <div className={s.remembered.upcoming.length > 0 ? 'mt-3 border-t border-white/10 pt-2' : 'mt-2'}>
-                <div className="mb-1 text-[10px] text-slate-500">写下的便签</div>
-                {s.remembered.notes.map((n, i) => (
-                  <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
-                    <span className="truncate">{n.note}</span>
-                    <span className="shrink-0 text-[10px] text-slate-500">{n.agoMinutes < 1 ? '刚刚' : n.agoMinutes < 60 ? `${n.agoMinutes} 分钟前` : `${Math.round(n.agoMinutes / 60)} 小时前`}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {s.remembered.upcoming.length === 0 && s.remembered.notes.length === 0 ? (
-              <div className="mt-2 text-[11px] text-slate-500">她现在没特别记着什么事。</div>
-            ) : null}
-          </>
-        )}
+
+        {/* 心里挂着的 / 写下的便签 */}
+        <div className="mt-2">
+          <div className="mb-1 text-[10px] text-slate-500">心里挂着的、写下的</div>
+          {!remembered || (!remembered.notesEnabled && !remembered.followupEnabled) ? (
+            <div className="text-[11px] text-slate-500">便签与"到点提醒"都还没开启。</div>
+          ) : !hasRemembered ? (
+            <div className="text-[11px] text-slate-500">她现在没特别记着什么事。</div>
+          ) : (
+            <>
+              {remembered.upcoming.map((u, i) => (
+                <div key={'u' + i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                  <span className="truncate">{u.what}</span>
+                  <span className={`shrink-0 text-[10px] ${u.due ? 'text-rose-300' : 'text-slate-500'}`}>{dueText(u)}</span>
+                </div>
+              ))}
+              {remembered.notes.map((n, i) => (
+                <div key={'n' + i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                  <span className="truncate">{n.note}</span>
+                  <span className="shrink-0 text-[10px] text-slate-500">
+                    {n.agoMinutes < 1 ? '刚刚' : n.agoMinutes < 60 ? `${n.agoMinutes} 分钟前` : `${Math.round(n.agoMinutes / 60)} 小时前`}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* 眼前看到的（前台窗口标题 + 进程，标题级、敏感已隐藏） */}
+        <div className="mt-3 border-t border-white/10 pt-2">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] text-slate-500">眼前看到的</div>
+            <div className="text-[10px] text-slate-600">标题级 · 敏感窗口已隐藏</div>
+          </div>
+          {!activity || !activity.enabled ? (
+            <div className="mt-1 text-[11px] text-slate-500">
+              {activity?.note ?? '活动采样没开（ENABLE_ACTIVITY_WATCH），她看不到你在用什么。'}
+            </div>
+          ) : activity.entries.length === 0 ? (
+            <div className="mt-1 text-[11px] text-slate-500">{activity.note ?? '还没有采样记录。'}</div>
+          ) : (
+            <div className="mt-1">
+              {activity.entries.map((a, i) => (
+                <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                  <span className="truncate">
+                    {a.title}
+                    {a.process ? <span className="ml-1 text-[10px] text-slate-500">· {a.process}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-slate-500">
+                    {a.minutesAgo < 1 ? '刚刚' : `${a.minutesAgo} 分钟前`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="text-[10px] text-slate-500">每 3 秒刷新 · 只读（不写、不改她的状态）</div>

@@ -233,7 +233,7 @@ export default function App() {
       icon: <HeartPulse size={20} />,
       accent: 'from-emerald-400/80 to-teal-300/70',
       defaultOpen: true,
-      window: { x: 1176, y: 470, w: 420, h: 470 },
+      window: { x: 1140, y: 176, w: 448, h: 668 },
       content: <HerStateApp />,
     },
     {

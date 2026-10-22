@@ -110,7 +110,7 @@ import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
 import { readRecentActivity, startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
-import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled } from './services/mcpClient.js';
+import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled, loadMcpConfig, listAllMcpTools, isToolAllowedByServer, isMcpConnected, MCP_CONFIG_PATH } from './services/mcpClient.js';
 import { startVoiceSampler, stopVoiceSampler, restartVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
 import { loadVoiceConfig, saveVoiceConfig } from './services/voiceConfig.js';
 import { listDesktopForModel, getPendingDesktopAction, clearPendingDesktopAction, requestOpenDesktopItem, isDesktopPath, desktopRoots, requestMoveDesktopItem, requestRenameDesktopItem, executePendingDesktopAction, undoLastDesktopAction, hasUndoableDesktopAction, recordDesktopOpen, readDesktopEvents } from './services/desktopItems.js';
@@ -2102,6 +2102,8 @@ export class AIGirlfriendServer {
           followups: herFollowupEnabled() ? listFollowups() : [],
           now: Date.now(),
         }),
+        // v1.93 她看到的活动（只读、标题级；敏感窗口采样器与 Node 两侧都已脱敏）
+        activity: readRecentActivity(6),
         now: Date.now(),
       });
     });
@@ -2240,6 +2242,49 @@ export class AIGirlfriendServer {
     this.app.get('/api/pet/desktop/list', (req, res) => {
       const limit = Number(req.query.limit ?? 40);
       res.json(listDesktopForModel(Number.isFinite(limit) ? limit : 40));
+    });
+
+    // v1.93 MCP：状态 / 工具探测 / 手动调用（只读；调用走同一套 allowTools 白名单）
+    this.app.get('/api/mcp/status', async (req, res) => {
+      try {
+        const cfg = loadMcpConfig();
+        const serverRows = Object.entries(cfg.servers).map(([name, s]) => ({
+          name,
+          enabled: s.enabled === true,
+          command: s.command,
+          args: s.args ?? [],
+          allowTools: s.allowTools ?? null,
+          note: s.note ?? '',
+          connected: isMcpConnected(name),
+        }));
+        const probe = String(req.query.probe ?? '') === '1';
+        const errors: Array<{ server: string; error: string }> = [];
+        let tools: Array<{ server: string; enabled: boolean; allowed: Array<{ name: string; description?: string }>; blocked: string[] }> = [];
+        if (probe) {
+          const per = await listAllMcpTools(cfg, errors);
+          tools = per.map(p => {
+            const s = cfg.servers[p.server];
+            const allowed = p.tools.filter(t => isToolAllowedByServer(s, t.name)).map(t => ({ name: t.name, description: t.description }));
+            const blocked = p.tools.filter(t => !isToolAllowedByServer(s, t.name)).map(t => t.name);
+            return { server: p.server, enabled: s.enabled === true, allowed, blocked };
+          });
+        }
+        res.json({ ok: true, clientEnabled: mcpClientEnabled(), configPath: MCP_CONFIG_PATH, servers: serverRows, ...(probe ? { tools, errors } : {}) });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    this.app.post('/api/mcp/call', async (req, res) => {
+      if (!mcpClientEnabled()) return res.status(400).json({ ok: false, error: 'mcp_disabled（ENABLE_MCP_CLIENT!=true）' });
+      const tool = String(req.body?.tool ?? '');
+      const args = (req.body?.args && typeof req.body.args === 'object') ? req.body.args as Record<string, unknown> : {};
+      try {
+        const r = await callMcpTool(tool, args);
+        res.json(r);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
     });
 
     // v1.91 桌面动作：移动/重命名（桌宠页点「允许」后调用；执行成功会记事件 + 排一条"随口提一句"）

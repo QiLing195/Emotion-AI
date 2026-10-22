@@ -111,3 +111,39 @@ describe('真实连一个 stdio MCP server（mock）', () => {
     expect(String(r.error)).toContain('server_disabled');
   });
 });
+
+describe('Windows 兼容与 schema 兼容层（v1.93）', () => {
+  it('Windows 上 npx 包一层 cmd.exe（否则 spawn ENOENT）', async () => {
+    const m = await import('../mcpClient.js');
+    const r = m.normalizeStdioCommand({ command: 'npx', args: ['-y', '@pkg/x', 'C:\\a b\\docs'] }, 'win32');
+    expect(r.command).toBe('cmd.exe');
+    expect(r.args[0]).toBe('/d');
+    expect(r.args[1]).toBe('/s');
+    expect(r.args[2]).toBe('/c');
+    expect(String(r.args[3])).toContain('npx');
+    expect(String(r.args[3])).toContain('"C:\\a b\\docs"');
+  });
+
+  it('非 Windows / 普通命令原样返回', async () => {
+    const m = await import('../mcpClient.js');
+    const a = m.normalizeStdioCommand({ command: 'npx', args: ['-y', 'pkg'] }, 'linux');
+    expect(a).toEqual({ command: 'npx', args: ['-y', 'pkg'] });
+    const b = m.normalizeStdioCommand({ command: 'node', args: ['server.js'] }, 'win32');
+    expect(b).toEqual({ command: 'node', args: ['server.js'] });
+  });
+
+  it('老 server 的 inputSchema 缺 type 时补成 object（否则新版 SDK 整条拒绝）', async () => {
+    const m = await import('../mcpClient.js');
+    const msg = { id: 2, result: { tools: [{ name: 'a', inputSchema: { $schema: 'x' } }, { name: 'b', inputSchema: { type: 'object', properties: {} } }] } };
+    m.patchToolSchemas(msg);
+    expect((msg.result.tools[0].inputSchema as { type?: string }).type).toBe('object');
+    expect((msg.result.tools[1].inputSchema as { type?: string }).type).toBe('object');
+  });
+
+  it('非 tools/list 消息不动（不误伤别的响应）', async () => {
+    const m = await import('../mcpClient.js');
+    const msg = { id: 3, result: { content: [{ type: 'text', text: 'hi' }] } };
+    m.patchToolSchemas(msg);
+    expect(msg).toEqual({ id: 3, result: { content: [{ type: 'text', text: 'hi' }] } });
+  });
+});

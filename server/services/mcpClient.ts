@@ -14,6 +14,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -147,15 +148,70 @@ function audit(row: Record<string, unknown>): void {
   } catch { /* 审计失败不影响调用 */ }
 }
 
+/**
+ * Windows 上 npx/npm 其实是 .cmd 批处理，Node 的 spawn 不能直接执行（ENOENT），
+ * 必须包一层 cmd.exe。其他平台/命令原样返回。
+ */
+export function normalizeStdioCommand(cfg: McpServerConfig, platform: string = process.platform): { command: string; args: string[] } {
+  const cmd = String(cfg.command ?? '').trim();
+  const args = Array.isArray(cfg.args) ? cfg.args.slice() : [];
+  if (platform === 'win32' && /^(npx|npm|pnpm|yarn|bunx)$/i.test(cmd)) {
+    const parts = [cmd, ...args].map(a => (/[\s"]/.test(a) ? `"${String(a).replace(/"/g, '\\"')}"` : String(a)));
+    return { command: 'cmd.exe', args: ['/d', '/s', '/c', parts.join(' ')] };
+  }
+  return { command: cmd, args };
+}
+
+/**
+ * 兼容层（v1.93）：老版本官方 server（如 filesystem@2025.8.18 / 0.6.2）的
+ * `tools/list` 返回的 `inputSchema` 只有 `$schema`、**没有 `type:"object"`**，
+ * 而新版 SDK 会按严格 schema 校验并整条拒绝（错误信息："expected object"）。
+ * 这里在 transport 收到 JSON-RPC 消息、SDK 解析之前，给缺 `type` 的 inputSchema 补上。
+ */
+export function patchToolSchemas(message: unknown): void {
+  const m = message as { result?: { tools?: unknown } } | null;
+  const tools = m?.result?.tools;
+  if (!Array.isArray(tools)) return;
+  for (const t of tools) {
+    if (!t || typeof t !== 'object') continue;
+    const tool = t as { inputSchema?: unknown };
+    if (tool.inputSchema && typeof tool.inputSchema === 'object') {
+      const schema = tool.inputSchema as { type?: unknown };
+      if (typeof schema.type !== 'string') schema.type = 'object';
+    }
+  }
+}
+
+function withSchemaCompat(inner: Transport): Transport {
+  const wrapper = {
+    onmessage: undefined as ((m: unknown) => void) | undefined,
+    onclose: undefined as (() => void) | undefined,
+    onerror: undefined as ((e: Error) => void) | undefined,
+    async start(): Promise<void> {
+      inner.onmessage = (m: unknown) => {
+        try { patchToolSchemas(m); } catch { /* 补不动就原样交给 SDK */ }
+        wrapper.onmessage?.(m);
+      };
+      inner.onclose = () => wrapper.onclose?.();
+      inner.onerror = (e: Error) => wrapper.onerror?.(e);
+      await inner.start();
+    },
+    async close(): Promise<void> { await inner.close(); },
+    async send(m: unknown): Promise<void> { await inner.send(m as Parameters<Transport['send']>[0]); },
+  };
+  return wrapper as unknown as Transport;
+}
+
 async function connectServer(server: string, cfg: McpServerConfig): Promise<Conn> {
   const existing = conns.get(server);
   if (existing) return existing;
-  const transport = new StdioClientTransport({
-    command: cfg.command,
-    args: cfg.args ?? [],
+  const spawnSpec = normalizeStdioCommand(cfg);
+  const transport = withSchemaCompat(new StdioClientTransport({
+    command: spawnSpec.command,
+    args: spawnSpec.args,
     env: { ...process.env as Record<string, string>, ...(cfg.env ?? {}) },
     stderr: 'ignore',
-  });
+  }));
   const client = new Client({ name: 'ai-girlfriend-mcp-client', version: '1.0.0' }, { capabilities: {} }) as unknown as AnyClient;
   await client.connect(transport);
   const listed = await client.listTools();
@@ -166,8 +222,11 @@ async function connectServer(server: string, cfg: McpServerConfig): Promise<Conn
   return conn;
 }
 
-/** 列出所有启用 server 的工具（懒连接；单个 server 失败不影响其它） */
-export async function listAllMcpTools(cfg: McpConfig = loadMcpConfig()): Promise<Array<{ server: string; tools: McpToolInfo[] }>> {
+/** 列出所有启用 server 的工具（懒连接；单个 server 失败不影响其它；errors 用于观测失败原因） */
+export async function listAllMcpTools(
+  cfg: McpConfig = loadMcpConfig(),
+  errors?: Array<{ server: string; error: string }>,
+): Promise<Array<{ server: string; tools: McpToolInfo[] }>> {
   const out: Array<{ server: string; tools: McpToolInfo[] }> = [];
   for (const [server, s] of Object.entries(cfg.servers)) {
     if (s.enabled !== true) continue;
@@ -175,7 +234,9 @@ export async function listAllMcpTools(cfg: McpConfig = loadMcpConfig()): Promise
       const conn = await connectServer(server, s);
       out.push({ server, tools: conn.tools });
     } catch (e) {
-      console.warn(`[MCP] 连接 ${server} 失败：${(e as Error).message}`);
+      const msg = (e as Error).message;
+      console.warn(`[MCP] 连接 ${server} 失败：${msg}`);
+      if (errors) errors.push({ server, error: msg });
     }
   }
   return out;

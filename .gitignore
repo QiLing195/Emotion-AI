@@ -24,3 +24,6 @@ memories/*.bak-*
 # 本地个人数据与本地设置：绝不上传
 .claude/settings.local.json
 memories/
+
+# MCP client local config (machine-specific paths; template: mcp-servers.example.json)
+mcp-servers.json

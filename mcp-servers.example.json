@@ -1,13 +1,28 @@
 {
-  "// 说明": "MCP 客户端配置（v1.82）。复制为 mcp-servers.json 后生效；代码里默认关，需 ENABLE_MCP_CLIENT=true。",
-  "// 安全": "第一版只读：每个 server 必须 enabled:true；不写 allowTools 时只放行名字像只读的工具(read/list/search/get/find/view/stat/query/head/cat/show/describe/fetch/lookup/inspect)。",
+  "_comment": "MCP server 配置模板：复制为 mcp-servers.json 再改（含本机绝对路径的配置不要提交）。每个 server 必须 enabled:true 才启用；allowTools 是白名单（不写则只放行名字像只读的工具 read/list/search/get/find/view/stat/query/head/cat/show/describe/fetch/lookup/inspect）。",
+  "_node_version": "官方 filesystem server 2025.8.18 可在 Node 22 跑；2.0.0 需要 Node >=24。",
   "servers": {
-    "filesystem": {
+    "fs": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "E:\\允许她读的目录"],
-      "enabled": false,
-      "allowTools": ["read_file", "list_directory", "search_files", "directory_tree"],
-      "note": "只读文件系统：把 E:\\允许她读的目录 换成你自己的路径；enabled 改 true 才生效"
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem@2025.8.18",
+        "<要暴露的目录绝对路径，例如 D:\\notes>"
+      ],
+      "enabled": true,
+      "allowTools": [
+        "list_allowed_directories",
+        "list_directory",
+        "list_directory_with_sizes",
+        "directory_tree",
+        "read_file",
+        "read_text_file",
+        "read_multiple_files",
+        "read_media_file",
+        "search_files",
+        "get_file_info"
+      ],
+      "note": "官方 filesystem server（只读）：只暴露一个目录，白名单只放行读取类工具；写/删/移动工具一个都不放行"
     }
   }
 }
