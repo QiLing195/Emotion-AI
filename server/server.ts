@@ -2851,6 +2851,10 @@ export class AIGirlfriendServer {
         activityConcern: aiCoordinator.getLastActivityConcern(),
         // v2.03：非用户来源单轮预算执行情况（scale < 1 表示发生过缩放）
         turnBudget: aiCoordinator.getLastTurnBudget(),
+        // v2.06：本轮表达计划（结构化：decision/emotion/duration/evidence/confidence）
+        expressionPlan: aiCoordinator.getLastExpressionPlan(),
+        // v2.06：本轮内在活动候选校验结果（accepted/rejected）
+        intrinsic: aiCoordinator.getLastIntrinsic(),
         // v1.9 动机层可观测：她此刻心里挂着的事（本轮说话的来源）
         motive: (() => {
           const m = es?.internal?.motive;

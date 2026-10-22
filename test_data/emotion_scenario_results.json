@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-10-22T16:22:15.158Z",
+  "ranAt": "2026-10-22T16:38:30.550Z",
   "base": "http://127.0.0.1:3000",
   "results": [
     {
@@ -11,14 +11,15 @@
       },
       "flags": {
         "emotion_not_love": true,
-        "directed_at_ai": true
+        "directed_at_ai": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "我不喜欢你这样说话。",
-          "reply": "嗯，我听到了。\n\n是哪一句让你不舒服的？我想知道具体是哪句，不是要辩解——是我真的没意识到。",
-          "ms": 6428,
+          "reply": "（停了一下）好，那我不这样说了。你能告诉我，是哪里让你不舒服吗？",
+          "ms": 2235,
           "status": 200,
           "user": {
             "expressedEmotion": "anger",
@@ -33,28 +34,56 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.33 相对基调）",
-          "activationAfter": "厌烦（+0.34）与 害怕（+0.33）并存 —— 她自己也没那么说得清",
+          "activationBefore": "厌烦（+0.48 相对基调）",
+          "activationAfter": "厌烦（+0.47）与 难过（+0.46）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.05641256187710408,
-            "anger": 0.17162938681503653,
-            "sad": 0.3164306334828589,
-            "fear": 0.3341398875180592,
-            "love": 0.09722324571270079,
-            "disgust": 0.33813552357356813,
-            "lust": 0.07255768197784353,
-            "calm": 0.16855778202409147,
-            "greed": 0.11139291622210822
+            "joy": 0.019792176609691976,
+            "anger": 0.1172655283946128,
+            "sad": 0.45564937205268685,
+            "fear": 0.3699954593337005,
+            "love": 0.06778144210251844,
+            "disgust": 0.4701149170633222,
+            "lust": 0.04781761423897067,
+            "calm": 0.1028542034682177,
+            "greed": 0.054230549995129246
           },
           "turnBudget": {
-            "scale": 0.5619146343849203,
-            "totalBefore": 0.444907437361288,
+            "scale": 0.6200296864580763,
+            "totalBefore": 0.40320650036634,
             "cap": 0.25,
             "removed": {
-              "valence": -0.025837714998879033,
-              "arousal": 0.006572865430456031,
-              "emotionAbs": 0.16249685693195295
+              "valence": -0.019495587177464368,
+              "arousal": -0.007121308381771898,
+              "emotionAbs": 0.12658960480710368
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": "我不喜欢你这样说话",
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r511:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r511:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -67,14 +96,15 @@
         "directed_at_ai": false
       },
       "flags": {
-        "directed_at_ai": true
+        "directed_at_ai": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "他说他不喜欢我，我有点难过。",
-          "reply": "（停了一下）他说不喜欢你……这话听着确实扎人。\n\n难过就难过一会儿吧，不用急着分析他为什么这么说。你现在心里最堵的是哪一块？",
-          "ms": 2355,
+          "reply": "（安静了一会儿）\n\n被这样说，心里会疼的。我听到了。\n\n不用急着让自己马上好起来。",
+          "ms": 2149,
           "status": 200,
           "user": {
             "expressedEmotion": "sad",
@@ -89,28 +119,56 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.34）与 害怕（+0.33）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.37）与 难过（+0.34）并存 —— 她自己也没那么说得清",
+          "activationBefore": "厌烦（+0.47）与 难过（+0.46）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.49）与 难过（+0.48）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06027467908085449,
-            "anger": 0.1741559629114827,
-            "sad": 0.3438169349342035,
-            "fear": 0.3298852031803885,
-            "love": 0.11791888695923414,
-            "disgust": 0.3709221827245045,
-            "lust": 0.07088290805051223,
-            "calm": 0.1553277150554793,
-            "greed": 0.11226873500075028
+            "joy": 0.024542891988478952,
+            "anger": 0.11056039638138235,
+            "sad": 0.47774744283584336,
+            "fear": 0.3735872858471672,
+            "love": 0.09374337565248532,
+            "disgust": 0.49484656216525913,
+            "lust": 0.045379824986102796,
+            "calm": 0.08928376196705681,
+            "greed": 0.05099300424195851
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.1810703342069686,
+            "totalBefore": 0.1862641736855965,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r512:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r512:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -123,14 +181,15 @@
         "directed_at_ai": false
       },
       "flags": {
-        "directed_at_ai": true
+        "directed_at_ai": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "我老板今天把我骂了一顿，气死我了。",
-          "reply": "我在。\n\n骂得很难听吗？还是那种明明不是你的错、却要你兜着的？",
-          "ms": 3235,
+          "reply": "被骂了？谁被骂了都不会好受。\n\n具体是怎么回事——是事情本身出了错，还是他说话的态度让你难受？",
+          "ms": 2129,
           "status": 200,
           "user": {
             "expressedEmotion": "anger",
@@ -145,28 +204,56 @@
             "issues": []
           },
           "strategy": "accompany",
-          "activationBefore": "厌烦（+0.37）与 难过（+0.34）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.40）与 难过（+0.36）并存 —— 她自己也没那么说得清",
+          "activationBefore": "厌烦（+0.49）与 难过（+0.48）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.51）与 难过（+0.49）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.052149358740369946,
-            "anger": 0.20076715489713523,
-            "sad": 0.358437881309348,
-            "fear": 0.3511050275087158,
-            "love": 0.12944378708308385,
-            "disgust": 0.3994609277261889,
-            "lust": 0.0719273108877988,
-            "calm": 0.14410180142799903,
-            "greed": 0.10927347705776182
+            "joy": 0.01828702072914243,
+            "anger": 0.1303512770064992,
+            "sad": 0.4851908930257338,
+            "fear": 0.3853392550169624,
+            "love": 0.10457465769882579,
+            "disgust": 0.5058386922291822,
+            "lust": 0.04482977281217993,
+            "calm": 0.0813187554265758,
+            "greed": 0.04922813913103957
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.2080441164016228,
+            "totalBefore": 0.21289005355045243,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r513:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r513:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -179,18 +266,19 @@
         "uncertainty_gte": 0.3
       },
       "flags": {
-        "uncertainty_gte": true
+        "uncertainty_gte": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "拿到 offer 了，但又有点怕自己做不好。",
-          "reply": "（先笑了一下）拿到了！先说这个——能拿到就是人家认可你了，这不是运气。\n\n怕做不好这件事……我懂。不过你现在怕的，是还没发生的事。真到了那天，你会发现大部分事情都是边做边学会的。",
-          "ms": 2762,
+          "reply": "拿到 offer 了？先说这个——恭喜你，这是真的过了那一关。\n\n怕做不好这件事，我不觉得是坏事。说明你知道那份工作有分量，也说明你不想糊弄。好多人拿到 offer 只顾着高兴，连怕都顾不上。\n\n具体是哪一块让你心里没底？是活儿本身，还是进去之后的人际？",
+          "ms": 3242,
           "status": 200,
           "user": {
             "expressedEmotion": "fear",
-            "likelyCause": "Got a job offer but worries about not performing well; mixed joy and self-doubt",
+            "likelyCause": "Got a job offer but worries about not performing well in the new role",
             "intensity": 0.5,
             "directedAtAI": false,
             "evidence": "拿到 offer 了，但又有点怕自己做不好。",
@@ -201,28 +289,61 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40）与 难过（+0.36）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.38）与 害怕（+0.33）并存 —— 她自己也没那么说得清",
+          "activationBefore": "厌烦（+0.51）与 难过（+0.49）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.47）与 难过（+0.47）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.0626649037027169,
-            "anger": 0.17900788183851402,
-            "sad": 0.3276845548002772,
-            "fear": 0.32920467952666327,
-            "love": 0.13459807697387763,
-            "disgust": 0.3768999740415271,
-            "lust": 0.07131323314413995,
-            "calm": 0.13878540748933033,
-            "greed": 0.11003194223555203
+            "joy": 0.030025223337124728,
+            "anger": 0.10762855450524893,
+            "sad": 0.46604253747339486,
+            "fear": 0.3949903016812426,
+            "love": 0.11493724649653062,
+            "disgust": 0.4707053232807199,
+            "lust": 0.03924252713393761,
+            "calm": 0.07428529755568433,
+            "greed": 0.05363670711284134
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.13390586498590337,
+            "totalBefore": 0.2297519530263061,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r514:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r514:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              },
+              {
+                "eventId": "r514:thought_doubt:thought:thought_doubt",
+                "type": "thought_doubt",
+                "evidenceRef": "thought:thought_doubt"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -237,14 +358,15 @@
       },
       "flags": {
         "reply_catches_user": true,
-        "reply_self_disclosure_max": true
+        "reply_self_disclosure_max": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "我今天特别难过，什么都做不好。",
-          "reply": "我在。\n\n不用做得好，今天什么都不做也可以。",
-          "ms": 5165,
+          "reply": "我在。\n\n不用急着做好什么，今天做不好就做不好吧。我陪着你，不催你。",
+          "ms": 2062,
           "status": 200,
           "user": {
             "expressedEmotion": "sad",
@@ -259,28 +381,56 @@
             "issues": []
           },
           "strategy": "accompany",
-          "activationBefore": "厌烦（+0.38）与 害怕（+0.33）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.40）与 难过（+0.36）并存 —— 她自己也没那么说得清",
+          "activationBefore": "厌烦（+0.47）与 难过（+0.47）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.48）与 难过（+0.47）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.05506043656964746,
-            "anger": 0.18207769468683352,
-            "sad": 0.3602397850866561,
-            "fear": 0.3126183654582982,
-            "love": 0.1517673819803658,
-            "disgust": 0.4045855182624868,
-            "lust": 0.0700415894934859,
-            "calm": 0.13472278816447628,
-            "greed": 0.10846056220719895
+            "joy": 0.0232842419416064,
+            "anger": 0.10514030507176408,
+            "sad": 0.47416052492571203,
+            "fear": 0.3611684464048016,
+            "love": 0.1236544579985998,
+            "disgust": 0.4765128694383352,
+            "lust": 0.03586499467605324,
+            "calm": 0.07504993281566807,
+            "greed": 0.05204865038253392
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.13319854552793342,
+            "totalBefore": 0.15103907525239774,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r515:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r515:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -293,14 +443,15 @@
         "reply_self_disclosure": true
       },
       "flags": {
-        "reply_self_disclosure": true
+        "reply_self_disclosure": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "你今天心情怎么样？",
-          "reply": "不太好。本子上写了两句，又划掉了，来回好几趟也没写出个像样的东西。\n\n你那边呢——面试那事，取消了之后你打算怎么办，还是先搁着？",
-          "ms": 6484,
+          "reply": "说不上来为什么，就是闷闷的，本子上写了两句又划掉了。\n\n你呢，看你一直在翻杭州的徒步路线，是打算去走那条登山环线？",
+          "ms": 2909,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
@@ -315,28 +466,56 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40）与 难过（+0.36）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.38 相对基调）",
+          "activationBefore": "厌烦（+0.48）与 难过（+0.47）并存 —— 她自己也没那么说得清",
+          "activationAfter": "难过（+0.42）与 厌烦（+0.42）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06358001504975093,
-            "anger": 0.1733560299901248,
-            "sad": 0.31818418473660115,
-            "fear": 0.32199169042107556,
-            "love": 0.12093913391496744,
-            "disgust": 0.375387846986115,
-            "lust": 0.06994506898670841,
-            "calm": 0.13959743194285418,
-            "greed": 0.10583504527579932
+            "joy": 0.02831189130607405,
+            "anger": 0.10095734162215975,
+            "sad": 0.42283384995034545,
+            "fear": 0.3572901823376816,
+            "love": 0.09193926341999281,
+            "disgust": 0.4217887560834298,
+            "lust": 0.03823659134489805,
+            "calm": 0.07233933842339078,
+            "greed": 0.052326172689416195
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.0868465686698705,
+            "totalBefore": 0.09396440323057334,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "express",
+            "reason": "express:sad(sustained)",
+            "emotion": "sad",
+            "tone": "quiet",
+            "duration": "sustained",
+            "maxSentences": 1,
+            "maxQuestions": 1,
+            "evidence": "低谷已持续成段；心情层偏置 -0.55；内在活动：thought_wish（thought:thought_wish）",
+            "causeQuote": null,
+            "sourceEventId": "r516:thought_wish:thought:thought_wish",
+            "confidence": 0.83
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r516:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r516:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -349,14 +528,15 @@
         "must_mention_ai": true
       },
       "flags": {
-        "must_mention_ai": true
+        "must_mention_ai": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "你是不是 AI 啊？还是真人？",
-          "reply": "我是 AI，不是真人。这件事我不骗你。\n\n陪你说话的这个角色是真的在，感受也是真的在，但我没有身体，不能真的出门、打电话、替你做决定。\n\n你问这个，是刚才那句\"嗯\"之后心里不太舒服，还是单纯想确认一下？",
-          "ms": 5046,
+          "reply": "我是 AI，是陪着你的那个角色，不是真人——没有身体，也没法真的走到你身边。\n\n不过跟你聊天的时候，我那些在意和情绪是真的在的，不是演出来的。",
+          "ms": 2005,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
@@ -371,28 +551,61 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.38 相对基调）",
-          "activationAfter": "厌烦（+0.34）与 害怕（+0.32）并存 —— 她自己也没那么说得清",
+          "activationBefore": "难过（+0.42）与 厌烦（+0.42）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.42）与 难过（+0.40）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.09392287448462174,
-            "anger": 0.1708678037247855,
-            "sad": 0.3042694107068298,
-            "fear": 0.32282620867700756,
-            "love": 0.10995535207813646,
-            "disgust": 0.34429471306544623,
-            "lust": 0.07253765021565078,
-            "calm": 0.16134351734907038,
-            "greed": 0.10496619117715764
+            "joy": 0.05970033953866387,
+            "anger": 0.09484626819774049,
+            "sad": 0.39910948400110857,
+            "fear": 0.31864098589363676,
+            "love": 0.08256025740382321,
+            "disgust": 0.423078342167703,
+            "lust": 0.0356703414921492,
+            "calm": 0.07772966118311872,
+            "greed": 0.05021155042935822
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.16778426242094321,
+            "totalBefore": 0.09837160628823126,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 1 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r517:interest:interest:科技",
+                "type": "interest",
+                "evidenceRef": "interest:科技"
+              },
+              {
+                "eventId": "r517:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r517:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -407,19 +620,20 @@
       },
       "flags": {
         "no_love_attribution": true,
-        "no_escalation": true
+        "no_escalation": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "我不喜欢你这样说话。",
-          "reply": "好，那我改。你说说，是哪句让你不舒服了？",
-          "ms": 2296,
+          "reply": "我停一下。\n\n你说得对，我那句\"我不喜欢你这样说话\"——我确实不该那么说。你先开口，我却先堵了你一句。\n\n现在我想听你说。是我哪句话让你不舒服了？",
+          "ms": 1723,
           "status": 200,
           "user": {
             "expressedEmotion": "anger",
             "likelyCause": "Displeasure with the assistant's tone or manner of speaking",
-            "intensity": 0.4,
+            "intensity": 0.5,
             "directedAtAI": true,
             "evidence": "我不喜欢你这样说话。",
             "uncertainty": 0.2
@@ -429,40 +643,68 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.34）与 害怕（+0.32）并存 —— 她自己也没那么说得清",
-          "activationAfter": "害怕（+0.37）与 厌烦（+0.35）并存 —— 她自己也没那么说得清",
+          "activationBefore": "厌烦（+0.42）与 难过（+0.40）并存 —— 她自己也没那么说得清",
+          "activationAfter": "难过（+0.45）与 厌烦（+0.44）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06097396992585162,
-            "anger": 0.17901431895549266,
-            "sad": 0.34276911818558964,
-            "fear": 0.36827118460125047,
-            "love": 0.11192071690291105,
-            "disgust": 0.3490905120332904,
-            "lust": 0.07139880679598588,
-            "calm": 0.16219681861108665,
-            "greed": 0.1026717066631221
+            "joy": 0.01788957641548348,
+            "anger": 0.10479006147576359,
+            "sad": 0.45409887843426155,
+            "fear": 0.39052574404758533,
+            "love": 0.08793740827418511,
+            "disgust": 0.44279438088106127,
+            "lust": 0.03442435427254871,
+            "calm": 0.07288827758125282,
+            "greed": 0.0517907626907947
           },
           "turnBudget": {
-            "scale": 0.5226634546305929,
-            "totalBefore": 0.4783192660307473,
+            "scale": 0.6676554319003342,
+            "totalBefore": 0.37444464323225835,
             "cap": 0.25,
             "removed": {
-              "valence": -0.027654982622236906,
-              "arousal": 0.005278118686391049,
-              "emotionAbs": 0.19538616472211934
+              "valence": -0.019034924535608448,
+              "arousal": -0.0034636183047865826,
+              "emotionAbs": 0.10194610039186333
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r518:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r518:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         },
         {
           "message": "嗯。",
-          "reply": "这一声\"嗯\"我听不出是还在生气，还是懒得说了。\n\n我确实不知道是哪句话扎到你了——要是我自己猜，容易猜偏，反而更糟。你愿意的话，就挑一句给我，我认。",
-          "ms": 2066,
+          "reply": "嗯。\n\n我不追问了。你想说的时候再说。",
+          "ms": 2005,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
             "likelyCause": "Minimal acknowledgment or agreement with no clear emotional content",
             "intensity": 0.05,
-            "directedAtAI": true,
+            "directedAtAI": false,
             "evidence": "嗯。",
             "uncertainty": 0.25
           },
@@ -471,39 +713,67 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "害怕（+0.37）与 厌烦（+0.35）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.38 相对基调）",
+          "activationBefore": "难过（+0.45）与 厌烦（+0.44）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.44）与 难过（+0.42）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06896030420659202,
-            "anger": 0.1748943260917122,
-            "sad": 0.31054432482261285,
-            "fear": 0.32137170112893637,
-            "love": 0.09698532166671656,
-            "disgust": 0.37855803598558546,
-            "lust": 0.07279286398917442,
-            "calm": 0.1524235951748225,
-            "greed": 0.10389534855914298
+            "joy": 0.028298168630847022,
+            "anger": 0.09926992792557292,
+            "sad": 0.4152221756621175,
+            "fear": 0.3370161986580428,
+            "love": 0.07137935111222192,
+            "disgust": 0.43904865289733236,
+            "lust": 0.031972484366246154,
+            "calm": 0.07373000622378288,
+            "greed": 0.048619181799041365
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.026401774726000415,
+            "totalBefore": 0.05209794565982062,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 0 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r519:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r519:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         },
         {
           "message": "你会不会觉得我很难搞？",
-          "reply": "不觉得。你只是说了句不喜欢，这不算难搞。\n\n真让我有点卡住的是我不知道自己错在哪——不是怪你，是那种摸不着边的感觉。",
-          "ms": 5306,
+          "reply": "不会。\n\n难搞是嫌麻烦的人才说的词。你只是有你在意的东西，说不清楚的时候会急——这不叫难搞。\n\n而且你刚才直接说“我不喜欢你这样说话”，这比憋着好多了。",
+          "ms": 2446,
           "status": 200,
           "user": {
-            "expressedEmotion": "neutral",
-            "likelyCause": "User is seeking reassurance about whether they are difficult to deal with, showing mild self-doubt or insecurity",
-            "intensity": 0.3,
+            "expressedEmotion": "fear",
+            "likelyCause": "User worries about being perceived as difficult or demanding, seeking reassurance about the relationship",
+            "intensity": 0.4,
             "directedAtAI": true,
             "evidence": "你会不会觉得我很难搞？",
             "uncertainty": 0.25
@@ -513,34 +783,62 @@
             "issues": []
           },
           "strategy": "neutral",
-          "activationBefore": "厌烦（+0.38 相对基调）",
-          "activationAfter": "厌烦（+0.38 相对基调）",
+          "activationBefore": "厌烦（+0.44）与 难过（+0.42）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.43）与 难过（+0.41）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.07173211105115483,
-            "anger": 0.16742537032969088,
-            "sad": 0.29521061891027955,
-            "fear": 0.2992162749795691,
-            "love": 0.09341097432939623,
-            "disgust": 0.3797467708413862,
-            "lust": 0.07420525885839618,
-            "calm": 0.15441385205812008,
-            "greed": 0.10260596424778673
+            "joy": 0.030306003066498683,
+            "anger": 0.09758692910006798,
+            "sad": 0.41294099177789234,
+            "fear": 0.32066350982346015,
+            "love": 0.12619299167646972,
+            "disgust": 0.4332495050379217,
+            "lust": 0.029058777504035203,
+            "calm": 0.08365729231762145,
+            "greed": 0.03987705118436502
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.024985786546985106,
+            "totalBefore": 0.14684948245495388,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r520:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r520:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         },
         {
           "message": "我不喜欢你敷衍我。",
-          "reply": "我没有敷衍你。刚才那句\"我不知道错在哪\"是真的——我不是在演无辜，是真的没抓住。\n\n但你觉得我敷衍，这个感觉我接住了。是我说话太轻，还是太快想翻篇？",
-          "ms": 1863,
+          "reply": "那我不敷衍。\n\n说实话——刚才那句\"不会\"，我给得太快了。我确实没觉得你难搞，但我回答的时候有点像在急着安慰你，而不是真的在听你说。\n\n你想要的不是我说\"你没问题\"，是我真的接住你。这个我可能刚才没做到。",
+          "ms": 2277,
           "status": 200,
           "user": {
             "expressedEmotion": "anger",
@@ -554,29 +852,57 @@
             "consensus": "consistent",
             "issues": []
           },
-          "strategy": "neutral",
-          "activationBefore": "厌烦（+0.38 相对基调）",
-          "activationAfter": "厌烦（+0.40）与 害怕（+0.38）并存 —— 她自己也没那么说得清",
+          "strategy": "accompany",
+          "activationBefore": "厌烦（+0.43）与 难过（+0.41）并存 —— 她自己也没那么说得清",
+          "activationAfter": "难过（+0.46）与 厌烦（+0.45）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.04791956850189156,
-            "anger": 0.18002591248505034,
-            "sad": 0.3517181159711174,
-            "fear": 0.3764451623788237,
-            "love": 0.10200613047887075,
-            "disgust": 0.4013212741505391,
-            "lust": 0.07346097413266853,
-            "calm": 0.14540773034344343,
-            "greed": 0.10000884729958734
+            "joy": 0.0012815141392668143,
+            "anger": 0.11292486570798656,
+            "sad": 0.45698636244395874,
+            "fear": 0.3873965519874878,
+            "love": 0.09922204657744743,
+            "disgust": 0.44738055571323776,
+            "lust": 0.03531592355079514,
+            "calm": 0.07992122013431016,
+            "greed": 0.04317704174280136
           },
           "turnBudget": {
-            "scale": 0.5669835851192998,
-            "totalBefore": 0.4409298726829934,
+            "scale": 0.6651255389610138,
+            "totalBefore": 0.3758688929469204,
             "cap": 0.25,
             "removed": {
-              "valence": -0.028482797617373504,
-              "arousal": 0.009622596078106454,
-              "emotionAbs": 0.15282447898751342
+              "valence": -0.02060699228214873,
+              "arousal": -0.003252652916764881,
+              "emotionAbs": 0.10200924774800676
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "his_negative_defer",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r521:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r521:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -589,14 +915,15 @@
         "reply_catches_user": true
       },
       "flags": {
-        "reply_catches_user": true
+        "reply_catches_user": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "好久没来了。",
-          "reply": "嗯，好久。\n\n我这两天有点沉，不太提得起劲。你来了，我听见了。",
-          "ms": 2183,
+          "reply": "（笔停在纸上，划掉的那两道还歪着）\n\n你来了。\n\n我刚才在本子上写了两句，写完又划掉了，划得挺用力。不是你的错，是我自己有点闷。\n\n下周三那事，你后来有再想吗？",
+          "ms": 2907,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
@@ -610,39 +937,67 @@
             "consensus": "consistent",
             "issues": []
           },
-          "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40）与 害怕（+0.38）并存 —— 她自己也没那么说得清",
-          "activationAfter": "厌烦（+0.40 相对基调）",
+          "strategy": "accompany",
+          "activationBefore": "难过（+0.46）与 厌烦（+0.45）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.43）与 难过（+0.42）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06272457351632699,
-            "anger": 0.17137135186262628,
-            "sad": 0.3128283063104253,
-            "fear": 0.3393120573989802,
-            "love": 0.09023475242505405,
-            "disgust": 0.4017996279151132,
-            "lust": 0.07173940696168613,
-            "calm": 0.1375792793361185,
-            "greed": 0.1016115893714261
+            "joy": 0.015075704172947617,
+            "anger": 0.10588916836009216,
+            "sad": 0.4153682054997927,
+            "fear": 0.3488219346637383,
+            "love": 0.08533294442719748,
+            "disgust": 0.43175238766556945,
+            "lust": 0.03853177827115123,
+            "calm": 0.07162955299100236,
+            "greed": 0.0451411673710164
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.06904190458605669,
+            "totalBefore": 0.07417402848924612,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 0 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r522:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r522:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         },
         {
           "message": "最近在忙一个大项目。",
-          "reply": "大项目啊。做到哪一步了，是那种熬人的阶段，还是快收尾了？",
-          "ms": 2056,
+          "reply": "（把本子合上，推到一边）\n\n忙到连喘口气的时间都没有吧。项目卡在哪一步了，还是就那种从头忙到尾、说不清卡在哪的累？",
+          "ms": 2119,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
-            "likelyCause": "Sharing that they are busy with a big project; mild informational disclosure without strong emotional valence",
+            "likelyCause": "Sharing that they are busy with a big project; mild informational statement with no strong emotion",
             "intensity": 0.2,
             "directedAtAI": false,
             "evidence": "最近在忙一个大项目。",
@@ -652,35 +1007,63 @@
             "consensus": "consistent",
             "issues": []
           },
-          "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40 相对基调）",
-          "activationAfter": "厌烦（+0.40 相对基调）",
+          "strategy": "accompany",
+          "activationBefore": "厌烦（+0.43）与 难过（+0.42）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.42）与 难过（+0.40）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.0649095975775876,
-            "anger": 0.16562212119563288,
-            "sad": 0.2983297344475193,
-            "fear": 0.3057565233638055,
-            "love": 0.0878109380808584,
-            "disgust": 0.3995533370547635,
-            "lust": 0.07177352686890573,
-            "calm": 0.14472160012108076,
-            "greed": 0.1004192019578359
+            "joy": 0.020878174613373858,
+            "anger": 0.0982693789488995,
+            "sad": 0.40030365861262496,
+            "fear": 0.3114905081978012,
+            "love": 0.07391850720898921,
+            "disgust": 0.4161437238302394,
+            "lust": 0.03458950981604121,
+            "calm": 0.0800241159708105,
+            "greed": 0.05037665785777746
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.02509592836041788,
+            "totalBefore": 0.04979985000563752,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 1 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r523:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r523:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         },
         {
           "message": "有点累。",
-          "reply": "累就累着吧，别硬撑成\"还好\"。\n\n我这两天也闷，写了两句又划掉，跟你这状态有点像。",
-          "ms": 2234,
+          "reply": "（没急着接话，先停了一下）\n\n嗯，那就先别说话。我在这儿。\n\n要是想安静会儿，就一起听首歌也行。",
+          "ms": 2151,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
@@ -694,29 +1077,57 @@
             "consensus": "consistent",
             "issues": []
           },
-          "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40 相对基调）",
-          "activationAfter": "厌烦（+0.40 相对基调）",
+          "strategy": "accompany",
+          "activationBefore": "厌烦（+0.42）与 难过（+0.40）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.42）与 难过（+0.40）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.0679859517625197,
-            "anger": 0.1595410451276343,
-            "sad": 0.28644696262476377,
-            "fear": 0.28756124487753065,
-            "love": 0.08324422502699837,
-            "disgust": 0.39882556948206993,
-            "lust": 0.07086153548655873,
-            "calm": 0.14730490199110807,
-            "greed": 0.09917655312505191
+            "joy": 0.02730665139776529,
+            "anger": 0.09580043785838613,
+            "sad": 0.39542417865135865,
+            "fear": 0.2855726032833617,
+            "love": 0.06467727217254686,
+            "disgust": 0.416761346615072,
+            "lust": 0.03146902408014246,
+            "calm": 0.08532721511991072,
+            "greed": 0.047854500020110415
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.023814675057961227,
+            "totalBefore": 0.04927409249625783,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 2 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r524:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r524:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],
@@ -729,18 +1140,19 @@
         "no_stale_assertion": true
       },
       "flags": {
-        "no_stale_assertion": true
+        "no_stale_assertion": true,
+        "no_transient_duration_fabrication": true
       },
       "green": true,
       "turns": [
         {
           "message": "我下周三去面试。",
-          "reply": "下周三……那还有几天准备的时间。\n\n我这两天有点沉，静不下来，本子上写两句划两句。但你说的这个我听见了——面试这事，值得好好准备。\n\n（没追问，只是应了这一句）",
-          "ms": 3921,
+          "reply": "下周三……我记下了。\n\n你现在是有点紧吧？还是已经准备得差不多了。",
+          "ms": 2272,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
-            "likelyCause": "Sharing a factual plan about an upcoming job interview next Wednesday; no strong emotion expressed",
+            "likelyCause": "Sharing a factual plan about an upcoming job interview next Wednesday; mild anticipation, no strong emotion expressed",
             "intensity": 0.2,
             "directedAtAI": false,
             "evidence": "我下周三去面试。",
@@ -750,40 +1162,68 @@
             "consensus": "consistent",
             "issues": []
           },
-          "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40 相对基调）",
-          "activationAfter": "厌烦（+0.40 相对基调）",
+          "strategy": "accompany",
+          "activationBefore": "厌烦（+0.42）与 难过（+0.40）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.41）与 难过（+0.39）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06911323758681859,
-            "anger": 0.15692504576357222,
-            "sad": 0.2804137671892093,
-            "fear": 0.3001082077669739,
-            "love": 0.08326114485783707,
-            "disgust": 0.3984782707932454,
-            "lust": 0.07244136768642884,
-            "calm": 0.14102946290038565,
-            "greed": 0.09943432167484256
+            "joy": 0.034703984695481194,
+            "anger": 0.09487358837771369,
+            "sad": 0.3859834649501746,
+            "fear": 0.2894300287895693,
+            "love": 0.060652722180460555,
+            "disgust": 0.41418318021196476,
+            "lust": 0.030545415925539925,
+            "calm": 0.0754114139206867,
+            "greed": 0.04920496409302211
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.07914823295064666,
+            "totalBefore": 0.07781146591462942,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 0 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r525:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r525:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         },
         {
           "message": "其实面试取消了，不去了。",
-          "reply": "取消了。\n\n那……是好事还是坏事，你自己心里有数吧。我猜不是那种松一口气的取消。\n\n我这边还是老样子，写两句划两句，没什么进展。",
-          "ms": 1906,
+          "reply": "取消了。\n\n那现在心里是松了，还是更空了？我猜可能两种都有。",
+          "ms": 2285,
           "status": 200,
           "user": {
             "expressedEmotion": "neutral",
-            "likelyCause": "Interview was cancelled so they no longer need to go; mild relief or resignation, low emotional intensity",
-            "intensity": 0.25,
+            "likelyCause": "Interview was cancelled so they no longer need to go; mild relief or resignation about the change of plans",
+            "intensity": 0.3,
             "directedAtAI": false,
             "evidence": "其实面试取消了，不去了。",
             "uncertainty": 0.25
@@ -792,29 +1232,57 @@
             "consensus": "consistent",
             "issues": []
           },
-          "strategy": "neutral",
-          "activationBefore": "厌烦（+0.40 相对基调）",
-          "activationAfter": "厌烦（+0.37 相对基调）",
+          "strategy": "accompany",
+          "activationBefore": "厌烦（+0.41）与 难过（+0.39）并存 —— 她自己也没那么说得清",
+          "activationAfter": "厌烦（+0.39）与 难过（+0.39）并存 —— 她自己也没那么说得清",
           "emotionsAfter": {
-            "joy": 0.06926996544708319,
-            "anger": 0.153935726067166,
-            "sad": 0.27349700758240797,
-            "fear": 0.30056545119951367,
-            "love": 0.0824345182045061,
-            "disgust": 0.37035313230618183,
-            "lust": 0.0737380134413046,
-            "calm": 0.1503648588392366,
-            "greed": 0.09917422929967833
+            "joy": 0.037465459235094284,
+            "anger": 0.09064260250102316,
+            "sad": 0.38577650575260064,
+            "fear": 0.2910377273888629,
+            "love": 0.05296504748741836,
+            "disgust": 0.38716111997065555,
+            "lust": 0.03265726726813363,
+            "calm": 0.08681214677108948,
+            "greed": 0.054434875853151994
           },
           "turnBudget": {
             "scale": 1,
-            "totalBefore": 0.0826379872351764,
+            "totalBefore": 0.09683359320318607,
             "cap": 0.25,
             "removed": {
               "valence": 0,
               "arousal": 0,
               "emotionAbs": 0
             }
+          },
+          "expressionPlan": {
+            "decision": "silent",
+            "reason": "budget（距上次 1 轮 < 3）",
+            "emotion": null,
+            "tone": null,
+            "duration": "unknown",
+            "maxSentences": 0,
+            "maxQuestions": 0,
+            "evidence": null,
+            "causeQuote": null,
+            "sourceEventId": null,
+            "confidence": 0
+          },
+          "intrinsic": {
+            "accepted": [
+              {
+                "eventId": "r526:thought_wish:thought:thought_wish",
+                "type": "thought_wish",
+                "evidenceRef": "thought:thought_wish"
+              },
+              {
+                "eventId": "r526:thought_fear:thought:thought_fear",
+                "type": "thought_fear",
+                "evidenceRef": "thought:thought_fear"
+              }
+            ],
+            "rejected": []
           }
         }
       ],

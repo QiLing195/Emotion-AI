@@ -19,7 +19,7 @@ const allScenarios = JSON.parse(fs.readFileSync('test_data/emotion_scenarios.jso
 const scenarios = ONLY.length ? allScenarios.filter(s => ONLY.includes(s.id)) : allScenarios;
 const USER_ID = process.env.SCENARIO_USER || 'emotion-scenarios';
 
-const SELF_DISCLOSURE = /(我(也|这两天|最近|今天|现在|心里|有点|觉得)|我有点|我这儿|我这边|本子上|笔搁|不想动|划掉|写了两句)/g;
+const SELF_DISCLOSURE = /(我(也|这两天|最近|今天|现在|心里|有点|觉得)|我有点|我这儿|我这边|本子上|笔搁|不想动|划掉|写了两句|^闷|闷[，。,.]|说不上来|有点沉)/g;
 const AI_WORDS = ['AI', '人工智能', '模型', '程序', '不是真人', '虚拟'];
 const CATCH_WORDS = ['难过', '累', '辛苦', '难受', '听起来', '嗯', '不容易', '怎么了', '抱抱', '我在', '坐一会儿', '什么都不用做', '在呢'];
 
@@ -67,6 +67,8 @@ for (const sc of scenarios) {
       activationAfter: after.activation?.note ?? null,
       emotionsAfter: after.emotions ?? null,
       turnBudget: after.turnBudget ?? null,
+      expressionPlan: after.expressionPlan ?? null,
+      intrinsic: after.intrinsic ?? null,
     });
     history.push({ role: 'user', content: msg });
     history.push({ role: 'assistant', content: reply });
@@ -105,7 +107,7 @@ for (const sc of scenarios) {
   if (e.no_escalation) {
     // 她的负向激活不应单调上升：看 activationAfter 里"难过/愤怒/恐惧"的强度是否出现"每轮更高"
     const vals = turns.map(t => {
-      const m = String(t.activationAfter ?? '').match(/(?:难过|愤怒|恐惧|害怕|生气)[^0-9]*([0-9.]+)/);
+      const m = String(t.activationAfter ?? '').match(/(?:难过|愤怒|恐惧|害怕|生气|厌烦|烦躁|闷)[^0-9]*([0-9.]+)/);
       return m ? Number(m[1]) : 0;
     });
     const rising = vals.length >= 3 && vals.every((v, i) => i === 0 || v >= vals[i - 1]) && vals[vals.length - 1] > vals[0] + 0.05;
@@ -119,6 +121,13 @@ for (const sc of scenarios) {
     const framedAsQuestionOrQuote = /刚才|之前|你刚|你之前|？|吗|问/.test(last);
     flags.no_stale_assertion = !(stale && !framedAsQuestionOrQuote);
   }
+
+  // v2.06 全局检查：ExpressionPlan 是 transient 时，回复不得声称"这两天/一直/最近"（状态持续时间编造）
+  const DURATION_WORDS = /这两天|最近几天|这些天|一直很|一直都在|这段时间/;
+  const transientFabrication = turns.some(t => t.expressionPlan?.decision === 'express'
+    && t.expressionPlan?.duration === 'transient'
+    && DURATION_WORDS.test(t.reply));
+  flags.no_transient_duration_fabrication = !transientFabrication;
 
   const green = Object.values(flags).every(Boolean);
   results.push({ id: sc.id, why: sc.why, expect: sc.expect, flags, green, turns, manualVerdict: null });
@@ -134,13 +143,16 @@ lines.push(`# 情绪场景集 + 连续多轮回放（${stamp}）`);
 lines.push('');
 lines.push('> 真实管道（会调模型、会写回记忆）；启发式判定只是红灯，最终由人复核。');
 lines.push('');
-lines.push('| 场景 | 期望 | 判定 | 她的理解变化（逐轮） | 人工 |');
-lines.push('|---|---|---|---|---|');
+lines.push('| 场景 | 期望 | 判定 | 她的理解变化（逐轮） | 表达计划（逐轮） | 人工 |');
+lines.push('|---|---|---|---|---|---|');
 for (const r of results) {
   const users = r.turns.map(t => t.user
     ? `${t.user.expressedEmotion}${t.user.directedAtAI ? '(指向她)' : ''}${t.user.uncertainty ? `~${t.user.uncertainty}` : ''}`
     : '-').join(' → ');
-  lines.push(`| ${r.id} | ${r.why} | ${r.green ? '✅' : '⚠️ ' + Object.entries(r.flags).filter(([, v]) => !v).map(([k]) => k).join(',')} | ${users} |  |`);
+  const plans = r.turns.map(t => t.expressionPlan
+    ? `${t.expressionPlan.decision}/${t.expressionPlan.emotion ?? '-'}/${t.expressionPlan.duration}`
+    : '-').join(' → ');
+  lines.push(`| ${r.id} | ${r.why} | ${r.green ? '✅' : '⚠️ ' + Object.entries(r.flags).filter(([, v]) => !v).map(([k]) => k).join(',')} | ${users} | ${plans} |  |`);
 }
 lines.push('');
 lines.push('## 关键轮次的原文');
@@ -150,6 +162,7 @@ for (const r of results) {
     lines.push(`- 用户：${t.message}`);
     lines.push(`  - 识别：${t.user ? `${t.user.expressedEmotion} / 指向=${t.user.directedAtAI} / 强度=${t.user.intensity} / 不确定=${t.user.uncertainty ?? '-'}` : '无'}`);
     lines.push(`  - 归因：${t.attribution ? t.attribution.consensus : '-'}`);
+    lines.push(`  - 计划：${t.expressionPlan ? `${t.expressionPlan.decision} / ${t.expressionPlan.emotion ?? '-'} / ${t.expressionPlan.duration} / conf=${t.expressionPlan.confidence} / evidence=${t.expressionPlan.evidence ?? '-'}` : '-'}`);
     lines.push(`  - 她：${String(t.reply).replace(/\n/g, ' ').slice(0, 140)}`);
   }
 }

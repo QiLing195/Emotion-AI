@@ -33,6 +33,8 @@ import {
   applySourceBudgetDelta,
 } from '../../src/lib/emergenceMetrics.js';
 import { applyNonUserTurnBudget } from '../../src/lib/turnBudget.js';
+import { planExpression, expressionPlanToSnippet, type ExpressionPlan } from '../../src/lib/expressionPlan.js';
+import { validateIntrinsicCandidates, IntrinsicDedup, INTRINSIC_DEFAULTS, type IntrinsicCandidate } from '../../src/lib/intrinsicActivity.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
 import { selfStateVoiceEnabled, buildSelfStateVoiceSnippet } from '../../src/lib/selfStateVoice.js';
@@ -279,6 +281,14 @@ export class AICoordinator {
    * 没有它就无从判断"她到底有没有在理解他这件事"，只能看情绪数字。
    */
   private lastAppraisal: AppraisalResult | null = null;
+  /** v2.06：最近一轮的 ExpressionPlan（表达计划；可观测） */
+  private lastExpressionPlan: ExpressionPlan | null = null;
+  /** v2.06：内在活动候选校验结果（可观测） */
+  private lastIntrinsic: {
+    accepted: Array<{ eventId: string; type: string; evidenceRef: string }>;
+    rejected: Array<{ eventId: string; reason: string }>;
+  } | null = null;
+  private intrinsicDedup = new IntrinsicDedup(200);
   /** v2.03：最近一轮的非用户来源总预算执行情况（可观测） */
   private lastTurnBudget: { scale: number; totalBefore: number; cap: number; removed: { valence: number; arousal: number; emotionAbs: number } } | null = null;
   /** v1.95 本轮用在情绪上的「她看到他正在做什么」（可观测；null = 这轮没有） */
@@ -484,22 +494,40 @@ export class AICoordinator {
         let unifiedCause: string | null = null;
         if (timelineEnabled()) {
           const chain = buildCauseChain(readRecentNodes(10), { sinceTs: lowReading?.since });
-          if (chain.kind === 'his_word' && chain.quoted) unifiedCause = chain.quoted;
+          // v2.06：原因只认**本轮这句话**（否则会把上一轮的话当成这一轮的原因，属于证据错配）
+          if (chain.kind === 'his_word' && chain.quoted && String(extras.userText ?? '').includes(String(chain.quoted).slice(0, 6))) {
+            unifiedCause = chain.quoted;
+          }
         }
         const act = activationOf(extras.updatedEmotionState);
-        const permit = buildUnifiedPermit({
+        // v2.06（审查建议 #4）：先产出一份**结构化 ExpressionPlan**，再决定是否表达。
+        // 时间尺度（transient/sustained）与证据由计划器决定，回复模型不能重新决定或编造。
+        const plan = planExpression({
           activated: (act.delta ?? {}) as Record<string, number>,
           hisEmotion: extras.userAnalysis?.expressedEmotion ?? null,
+          hisIntensity: extras.userAnalysis?.intensity ?? 0.6,
           lowEstablished: Boolean(lowReading?.established),
+          moodDelta: extras.updatedEmotionState.internal?.mood?.valence ?? 0,
+          ruminationActive: Boolean(
+            extras.updatedEmotionState.internal?.rumination
+            && extras.updatedEmotionState.internal.rumination.streak >= 3,
+          ),
           causeQuote: unifiedCause,
           round: emotionExprTurn,
           lastExpressedRound: lastEmotionExpressedRound,
           hisAsksAboutHer: detectAsksAboutHer(extras.userText),
+          intrinsic: this.lastIntrinsic?.accepted.length
+            ? this.lastIntrinsic.accepted.map(c => ({ ...c, confidence: 0.7 }))
+            : [],
         });
-        if (permit.snippet) {
-          strategySnippet += `\n\n${permit.snippet}`;
-          lastEmotionExpressedRound = permit.nextLastExpressedRound ?? lastEmotionExpressedRound;
-          console.log(`[UnifiedExpr] 表达许可: ${permit.reason}`);
+        this.lastExpressionPlan = plan;
+        const planSnippet = expressionPlanToSnippet(plan);
+        if (plan.decision === 'express' && planSnippet) {
+          strategySnippet += `\n\n${planSnippet}`;
+          lastEmotionExpressedRound = emotionExprTurn;
+          console.log(`[ExpressionPlan] express ${plan.emotion} duration=${plan.duration} confidence=${plan.confidence} evidence=${plan.evidence ?? '-'}`);
+        } else {
+          console.log(`[ExpressionPlan] silent: ${plan.reason}`);
         }
       } catch { /* 表达层永不打断主流程 */ }
     } else if (emotionExpressionEnabled() && extras.updatedEmotionState) {
@@ -969,10 +997,54 @@ export class AICoordinator {
     } else {
       this.lastActivityConcern = null;
     }
-    if (internalEvents.length > 0) {
+    // v2.06（审查建议 #3）：内在事件先变成**带证据/时效的候选**，经校验后才允许施加。
+    // 没有证据、过期、重复（最近已应用过）的候选不得当成真实经历。
+    const intrinsicCandidates: IntrinsicCandidate[] = internalEvents.map((ev) => {
+      const def = INTRINSIC_DEFAULTS[ev.type] ?? { ttlMs: 6 * 3600_000, confidence: 0.6 };
+      const evidenceRef = input.activityConcern && ev.type === 'activity_concern'
+        ? `activity:${input.activityConcern.category ?? 'unknown'}`
+        : ev.type === 'reunion' || ev.type === 'loneliness'
+          ? `idle:${Math.round(idleMins)}m`
+          : ev.type.startsWith('thought_')
+            ? `thought:${ev.type}`
+            : ev.type === 'interest'
+              ? `interest:${userInterests.slice(0, 2).join('/')}`
+              : ev.type === 'discovery'
+                ? `discovery:${pendingDiscoveries[0]?.id ?? pendingDiscoveries.length}`
+                : ev.type === 'insight'
+                  ? `insight:${generatedInsights.length}`
+                  : `event:${ev.type}`;
+      return {
+        eventId: `r${input.roundNumber ?? this.turnCounter}:${ev.type}:${evidenceRef}`,
+        type: ev.type,
+        source: ev.type.startsWith('thought_') ? 'thought'
+          : ev.type === 'interest' ? 'interest'
+            : ev.type === 'discovery' ? 'discovery'
+              : ev.type === 'insight' ? 'insight'
+                : ev.type === 'activity_concern' ? 'activity' : 'idle',
+        evidenceRef,
+        confidence: def.confidence,
+        expiresAt: Date.now() + def.ttlMs,
+        intensity: ev.intensity,
+      };
+    });
+    const intrinsicResult = validateIntrinsicCandidates(intrinsicCandidates, {
+      now: Date.now(),
+      seen: this.intrinsicDedup,
+      maxPerTurn: 3,
+    });
+    this.lastIntrinsic = {
+      accepted: intrinsicResult.accepted.map(c => ({ eventId: c.eventId, type: c.type, evidenceRef: c.evidenceRef })),
+      rejected: intrinsicResult.rejected,
+    };
+    const acceptedInternal = intrinsicResult.accepted.map(c => ({ type: c.type, intensity: c.intensity })) as Parameters<typeof applyInternalEvents>[1];
+    if (intrinsicResult.rejected.length > 0) {
+      console.log(`[Intrinsic] 候选 ${intrinsicCandidates.length} 个：通过 ${intrinsicResult.accepted.length}，拒绝 ${intrinsicResult.rejected.map(r => r.reason).join('/')}`);
+    }
+    if (acceptedInternal.length > 0) {
       const beforeTai = updatedEmotionState.taiji;
       const beforeEmo = { ...updatedEmotionState.emotions };
-      updatedEmotionState = applyInternalEvents(updatedEmotionState, internalEvents);
+      updatedEmotionState = applyInternalEvents(updatedEmotionState, acceptedInternal);
       const afterTai = updatedEmotionState.taiji;
       this.emergence = accumulateSource(
         this.emergence,
@@ -1412,6 +1484,12 @@ export class AICoordinator {
    */
   /** v2.03：最近一轮非用户来源预算（scale < 1 表示发生过缩放） */
   getLastTurnBudget() { return this.lastTurnBudget; }
+
+  /** v2.06：最近一轮 ExpressionPlan（表达计划） */
+  getLastExpressionPlan(): ExpressionPlan | null { return this.lastExpressionPlan; }
+
+  /** v2.06：最近一轮内在活动候选校验结果 */
+  getLastIntrinsic() { return this.lastIntrinsic; }
 
   getLastAppraisal(): AppraisalResult | null {
     return this.lastAppraisal;

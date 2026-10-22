@@ -86,7 +86,8 @@ describe('aiCoordinator — activeValues 透传（S7 价值观调制）', () => 
   it('v2.04：没有 emotionEvent 时，内部事件/心情/反刍仍受单轮预算约束', () => {
     process.env.TURN_NONUSER_CAP = '0.001';
     try {
-      run({ lastInteractionAt: Date.now() - 12 * HOUR, roundNumber: 1, emotionEvent: null, userAnalysis: null });
+      // v2.06：内在候选去重后，同一证据不会重复应用；这里用不同 idle 证据保证本轮确有内部事件。
+      run({ lastInteractionAt: Date.now() - 13 * HOUR, roundNumber: 1, emotionEvent: null, userAnalysis: null });
       const budget = aiCoordinator.getLastTurnBudget();
       expect(budget).not.toBeNull();
       expect(budget!.totalBefore).toBeGreaterThan(0.001);
