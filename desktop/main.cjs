@@ -96,6 +96,16 @@ function createPetWindow() {
   // 而 maximizable:false 不能完全挡住；最大尺寸能让系统把窗口夹回 300x400。
   petWin.setMinimumSize(300, 400);
   petWin.setMaximumSize(300, 400);
+  petWin.setResizable(false);
+  petWin.setMaximizable(false);
+  petWin.setFullScreenable(false);
+  // v2.08：Windows 双击无边框窗口时仍可能下发"最大化"，触发一串 resize 动画，
+  // 和我们的恢复逻辑互相打架（实测窗口被一路撑到全屏）。这里直接拒绝任何系统 resize；
+  // 只有我们自己 setBounds 时才放行。
+  let petAllowResize = false;
+  petWin.on('will-resize', (event) => {
+    if (!petAllowResize) event.preventDefault();
+  });
   petWin.setAlwaysOnTop(true, 'screen-saver');
   petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   positionPet(petWin);
@@ -109,24 +119,44 @@ function createPetWindow() {
   // v2.07：双击拖动区/系统手势会把无边框窗口最大化甚至全屏（用户实测变"挡屏"）——
   // 统一恢复成桌宠的 300x400，并夹回工作区。
   let petRestoring = false;
+  let petRestoreTimer = null;
   const restorePetWindow = (reason) => {
-    if (!petWin || petWin.isDestroyed() || petRestoring) return;
-    const [w, h] = petWin.getSize();
-    // 只拦"明显变大"（系统手势/双击最大化的典型值），不影响 DPI/边框造成的几像素差异
-    const badSize = w > 380 || h > 480;
-    const badState = petWin.isFullScreen() || petWin.isMaximized();
-    if (!badSize && !badState) return;
-    petRestoring = true;
-    console.log('[Pet] 窗口异常(' + w + 'x' + h + ')，恢复桌宠窗口（' + reason + '）');
-    if (petWin.isFullScreen()) petWin.setFullScreen(false);
-    if (petWin.isMaximized()) petWin.unmaximize();
-    petWin.setSize(300, 400);
-    positionPet(petWin);
-    setTimeout(() => { petRestoring = false; }, 300);
+    if (!petWin || petWin.isDestroyed()) return;
+    // 防抖：等系统动画这一帧过去再恢复，避免和最大化动画互相拉扯
+    if (petRestoreTimer) clearTimeout(petRestoreTimer);
+    petRestoreTimer = setTimeout(() => {
+      petRestoreTimer = null;
+      if (!petWin || petWin.isDestroyed()) return;
+      const [w, h] = petWin.getSize();
+      const badSize = w > 380 || h > 480;
+      const badState = petWin.isFullScreen() || petWin.isMaximized();
+      if (!badSize && !badState) return;
+      if (petRestoring) return;
+      petRestoring = true;
+      console.log('[Pet] 窗口异常(' + w + 'x' + h + ')，恢复桌宠窗口（' + reason + '）');
+      try {
+        if (petWin.isFullScreen()) petWin.setFullScreen(false);
+        if (petWin.isMaximized()) petWin.unmaximize();
+        const display = screen.getPrimaryDisplay();
+        const wa = display.workArea;
+        petAllowResize = true;
+        petWin.setBounds({
+          x: Math.max(wa.x, wa.x + wa.width - 300 - 24),
+          y: Math.max(wa.y, wa.y + wa.height - 400 - 24),
+          width: 300,
+          height: 400,
+        }, false);
+        petWin.setMaximumSize(300, 400);
+        petWin.setMinimumSize(300, 400);
+        petWin.setMaximizable(false);
+        petWin.setResizable(false);
+      } finally {
+        setTimeout(() => { petAllowResize = false; petRestoring = false; }, 200);
+      }
+    }, 120);
   };
   petWin.on('maximize', () => restorePetWindow('maximize'));
   petWin.on('enter-full-screen', () => restorePetWindow('full-screen'));
-  // Windows 把无边框窗口双击当"最大化"时不一定发 maximize 事件，用 resize 兜底
   petWin.on('resize', () => restorePetWindow('resize'));
 
   // Ctrl+Shift+P 打开/聚焦聊天窗口；Ctrl+Shift+Q 退出桌宠
@@ -183,6 +213,36 @@ function petDragEnd() { petDrag = null; }
 
 function registerPetIpc() {
   const { ipcMain } = require('electron');
+  // v2.08：点击穿透 —— 主进程轮询光标位置，只有落在"她本人/按钮"矩形内才接收鼠标，
+  // 其余透明区域 setIgnoreMouseEvents(true)，点击直接落到桌面。
+  ipcMain.on('pet:set-ignore-mouse', (_evt, ignore) => {
+    if (!petWin || petWin.isDestroyed()) return;
+    try { petWin.setIgnoreMouseEvents(Boolean(ignore), { forward: true }); } catch { /* 老版本 Electron 无 forward */ }
+  });
+  let petHitRects = [];
+  let petIgnoreState = null;
+  ipcMain.on('pet:set-hit-rects', (_evt, rects) => {
+    if (Array.isArray(rects)) petHitRects = rects.filter(r => r && Number.isFinite(r.x) && Number.isFinite(r.y));
+  });
+  function startPetHoverWatcher() {
+    setInterval(() => {
+      if (!petWin || petWin.isDestroyed() || petDrag) return;
+      if (!petHitRects.length) return;
+      const [wx, wy] = petWin.getPosition();
+      const p = screen.getCursorScreenPoint();
+      const inside = petHitRects.some(r => {
+        const x = wx + r.x, y = wy + r.y;
+        return p.x >= x && p.y >= y && p.x <= x + r.w && p.y <= y + r.h;
+      });
+      const ignore = !inside;
+      if (ignore !== petIgnoreState) {
+        petIgnoreState = ignore;
+        try { petWin.setIgnoreMouseEvents(ignore, { forward: true }); } catch { /* ignore */ }
+        console.log('[Pet] 点击穿透=' + ignore);
+      }
+    }, 60);
+  }
+  startPetHoverWatcher();
   ipcMain.on('pet:drag-begin', () => petDragBegin());
   ipcMain.on('pet:drag-move', () => petDragMove());
   ipcMain.on('pet:drag-end', () => petDragEnd());

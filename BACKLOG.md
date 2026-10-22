@@ -106,3 +106,10 @@
 - [x] 主进程按 `screen.getCursorScreenPoint()` 位移移动窗口（避免 movementX 漂移）
 - [x] 窗口尺寸硬限制 300x400 + maximize/full-screen/resize 兜底恢复；右键菜单加「回到右下角」
 - [ ] 真机人工确认：按钮（允许/拒绝/撤销）在整窗拖动层下仍可点（已用 closest 排除，但未逐个人工点过）
+
+### v2.08 桌宠窗口尺寸/点击穿透/垂直拖动（2026-10-23）
+- [x] 阻止系统最大化：resizable/maximizable/fullscreenable=false + will-resize preventDefault + 无动画 setBounds 恢复 300x400
+- [x] 透明区域点击穿透：渲染层上报命中矩形，主进程轮询光标切换 setIgnoreMouseEvents（只有她本人/按钮可点）
+- [x] 垂直拖不动：screenY 可能恒为 0，阈值改用 max(screen 位移, client 位移)；恢复 pointer capture
+- [x] 实测：垂直上拖 120px / 水平拖动 / 双击不变大 / 无窗口异常恢复日志
+- [ ] 真机人工确认：透明区点击确实落到桌面（已按 Electron 标准穿透方案实现，自动测试只能验证状态切换）

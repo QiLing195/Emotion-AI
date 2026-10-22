@@ -12,6 +12,8 @@ declare global {
     dragBegin?: () => void;
     dragMove?: () => void;
     dragEnd?: () => void;
+    setIgnoreMouse?: (ignore: boolean) => void;
+    setHitRects?: (rects: Array<{ x: number; y: number; w: number; h: number }>) => void;
       getPosition: () => Promise<{ x: number; y: number } | null>;
       openChat: () => void;
       showMenu: () => void;
@@ -107,6 +109,7 @@ export default function PetApp() {
   const [probed, setProbed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const draggingRef = useRef(false);
+  const captureRef = useRef<{ el: HTMLElement | null; id: number }>({ el: null, id: -1 });
   const [frameUrls, setFrameUrls] = useState<string[]>([]);
   const [frameIdx, setFrameIdx] = useState(0);
   const [awake, setAwake] = useState(false);
@@ -117,7 +120,7 @@ export default function PetApp() {
   const bubbleTimer = useRef<number | null>(null);
   const actionTimer = useRef<number | null>(null);
   const lastTouch = useRef<number>(Date.now());
-  const dragRef = useRef<{ down: boolean; startX: number; startY: number; moved: number }>({ down: false, startX: 0, startY: 0, moved: 0 });
+  const dragRef = useRef<{ down: boolean; startX: number; startY: number; startCX: number; startCY: number; moved: number }>({ down: false, startX: 0, startY: 0, startCX: 0, startCY: 0, moved: 0 });
   const suppressClick = useRef(0);
   const voiceSeq = useRef(0);
   const busyReply = useRef(false);
@@ -376,12 +379,21 @@ export default function PetApp() {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('button, a, input, textarea, select')) return;
-    dragRef.current = { down: true, startX: e.screenX, startY: e.screenY, moved: 0 };
+    dragRef.current = { down: true, startX: e.screenX, startY: e.screenY, startCX: e.clientX, startCY: e.clientY, moved: 0 };
+    // v2.08：抓住指针，快速拖动时鼠标离开窗口也能继续收到 pointermove（否则垂直/快速拖会断）
+    const el = e.currentTarget as HTMLElement;
+    captureRef.current = { el, id: e.pointerId };
+    try { el.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     window.petWindow?.dragBegin?.();
     const onMove = (ev: PointerEvent) => {
       const st = dragRef.current;
       if (!st.down) return;
-      st.moved = Math.abs(ev.screenX - st.startX) + Math.abs(ev.screenY - st.startY);
+      // ⚠️ 有些环境下 PointerEvent.screenY 恒为 0（垂直拖动会因此永远判定不出位移，
+      // 表现就是"只能水平移动"）。所以同时用 client 坐标算一次，取较大者；
+      // 实际窗口位移由主进程按屏幕光标计算，不依赖这里。
+      const screenDelta = Math.abs(ev.screenX - st.startX) + Math.abs(ev.screenY - st.startY);
+      const clientDelta = Math.abs(ev.clientX - st.startCX) + Math.abs(ev.clientY - st.startCY);
+      st.moved = Math.max(st.moved, screenDelta, clientDelta);
       if (st.moved > 3) {
         if (!draggingRef.current) { draggingRef.current = true; setDragging(true); }
         window.petWindow?.dragMove?.();
@@ -395,6 +407,12 @@ export default function PetApp() {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      try {
+        if (captureRef.current.el && captureRef.current.id >= 0) {
+          captureRef.current.el.releasePointerCapture?.(captureRef.current.id);
+        }
+      } catch { /* ignore */ }
+      captureRef.current = { el: null, id: -1 };
       window.petWindow?.dragEnd?.();
       if (wasDrag) {
         setDragging(false);
@@ -430,6 +448,28 @@ export default function PetApp() {
 
   const headColor = low ? '#8e9bb8' : '#f6c1cf';
   const bodyColor = low ? '#6b7896' : '#f7cbd5';
+
+  // v2.08：透明区域点击穿透 —— 定期把"她本人 + 所有按钮/输入"的矩形上报给主进程，
+  // 主进程轮询光标，只有落在这些矩形内才接收鼠标；其余位置点击直接落到桌面。
+  useEffect(() => {
+    const report = () => {
+      const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+      document.querySelectorAll<HTMLElement>('[data-pet-hit], button, a, input, textarea, select').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+      });
+      window.petWindow?.setHitRects?.(rects);
+    };
+    report();
+    const timer = window.setInterval(report, 500);
+    window.addEventListener('resize', report);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('resize', report);
+      window.petWindow?.setIgnoreMouse?.(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
@@ -550,6 +590,7 @@ export default function PetApp() {
         )}
 
         <div
+          data-pet-hit="1"
           title={dragging ? '放我下来…' : '摸她 / 按住拖动 / 双击挥手 / 右键菜单'}
           className="absolute inset-0 select-none border-none p-0 outline-none"
           style={{ background: 'transparent', touchAction: 'none' }}
