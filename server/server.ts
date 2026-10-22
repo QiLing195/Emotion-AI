@@ -108,6 +108,7 @@ import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
 import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
+import { buildRememberedView } from './services/herRemembered.js';
 import { getWeather, searchPlace, externalToolsEnabled } from './services/externalLookup.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
@@ -2011,6 +2012,14 @@ export class AIGirlfriendServer {
         room: herRoomView(loadHerRoom()),
         emotion: { top, delta: Math.round(topDelta * 1000) / 1000 },
         lowPeriod: lp ? { active: Boolean(lp.active), established: Boolean(lp.established), turns: Number(lp.turns ?? 0), phase: String(lp.phase ?? 'none') } : null,
+        // v1.81 她记着的事（只读；界面展示，不发消息、不改状态）
+        remembered: buildRememberedView({
+          notesEnabled: herNotesEnabled(),
+          followupEnabled: herFollowupEnabled(),
+          notes: herNotesEnabled() ? listHerNotes(20) : [],
+          followups: herFollowupEnabled() ? listFollowups() : [],
+          now: Date.now(),
+        }),
         now: Date.now(),
       });
     });

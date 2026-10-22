@@ -16,7 +16,24 @@ interface HerState {
   };
   emotion: { top: string | null; delta: number };
   lowPeriod: null | { active: boolean; established: boolean; turns: number; phase: string };
+  /** v1.81 她记着的事（只读） */
+  remembered?: {
+    notesEnabled: boolean;
+    followupEnabled: boolean;
+    notes: Array<{ note: string; agoMinutes: number }>;
+    upcoming: Array<{ what: string; dueAt: number; inMinutes: number; due: boolean }>;
+  };
   now?: number;
+}
+
+/** 到点的相对说法（界面用，与 server/services/herRemembered.ts 的 relativeDue 同步维护） */
+function dueText(r: { inMinutes: number }): string {
+  const m = r.inMinutes;
+  if (m <= 0) return '到点了';
+  if (m < 60) return `${Math.max(1, m)} 分钟后`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} 小时后`;
+  return `${Math.round(h / 24)} 天后`;
 }
 
 const EMOTION_LABEL: Record<string, string> = {
@@ -112,6 +129,45 @@ export default function HerStateApp() {
           <div className="mt-2 text-[11px] leading-relaxed text-slate-400">
             小屋活动只在 <code className="rounded bg-white/10 px-1">ENABLE_HER_ROOM=true</code> 时记录；开着她会有"此刻在做什么"的真实状态。
           </div>
+        )}
+      </div>
+
+      {/* 她记着的事（只读） */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] uppercase tracking-widest text-slate-400">她记着的事</div>
+          <div className="text-[10px] text-slate-500">只读 · 不发消息</div>
+        </div>
+        {(!s?.remembered || (!s.remembered.notesEnabled && !s.remembered.followupEnabled)) ? (
+          <div className="mt-2 text-[11px] text-slate-500">便签与"到点提醒"都还没开启。</div>
+        ) : (
+          <>
+            {s.remembered.upcoming.length > 0 ? (
+              <div className="mt-2">
+                <div className="mb-1 text-[10px] text-slate-500">心里挂着、还没到点</div>
+                {s.remembered.upcoming.map((u, i) => (
+                  <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                    <span className="truncate">{u.what}</span>
+                    <span className={`shrink-0 text-[10px] ${u.due ? 'text-rose-300' : 'text-slate-500'}`}>{dueText(u)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {s.remembered.notes.length > 0 ? (
+              <div className={s.remembered.upcoming.length > 0 ? 'mt-3 border-t border-white/10 pt-2' : 'mt-2'}>
+                <div className="mb-1 text-[10px] text-slate-500">写下的便签</div>
+                {s.remembered.notes.map((n, i) => (
+                  <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                    <span className="truncate">{n.note}</span>
+                    <span className="shrink-0 text-[10px] text-slate-500">{n.agoMinutes < 1 ? '刚刚' : n.agoMinutes < 60 ? `${n.agoMinutes} 分钟前` : `${Math.round(n.agoMinutes / 60)} 小时前`}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {s.remembered.upcoming.length === 0 && s.remembered.notes.length === 0 ? (
+              <div className="mt-2 text-[11px] text-slate-500">她现在没特别记着什么事。</div>
+            ) : null}
+          </>
         )}
       </div>
 
