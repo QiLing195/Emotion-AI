@@ -14,7 +14,7 @@ export interface AISettings {
 // Exponential backoff retry utility
 async function retryAsync<T>(
   fn: () => Promise<T>,
-  maxRetries: number = 3,
+  maxRetries: number = Number.isFinite(Number(process.env.AI_MAX_RETRIES)) ? Number(process.env.AI_MAX_RETRIES) : 3,
   baseDelay: number = 1000
 ): Promise<T> {
   let lastError: any;

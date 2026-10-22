@@ -490,6 +490,9 @@ export class AIGirlfriendServer {
   private _activityUnderstandingCache: { at: number; value: ActivityUnderstanding | null } | null = null;
   private _activityCareStreak: CareStreak = emptyCareStreak(new Date().toISOString().slice(0, 10));
   private _activityCareTimer: ReturnType<typeof setInterval> | null = null;
+  /** v2.01 诊断：进程启动时间与最近一轮分阶段耗时（GET /api/diagnostics 用） */
+  private _startedAt: number = Date.now();
+  private _lastTurnTimings: Record<string, unknown> | null = null;
 
   private currentActivityUnderstanding(fresh = false): ActivityUnderstanding | null {
     const now = Date.now();
@@ -983,6 +986,9 @@ export class AIGirlfriendServer {
           // v1.95：他正在做的事（投简历/开会/学习/写代码）也会轻轻牵动她（弱内在事件，受总量上限）
           activityConcern: toActivityConcern(this.currentActivityUnderstanding()),
         });
+
+        // v2.01 诊断：记住最近一轮的分阶段耗时（不含用户原文）
+        try { this._lastTurnTimings = turnOutput.metadata.timings as unknown as Record<string, unknown>; } catch { /* ignore */ }
 
         // v1.63 她的小屋：每轮推进"她此刻在做什么"（持久化事实；白名单外的外部生活不许编）
         if (herRoomEnabled() && turnOutput.updatedEmotionState) {
@@ -2008,6 +2014,8 @@ export class AIGirlfriendServer {
         res.json({
           // v1.11: 必须返回接地校验后的文本（此前返回 result.text，导致重写结果被丢弃）
           response: aiText,
+          // v2.01：分阶段耗时只在 DEBUG_TIMINGS=true 时返回（默认不改变响应体积）
+          ...(process.env.DEBUG_TIMINGS === 'true' ? { timings: turnOutput.metadata.timings } : {}),
           // v1.60-p0：Guard 的**同一份**判定结果直接暴露（不重新推导，避免两套状态）
           provenanceVerdict: provenanceGuard.verdict,
           expressionAccepted: provenanceGuard.accepted,
@@ -2044,8 +2052,13 @@ export class AIGirlfriendServer {
       } catch (error) {
         console.error('[Chat] Error:', error);
         const status = error instanceof AIRequestError ? 502 : 500;
+        // v2.01（专家第 5 条）：模型不可用时给**清晰可行动**的反馈，而不是一句 Internal server error。
+        // 本地记忆/界面仍可用；前端可以把 hint 直接展示给用户。
         res.status(status).json({
-          error: error instanceof AIRequestError ? error.message : 'Internal server error',
+          ok: false,
+          error: error instanceof AIRequestError ? 'model_unavailable' : 'chat_failed',
+          detail: error instanceof AIRequestError ? error.message : (error as Error)?.message ?? 'unknown',
+          hint: '模型服务不可用：检查网络/VPN 或 API key 后重试。本地记忆与界面仍然可用（不会丢数据）。',
         });
       } finally {
         releaseChatLock();
@@ -2343,6 +2356,37 @@ export class AIGirlfriendServer {
             recent: recentCareAsks(5),
             pendingFollowUp: findPendingFollowUp(),
           },
+        });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    // v2.01 诊断：本地可诊断信息（不含用户原文/记忆内容/密钥）
+    this.app.get('/api/diagnostics', (_req, res) => {
+      try {
+        const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')) as { version?: string };
+        const mem = process.memoryUsage();
+        res.json({
+          ok: true,
+          version: pkg.version ?? 'unknown',
+          startedAt: this._startedAt,
+          uptimeMs: Date.now() - this._startedAt,
+          rssMb: Math.round(mem.rss / 1024 / 1024),
+          heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+          counts: {
+            episodes: episodicStore.episodes.length,
+            graphNodes: memoryGraph.getAllNodes().length,
+          },
+          flags: {
+            agentTools: process.env.ENABLE_AGENT_TOOLS === 'true',
+            activityWatch: process.env.ENABLE_ACTIVITY_WATCH === 'true',
+            activityCare: process.env.ENABLE_ACTIVITY_CARE === 'true',
+            voiceWake: process.env.ENABLE_VOICE_WAKE === 'true',
+            mcpClient: process.env.ENABLE_MCP_CLIENT === 'true',
+            debugTimings: process.env.DEBUG_TIMINGS === 'true',
+          },
+          lastTurnTimings: this._lastTurnTimings,
         });
       } catch (e) {
         res.status(500).json({ ok: false, error: (e as Error).message });
