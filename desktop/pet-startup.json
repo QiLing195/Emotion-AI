@@ -1,0 +1,11 @@
+{
+  "_comment": "桌宠启动时要打开的程序。加/删都只改这个文件，不用动代码。想让桌宠启动时打开哪些软件，往 apps 里加 {name, path} 即可；path 必须存在。",
+  "delayMs": 3000,
+  "skipIfRunning": true,
+  "apps": [
+    {
+      "name": "飞鸟加速",
+      "path": "E:\\Program Files (x86)\\feiniao\\飞鸟加速.exe"
+    }
+  ]
+}

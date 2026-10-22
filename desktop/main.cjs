@@ -216,6 +216,46 @@ if (!gotLock) {
 } else {
   app.on('second-instance', () => { if (petWin) { petWin.show(); petWin.focus(); } });
 
+  // v1.92 桌宠启动时顺带打开常用程序（配置在 desktop/pet-startup.json，改配置不用改代码）
+  function isProcessRunning(exeBase) {
+    try {
+      const { execFileSync } = require('node:child_process');
+      const procName = exeBase.replace(/\.exe$/i, '');
+      const out = execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+        `(Get-Process -Name '${procName}' -ErrorAction SilentlyContinue | Measure-Object).Count`],
+      { encoding: 'utf8', windowsHide: true, timeout: 8000 });
+      return Number(String(out).trim()) > 0;
+    } catch { return false; }
+  }
+
+  function openStartupApps() {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    let cfg = null;
+    try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'pet-startup.json'), 'utf8')); } catch { return; }
+    const apps = Array.isArray(cfg && cfg.apps) ? cfg.apps : [];
+    if (!apps.length) return;
+    const delay = Number(cfg.delayMs);
+    const wait = Number.isFinite(delay) && delay >= 0 ? delay : 3000;
+    const skipIfRunning = cfg.skipIfRunning !== false;
+    setTimeout(() => {
+      const { spawn } = require('node:child_process');
+      const { shell } = require('electron');
+      for (const item of apps) {
+        const exe = String(item && item.path ? item.path : '');
+        const name = String(item && item.name ? item.name : path.basename(exe));
+        if (!exe || !fs.existsSync(exe)) { console.log(`[Pet] 启动项缺失，跳过：${name}（${exe}）`); continue; }
+        if (skipIfRunning && isProcessRunning(path.basename(exe))) { console.log(`[Pet] ${name} 已在运行，跳过`); continue; }
+        try {
+          const child = spawn(exe, [], { cwd: path.dirname(exe), detached: true, stdio: 'ignore' });
+          child.on('error', () => { void shell.openPath(exe); });
+          child.unref();
+          console.log(`[Pet] 已打开：${name}`);
+        } catch { void shell.openPath(exe); }
+      }
+    }, wait);
+  }
+
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     // 等后端就绪（最多 30s）
@@ -230,6 +270,7 @@ if (!gotLock) {
     createPetWindow();
     captureTimer = setInterval(pollCaptureOnce, POLL_MS);
     pollCaptureOnce();
+    openStartupApps();
   });
 
   app.on('window-all-closed', () => { app.quit(); });
