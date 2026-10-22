@@ -55,3 +55,10 @@
 - [ ] P0-1 提示注入：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）标注"是数据不是指令"+ A1–A4 复现脚本（下一步）
 - [ ] P1 RAG 固定评测集（recall@k / groundedness 分开量）
 - [ ] P1 单机体验指标 + 分阶段耗时基线（专家第 4/5 条）
+
+### v2.01 完成（专家第 3-5 条）
+- [x] 小而固定的质量回归集：`test_data/quality_cases.json` + `scripts/quality-regression.mjs`（8 例，一次运行 8/8 无红灯，人工判定 ✅；变更后应重跑）
+- [x] 单机性能基线：`scripts/perf-baseline.mjs` → `artifacts/v2.01/perf-baseline.md`（聊天平均 3767ms，服务端分阶段仅 18ms ⇒ 瓶颈在模型 API）
+- [x] 最小运行诊断：`GET /api/diagnostics`（不含原文/密钥）；`DEBUG_TIMINGS=true` 时 chat 返回分阶段耗时
+- [x] 模型不可用降级：实测 103s/HTTP500、进程存活 → 改为 503 `model_unavailable` + 可行动 hint；`AI_MAX_RETRIES` 可调
+- [ ] 仍缺：单轮生成总预算（P1）、RAG 检索层评测（P1）、提示注入输入侧标注（P0-1）
