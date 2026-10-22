@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>上下文 · RAG · LLM 数据流</title>
+<style>
+  :root{
+    --bg:#0b0d17; --panel:#141826; --panel2:#101423; --line:#2a3149;
+    --txt:#e6e9f5; --dim:#98a2c0; --accent:#f472b6; --accent2:#60a5fa; --ok:#34d399; --warn:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 700px at 20% -10%, #1b2138 0%, var(--bg) 60%);color:var(--txt);
+       font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;}
+  .wrap{width:1680px;padding:26px 30px 30px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px}
+  h1 small{font-size:13px;color:var(--dim);font-weight:400;margin-left:10px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+  .row{display:flex;gap:14px;align-items:stretch}
+  .col{display:flex;flex-direction:column;gap:12px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .box h3{margin:0 0 8px;font-size:14px;color:var(--accent2);letter-spacing:.4px}
+  .box h3 .n{display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:6px;
+             background:rgba(96,165,250,.18);color:#bfdbfe;font-size:12px;margin-right:7px}
+  ul{margin:0;padding-left:18px}
+  li{font-size:12.5px;line-height:1.65;color:#dfe4f3}
+  li b{color:#fff}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);
+       color:var(--dim);margin-left:6px;vertical-align:1px}
+  .tag.rule{border-color:#3f3a52;color:#e9d5ff;background:rgba(168,85,247,.10)}
+  .tag.llm{border-color:#3b4a63;color:#bfdbfe;background:rgba(96,165,250,.12)}
+  .tag.rag{border-color:#3f5a4a;color:#bbf7d0;background:rgba(52,211,153,.10)}
+  .stage{flex:1;position:relative}
+  .arrow{align-self:center;color:#5b6688;font-size:22px;padding:0 2px}
+  .flow{display:flex;align-items:stretch;gap:8px}
+  .big{background:linear-gradient(180deg,rgba(244,114,182,.10),rgba(96,165,250,.06));border-color:#4a3a55}
+  .big h3{color:#fbcfe8}
+  .two{display:flex;gap:14px;margin-top:14px}
+  .two>.col{flex:1}
+  .ctxbar{display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin:8px 0 4px}
+  .ctxbar div{display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#0b0d17;font-weight:700}
+  .legend{font-size:11px;color:var(--dim);margin-top:2px}
+  .mono{font-family:Consolas,"Cascadia Mono",monospace;font-size:11.5px;color:#c7d2fe}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;font-size:12px;color:#dfe4f3}
+  .kv span:nth-child(odd){color:var(--dim)}
+  .foot{margin-top:16px;font-size:11.5px;color:#7c86a6;line-height:1.7}
+  .pill{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;margin:0 6px 6px 0;
+        border:1px solid var(--line);background:var(--panel2);color:#cfd6ea}
+  .ok{color:var(--ok)} .warn{color:var(--warn)}
+  .care{border-color:#4a3f2a;background:linear-gradient(180deg,rgba(251,191,36,.08),rgba(251,191,36,.02))}
+  .care h3{color:#fde68a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>上下文 · RAG · LLM：她回一句话时到底发生了什么<small>道·AI 女友 / v1.98 架构图</small></h1>
+  <div class="sub">一条消息进来 → 感知与情绪动力学 → 上下文装配（含 RAG 召回）→ LLM 生成 → 校验与写回。颜色：<span class="tag rule">规则/确定性</span><span class="tag rag">检索</span><span class="tag llm">模型</span></div>
+
+  <!-- 主链 -->
+  <div class="flow">
+    <div class="box stage">
+      <h3><span class="n">1</span>输入</h3>
+      <ul>
+        <li><b>他这句话</b>（/api/chat 或语音唤醒后转写）</li>
+        <li><b>前台窗口活动</b>（20s 采样，标题+进程，敏感已脱敏）<span class="tag rule">只读</span></li>
+        <li>她的小屋状态 / 上次互动时间 / 关系阶段</li>
+      </ul>
+    </div>
+    <div class="arrow">▶</div>
+    <div class="box stage">
+      <h3><span class="n">2</span>感知与情绪</h3>
+      <ul>
+        <li>情感分析 <span class="tag llm">LLM 或本地规则</span> → 九情事件 + 他的情绪</li>
+        <li>活动理解 <span class="tag rule">规则 12 类</span> →「他像是在找工作」+ vague 标记</li>
+        <li>情绪动力学：9 情 / 太极 / 心情层 / 反刍 / 评价层 / 内在事件（含 activity_concern）</li>
+      </ul>
+    </div>
+    <div class="arrow">▶</div>
+    <div class="box stage big">
+      <h3><span class="n">3</span>上下文装配（Prompt 组装）</h3>
+      <ul>
+        <li>① 人格底座　② 自我叙事（长期记忆）</li>
+        <li>③ <b>记忆召回 = RAG</b>（见右侧细节）　④ <b>动机层</b>：她此刻想说什么</li>
+        <li>⑤ 策略片段（7 种）　⑥ 活动理解一行 <span class="mono">【我看到的】…</span></li>
+        <li>⑦ 她的状态（情绪/小屋）　⑧ 边界与禁令</li>
+      </ul>
+    </div>
+    <div class="arrow">▶</div>
+    <div class="box stage">
+      <h3><span class="n">4</span>LLM 生成</h3>
+      <ul>
+        <li>aiProvider（可带 <b>function calling</b>，有界 2 轮）</li>
+        <li>工具：<span class="mono">recall_memory / read_my_activity / look_at_my_screen / MCP 只读…</span></li>
+        <li>产出：她的话（短句、口语、带自己状态）</li>
+      </ul>
+    </div>
+    <div class="arrow">▶</div>
+    <div class="box stage">
+      <h3><span class="n">5</span>校验与输出</h3>
+      <ul>
+        <li>记忆接地校验：「你说过…」必须能在她知识里落地，否则重写/删句 <span class="tag rule">防编造</span></li>
+        <li>复读尺 / 清洗 / 长度 → 气泡（可选语音）</li>
+        <li>写回：情景记忆 + 图谱节点 + 情感时间线 + 学习账本</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="two">
+    <!-- RAG -->
+    <div class="col">
+      <div class="box">
+        <h3>RAG（检索增强）在这里具体做什么</h3>
+        <div class="kv">
+          <span>Query</span><span class="mono">他这句话 ⊕ 当前情境（情绪 / 关系阶段 / 话题锚点 / 时间）</span>
+          <span>四路召回</span><span>① 情景记忆相似度　② 记忆图谱 BFS 激活扩散　③ 统一四源召回　④ 主动回忆（动机闸门选中）</span>
+          <span>打分</span><span class="mono">词面相关 × 情绪签名 × 时间衰减(艾宾浩斯) × 关系可见性</span>
+          <span>门控</span><span>敏感度×关系阶段（memoryVisibility）／治理状态（verified/rolled_back）／遗忘曲线归档</span>
+          <span>注入</span><span>预算内 top-k 片段 + 引用提示；不塞原始日志，只塞「能被引用的事实」</span>
+          <span>兜底</span><span>生成后再过<b>接地校验</b>：没依据的断言重写或删除 <span class="tag rule">规则</span></span>
+        </div>
+      </div>
+      <div class="box">
+        <h3>上下文窗口的典型构成（示意，不是精确 token 账）</h3>
+        <div class="ctxbar">
+          <div style="flex:20;background:#fbcfe8">人格底座</div>
+          <div style="flex:14;background:#c4b5fd">自我叙事</div>
+          <div style="flex:22;background:#86efac">RAG 记忆</div>
+          <div style="flex:12;background:#93c5fd">动机</div>
+          <div style="flex:10;background:#fcd34d">策略</div>
+          <div style="flex:8;background:#fca5a5">活动理解</div>
+          <div style="flex:8;background:#a5b4fc">她的状态</div>
+          <div style="flex:6;background:#cbd5e1">禁令</div>
+        </div>
+        <div class="legend">人格/叙事/禁令是「她是谁、不能做什么」；RAG 是「她记得什么」；动机/策略是「这轮怎么说」；活动理解/状态是「此刻」。</div>
+      </div>
+    </div>
+
+    <!-- 主动关心 -->
+    <div class="col">
+      <div class="box care">
+        <h3>旁路：她主动关心（不经他开口）</h3>
+        <ul>
+          <li>每 60s：活动理解 → 是否「关心类」（找工作/开会/学习/写代码）且证据不 vague</li>
+          <li>门槛：持续 ≥20 分钟（低谷 40）→ 冷却 90 分钟（低谷 180）→ 每天 ≤2 次（低谷 1）→ 时间窗 8:00–23:00</li>
+          <li>通过 → LLM 生成 ≤40 字（带「上次你问过…这次问结果」的记忆）</li>
+          <li>入队 → 桌宠气泡；落盘 <span class="mono">memories/activity_care.json</span>，界面「她心里记着的你的事」</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>为什么不是「把记忆全塞给模型」</h3>
+        <ul>
+          <li><b>禁止模型自己编记忆</b>：RAG 只给可引用片段；生成后仍有接地校验</li>
+          <li><b>规则与模型分工</b>：情绪动力学 / 活动理解 / 门槛 / 校验 = 规则（可解释、可测）；措辞与共情 = 模型</li>
+          <li><b>预算意识</b>：动机放在 Prompt 末尾（注意力最高处）；记忆按需召回而不是全量</li>
+        </ul>
+        <div style="margin-top:8px">
+          <span class="pill mono">src/lib/unifiedMemory.ts</span><span class="pill mono">src/lib/memoryGraph.ts</span>
+          <span class="pill mono">src/lib/memoryGrounding.ts</span><span class="pill mono">server/services/aiCoordinator.ts</span>
+          <span class="pill mono">server/services/activityUnderstanding.ts</span><span class="pill mono">server/services/herCareMemory.ts</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    一句话：<b class="ok">规则负责「她此刻是谁、记得什么够格、什么不能说」</b>，<b class="warn">模型负责「怎么把这件事说成人话」</b>；
+    RAG 把「她记得的」变成少数可引用事实，生成后再用规则查一遍有没有编。主动关心是同一套上下文装配的旁路（触发源从"他说话"换成"他的窗口"）。
+  </div>
+</div>
+</body>
+</html>

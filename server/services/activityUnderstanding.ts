@@ -261,6 +261,8 @@ export interface CareOptions {
   inLowPeriod?: boolean;
   /** 本地小时（0-23）；给了就做时间窗判断，不给则不做 */
   hour?: number;
+  /** v1.98 门槛覆盖（调优/验证用；不传用默认或低谷默认） */
+  thresholds?: { sustainMs: number; cooldownMs: number; maxPerDay: number };
 }
 
 export interface CareDecision {
@@ -284,7 +286,7 @@ export function updateCareStreak(
   opts: CareOptions = {},
 ): CareDecision {
   const low = opts.inLowPeriod === true;
-  const thresholds = {
+  const thresholds = opts.thresholds ?? {
     sustainMs: low ? CARE_LOW_SUSTAIN_MS : CARE_MIN_SUSTAIN_MS,
     cooldownMs: low ? CARE_LOW_COOLDOWN_MS : CARE_COOLDOWN_MS,
     maxPerDay: low ? CARE_LOW_MAX_PER_DAY : CARE_MAX_PER_DAY,

@@ -465,6 +465,20 @@ export class AIGirlfriendServer {
     return value;
   }
 
+  /** v1.98 门槛可用 env 调（默认值不变）：CARE_SUSTAIN_MINUTES / CARE_COOLDOWN_MINUTES / CARE_MAX_PER_DAY */
+  private careThresholdsOverride(inLowPeriod: boolean): { sustainMs: number; cooldownMs: number; maxPerDay: number } | undefined {
+    const sust = Number(process.env.CARE_SUSTAIN_MINUTES);
+    const cool = Number(process.env.CARE_COOLDOWN_MINUTES);
+    const cap = Number(process.env.CARE_MAX_PER_DAY);
+    const ok = (n: number) => Number.isFinite(n) && n > 0;
+    if (!ok(sust) && !ok(cool) && !ok(cap)) return undefined;
+    return {
+      sustainMs: (ok(sust) ? sust : (inLowPeriod ? 40 : 20)) * 60_000,
+      cooldownMs: (ok(cool) ? cool : (inLowPeriod ? 180 : 90)) * 60_000,
+      maxPerDay: ok(cap) ? Math.floor(cap) : (inLowPeriod ? 1 : 2),
+    };
+  }
+
   private activityCareEnabled(): boolean {
     return process.env.ENABLE_ACTIVITY_CARE === 'true';
   }
@@ -494,6 +508,7 @@ export class AIGirlfriendServer {
     const decision = updateCareStreak(this._activityCareStreak, u, now, day, {
       inLowPeriod,
       hour: new Date(now).getHours(),
+      thresholds: this.careThresholdsOverride(inLowPeriod),
     });
     this._activityCareStreak = decision.streak;
     if (!u) return { ok: true, reason: 'no_understanding', decision: this._activityCareStreak };

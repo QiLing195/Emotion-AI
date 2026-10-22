@@ -279,3 +279,26 @@ describe('v1.97：平台优先（真实使用发现）', () => {
     });
   });
 });
+describe('v1.98：门槛可调（验证/调优用）', () => {
+  it('传 thresholds 就按它判（1 分钟持续即可开口），返回值也带回该门槛', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = m.understandActivity(view([
+      { title: 'BOSS直聘 - 杭州岗位', minutesAgo: 1 },
+      { title: 'BOSS直聘 - 简历投递', minutesAgo: 2 },
+    ]));
+    const t0 = 1_700_000_000_000;
+    const d = m.updateCareStreak(
+      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 61_000, samples: 2 },
+      u, t0, 'd', { hour: 12, thresholds: { sustainMs: 60_000, cooldownMs: 60_000, maxPerDay: 5 } },
+    );
+    expect(d.shouldCare).toBe(true);
+    expect(d.thresholds).toEqual({ sustainMs: 60_000, cooldownMs: 60_000, maxPerDay: 5 });
+    // 不传 thresholds 时仍是默认 20 分钟
+    const d2 = m.updateCareStreak(
+      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 61_000, samples: 2 },
+      u, t0, 'd', { hour: 12 },
+    );
+    expect(d2.shouldCare).toBe(false);
+    expect(d2.reason).toBe('not_long_enough');
+  });
+});
