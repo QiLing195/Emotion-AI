@@ -2036,6 +2036,8 @@ export class AIGirlfriendServer {
           emotionAnalysis: {
             source: emotionAnalysis.source,
             user: emotionAnalysis.userAnalysis,
+            // v2.03：归因一致性裁决（矛盾时降级 directedAtAI 并跳过奖惩强化）
+            attribution: (emotionAnalysis as { attribution?: unknown }).attribution ?? null,
           },
           emotionState: authoritativeEmotionState,
           // v1.11 句内状态弧线所用："用户这句话之前"她的状态（纯数据快照）。
@@ -2843,6 +2845,8 @@ export class AIGirlfriendServer {
         })(),
         // v1.95 她"看到他正在做什么"是否牵动了她（本轮）
         activityConcern: aiCoordinator.getLastActivityConcern(),
+        // v2.03：非用户来源单轮预算执行情况（scale < 1 表示发生过缩放）
+        turnBudget: aiCoordinator.getLastTurnBudget(),
         // v1.9 动机层可观测：她此刻心里挂着的事（本轮说话的来源）
         motive: (() => {
           const m = es?.internal?.motive;

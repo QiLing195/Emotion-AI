@@ -70,4 +70,37 @@ describe('aiCoordinator — activeValues 透传（S7 价值观调制）', () => 
     expect(out.strategy).toBeTruthy();
     expect(out.strategyDecision.confidence).toBeGreaterThan(0);
   });
+
+  it('v2.03：external 只记"直接刺激"，不再把其它来源一起吞进 external（审查 P1-4）', () => {
+    const before = aiCoordinator.getEmergenceReport().breakdown;
+    run({
+      emotionEvent: { deltaA: 0.3, deltaB: -0.1, deltaR: 0.05, intent: 'user', GC: 0.4, agency: -0.2, fairness: 0.2, control: 0.1 },
+      userAnalysis: null,
+    });
+    const after = aiCoordinator.getEmergenceReport().breakdown;
+    expect(after.external - before.external).toBeGreaterThan(0);
+    expect(after.contagion - before.contagion).toBe(0);
+    expect(after.appraisal - before.appraisal).toBe(0);
+  });
+
+  it('v2.03：非用户来源超预算时会缩放并记录（审查 P1-2）', () => {
+    process.env.TURN_NONUSER_CAP = '0.01';
+    try {
+      run({
+        lastInteractionAt: Date.now() - 12 * HOUR,
+        roundNumber: 1,
+        emotionEvent: { deltaA: 0.2, deltaB: 0.1, deltaR: 0, intent: 'third_party', GC: -0.2, agency: 0.2, fairness: -0.2, control: -0.2 },
+        userAnalysis: {
+          expressedEmotion: 'sad', likelyCause: 'test', intensity: 0.8, directedAtAI: false,
+        },
+      });
+      const budget = aiCoordinator.getLastTurnBudget();
+      expect(budget).not.toBeNull();
+      expect(budget!.scale).toBeLessThan(1);
+      expect(budget!.removed.emotionAbs).toBeGreaterThan(0);
+    } finally {
+      delete process.env.TURN_NONUSER_CAP;
+    }
+  });
+
 });

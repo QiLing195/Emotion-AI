@@ -356,6 +356,12 @@ export interface UserEmotionAnalysis {
   likelyCause: string;
   intensity: number;
   directedAtAI: boolean;
+  /** v2.03：文本证据（本地识别或模型依据），用于归因一致性裁决 */
+  evidence?: string;
+  /** v2.03：不确定度 0~1（越高越不该大幅改变状态） */
+  uncertainty?: number;
+  /** v2.03：归因一致性裁决结果 */
+  attribution?: { consensus: 'consistent' | 'downgraded' | 'unknown'; issues: string[] };
 }
 
 export interface EmotionContextOptions {

@@ -1,5 +1,6 @@
 import { analyzeUserSentiment } from '../../src/lib/emotionEngine.js';
 import type { EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEngine.js';
+import { reconcileAttribution } from '../../src/lib/emotionAttributionConsistency.js';
 import { generateAIResponse } from '../../src/lib/aiProvider.js';
 import type { AISettings } from '../../src/lib/aiProvider.js';
 import { extractJSON } from '../utils/index.js';
@@ -11,6 +12,8 @@ export interface EmotionAnalysisResult {
   event: EmotionEvent;
   userAnalysis: UserEmotionAnalysis;
   source: EmotionAnalysisSource;
+  /** v2.03：归因一致性裁决（矛盾时降级 directedAtAI 并跳过奖惩强化） */
+  attribution?: { consensus: 'consistent' | 'downgraded' | 'unknown'; issues: string[] };
 }
 
 type GenerateResponse = typeof generateAIResponse;
@@ -32,6 +35,8 @@ export function analyzeUserEmotionLocally(userText: string): UserEmotionAnalysis
 
   const text = userText.toLowerCase();
   const patterns: Array<[RegExp, string, string]> = [
+    // v2.03：否定亲密表达优先（I don't love you ≠ love）
+    [/\b(don'?t|do not|not)\s+(love|like|miss)\s+(you|u)\b/, 'anger', 'negated affection'],
     [/\b(happy|glad|great|excited|joy)\b/, 'joy', 'positive expression'],
     [/\b(love|miss you|like you)\b/, 'love', 'affection expression'],
     [/\b(thank|grateful|appreciate)\b/, 'gratitude', 'gratitude expression'],
@@ -72,6 +77,12 @@ export function sanitizeUserAnalysis(raw: unknown, fallback: UserEmotionAnalysis
     directedAtAI: typeof candidate.directedAtAI === 'boolean'
       ? candidate.directedAtAI
       : fallback.directedAtAI,
+    ...(typeof candidate.evidence === 'string' && candidate.evidence.trim()
+      ? { evidence: candidate.evidence.trim().slice(0, 200) }
+      : (fallback.evidence ? { evidence: fallback.evidence } : {})),
+    ...(typeof candidate.uncertainty === 'number' && Number.isFinite(candidate.uncertainty)
+      ? { uncertainty: clamp(candidate.uncertainty, 0, 1) }
+      : (typeof fallback.uncertainty === 'number' ? { uncertainty: fallback.uncertainty } : {})),
   };
 }
 
@@ -159,11 +170,11 @@ export async function analyzeEmotionEvent(
   generate: GenerateResponse = generateAIResponse,
 ): Promise<EmotionAnalysisResult> {
   const userAnalysis = analyzeUserEmotionLocally(userText);
-  const fallback = (): EmotionAnalysisResult => ({
-    event: fallbackEmotionEvent(userText, userAnalysis),
-    userAnalysis,
-    source: 'fallback',
-  });
+  const fallback = (): EmotionAnalysisResult => {
+    const event = fallbackEmotionEvent(userText, userAnalysis);
+    const rec = reconcileAttribution(event, userAnalysis);
+    return { event, userAnalysis: rec.analysis, source: 'fallback', attribution: { consensus: rec.consensus, issues: rec.issues } };
+  };
 
   if (!settings?.apiKey) return fallback();
 
@@ -178,7 +189,9 @@ export async function analyzeEmotionEvent(
     const parsed = extractJSON(content || '{}');
     const event = sanitizeEmotionEvent(parsed?.emotionEvent ?? parsed);
     const modelUserAnalysis = sanitizeUserAnalysis(parsed?.userAnalysis, userAnalysis);
-    return event ? { event, userAnalysis: modelUserAnalysis, source: 'llm' } : fallback();
+    if (!event) return fallback();
+    const rec = reconcileAttribution(event, modelUserAnalysis);
+    return { event, userAnalysis: rec.analysis, source: 'llm', attribution: { consensus: rec.consensus, issues: rec.issues } };
   } catch (error) {
     console.warn('[EmotionAnalyzer] LLM analysis failed; using local fallback.', error);
     return fallback();

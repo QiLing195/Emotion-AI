@@ -30,7 +30,9 @@ import {
   sumEmotionDelta,
   type EmergenceReport,
   type EmergenceStats,
+  scaleSourcesForBudget,
 } from '../../src/lib/emergenceMetrics.js';
+import { applyNonUserTurnBudget } from '../../src/lib/turnBudget.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
 import { selfStateVoiceEnabled, buildSelfStateVoiceSnippet } from '../../src/lib/selfStateVoice.js';
@@ -277,6 +279,8 @@ export class AICoordinator {
    * 没有它就无从判断"她到底有没有在理解他这件事"，只能看情绪数字。
    */
   private lastAppraisal: AppraisalResult | null = null;
+  /** v2.03：最近一轮的非用户来源总预算执行情况（可观测） */
+  private lastTurnBudget: { scale: number; totalBefore: number; cap: number; removed: { valence: number; arousal: number; emotionAbs: number } } | null = null;
   /** v1.95 本轮用在情绪上的「她看到他正在做什么」（可观测；null = 这轮没有） */
   private lastActivityConcern: { type: string; category: string; summary: string; intensity: number } | null = null;
   /** 🧠 思维图谱（跨轮共享，在情感引擎与策略引擎之间积累思维碎片） */
@@ -729,6 +733,10 @@ export class AICoordinator {
       this.intimacySeekingCount++;
     }
 
+    // v2.03：直接刺激后的状态快照（用于 external 记账 + 非用户来源预算基准）
+    let directStimulusAfter: { emotions: Record<string, number>; valence: number; arousal: number } | null = null;
+
+
     // ── 阶段 3: 情感引擎更新（v1.0 applyEvent 统一路径）──
     const t3 = Date.now();
     let updatedEmotionState: EmotionState;
@@ -749,6 +757,13 @@ export class AICoordinator {
         timestamp: Date.now(),
         data: buildEmotionUpdatedPayload({ stimulus: input.emotionEvent, context }),
       });
+      // v2.03（审查 P1-4）：直接刺激结束时的快照 —— external 记账只到这里，
+      // 不能把后面的传染/评价/内在/心情/反刍也算进 external（那会重复计数）。
+      directStimulusAfter = {
+        emotions: { ...updatedEmotionState.emotions } as unknown as Record<string, number>,
+        valence: updatedEmotionState.taiji.valence,
+        arousal: updatedEmotionState.taiji.arousal,
+      };
 
       // 发事件（携带完整 stimulus + context，供 Timeline Viewer 消费）
       const oldValence = input.currentEmotionState.taiji.valence;
@@ -781,7 +796,11 @@ export class AICoordinator {
     // 此前 suggestReinforcement/applyReinforcement 只在旧前端 store 里被调用，
     // 权威管道（server）从未接入：她被夸奖不会更亲近、被指责也不会更戒备。
     // 只处理**明确指向她**的情绪（避免把"用户对老板生气"算到她头上）。
-    if (input.userAnalysis?.directedAtAI && input.userAnalysis.expressedEmotion !== 'neutral') {
+    // v2.03（审查 P1-3）：归因矛盾/高不确定度时不做奖惩强化（宁可少强化，也不错误奖励/惩罚）
+    const attributionDowngraded = input.userAnalysis?.attribution?.consensus === 'downgraded';
+    const uncertain = (input.userAnalysis?.uncertainty ?? 0) >= 0.6;
+    if (input.userAnalysis?.directedAtAI && input.userAnalysis.expressedEmotion !== 'neutral'
+        && !attributionDowngraded && !uncertain) {
       const signal = suggestReinforcement(input.userAnalysis);
       if (signal.value > 0.01) {
         updatedEmotionState = applyEvent(updatedEmotionState, {
@@ -1000,13 +1019,39 @@ export class AICoordinator {
         sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
       );
     }
+    // v2.03（审查 P1-2）：非用户来源的单轮总预算 —— 一句强情绪不能靠"多条通路各加一点"被反复计入。
+    // 以"直接刺激之后"为基准；超出 cap（默认 0.25）就等比缩回，并把各来源记账同步缩放，
+    // 保证"各来源之和 ≈ 状态实际变化"。
+    if (directStimulusAfter) {
+      const capEnv = Number(process.env.TURN_NONUSER_CAP);
+      const cap = Number.isFinite(capEnv) && capEnv > 0 ? capEnv : 0.25;
+      const budget = applyNonUserTurnBudget(updatedEmotionState, directStimulusAfter, cap);
+      if (budget.scale < 0.999) {
+        updatedEmotionState = budget.state;
+        this.emergence = scaleSourcesForBudget(
+          this.emergence,
+          ['contagion', 'appraisal', 'internal', 'mood', 'rumination', 'shadow'],
+          budget.scale,
+        );
+        this.lastTurnBudget = { scale: budget.scale, totalBefore: budget.totalBefore, cap, removed: budget.removed };
+        console.log(`[Budget] 非用户来源超预算 ${budget.totalBefore.toFixed(3)} > ${cap}，缩放到 ${budget.scale.toFixed(2)}`);
+      } else {
+        this.lastTurnBudget = { scale: 1, totalBefore: budget.totalBefore, cap, removed: budget.removed };
+      }
+    }
+
     // 用户话语直接刺激（阶段 3 的 applyEvent）作为 external 来源一并记账
+    // v2.03（审查 P1-4）：external 只统计"本轮开始 → 直接刺激结束"，
+    // 传染/评价/内在/心情/反刍各自记自己的来源（此前这里取到全部步骤结束后，导致重复计数）。
     this.emergence = accumulateSource(
       this.emergence,
       'external',
-      valenceBeforeInternal - input.currentEmotionState.taiji.valence,
-      arousalBeforeInternal - input.currentEmotionState.taiji.arousal,
-      sumEmotionDelta(input.currentEmotionState.emotions, updatedEmotionState.emotions),
+      (directStimulusAfter?.valence ?? updatedEmotionState.taiji.valence) - input.currentEmotionState.taiji.valence,
+      (directStimulusAfter?.arousal ?? updatedEmotionState.taiji.arousal) - input.currentEmotionState.taiji.arousal,
+      sumEmotionDelta(
+        input.currentEmotionState.emotions,
+        (directStimulusAfter?.emotions ?? updatedEmotionState.emotions) as unknown as typeof input.currentEmotionState.emotions,
+      ),
     );
 
     // ⑤ 回写内在状态：心情采样（本轮九情净效价）+ 反刍链推进（只看激活情绪）
@@ -1357,6 +1402,9 @@ export class AICoordinator {
   /**
    * v1.14 最近一次评价层结果：这件事对**她**意味着什么（readings 带人话理由与依据）。
    */
+  /** v2.03：最近一轮非用户来源预算（scale < 1 表示发生过缩放） */
+  getLastTurnBudget() { return this.lastTurnBudget; }
+
   getLastAppraisal(): AppraisalResult | null {
     return this.lastAppraisal;
   }
@@ -1449,4 +1497,3 @@ function findStickyEmotions(_moods: number[]): string[] {
 
 // 全局单例（与 DefaultAIEngine 保持相同模式）
 export const aiCoordinator = new AICoordinator();
-

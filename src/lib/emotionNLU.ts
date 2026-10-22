@@ -40,6 +40,37 @@ export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
     { emotion: 'neutral', keywords: ['嗯', '好的', '哦', '知道了', '行', '可以'], cause: '日常交流' },
   ];
 
+  // v2.03：否定/拒绝表达优先 —— 不能因为命中"喜欢/爱你"就把"我不喜欢你"判成 love
+  const quoted = /[「“"『][^」”"』]{1,40}[」”"』]/.test(t) || /(他说|她说|我朋友|我同事|室友说|朋友说)/.test(t);
+  // v2.03：双重否定不是拒绝（"不讨厌你" ≈ 有好感/中立偏正）
+  if (/不讨厌/.test(t)) {
+    return {
+      expressedEmotion: 'love',
+      likelyCause: '双重否定（不讨厌 ≈ 有好感）',
+      intensity: 0.35,
+      directedAtAI: /你/.test(t) && !quoted,
+      evidence: t.slice(0, 80),
+      uncertainty: 0.35,
+    };
+  }
+  const negatedAffection = [
+    { re: /不(再)?(喜欢|爱你)/, emotion: 'anger', cause: '否定/拒绝表达' },
+    { re: /(不喜欢|不爱|没喜欢过|不感兴趣|没感觉)/, emotion: 'anger', cause: '否定/冷淡表达' },
+    { re: /(讨厌你|烦你|受够你)/, emotion: 'anger', cause: '对你不满' },
+  ].find(x => x.re.test(t));
+  if (negatedAffection) {
+    const directed = /你/.test(t) && !quoted;
+    const intensity = Math.max(0.2, Math.min(1, 0.55 + (quoted ? -0.2 : 0)));
+    return {
+      expressedEmotion: negatedAffection.emotion,
+      likelyCause: negatedAffection.cause + (directed ? '，且与你有关' : '') + (quoted ? '（可能是引用/转述）' : ''),
+      intensity: Math.round(intensity * 100) / 100,
+      directedAtAI: directed,
+      evidence: t.slice(0, 80),
+      uncertainty: quoted ? 0.6 : 0.2,
+    };
+  }
+
   let bestMatch = { emotion: 'neutral', score: 0, cause: '日常交流' };
   for (const p of patterns) {
     let score = 0;
@@ -49,8 +80,21 @@ export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
     if (score > bestMatch.score) bestMatch = { emotion: p.emotion, score, cause: p.cause };
   }
 
-  const directedAtAI = ['你', '你让', '你给', '你总是', '你从来'].some(w => t.includes(w));
-  const intensity = Math.min(1, bestMatch.score * 0.5 + Math.min(1, t.length / 100) * 0.3 + ((t.match(/[！!]/g)?.length ?? 0) * 0.2));
+  const directedAtAI = ['你', '你让', '你给', '你总是', '你从来'].some(w => t.includes(w)) && !quoted;
+  let intensity = Math.min(1, bestMatch.score * 0.5 + Math.min(1, t.length / 100) * 0.3 + ((t.match(/[！!]/g)?.length ?? 0) * 0.2));
+  // v2.03：混合情绪（同时命中正/负类）与引用 → 降低强度 + 提高不确定度
+  const NEG_HIT = /(难过|伤心|生气|烦|害怕|担心|焦虑|累|失望|委屈|讨厌)/.test(t);
+  const POS_HIT = /(开心|高兴|哈哈|快乐|幸福|谢谢|感谢)/.test(t);
+  const mixed = NEG_HIT && POS_HIT;
+  if (quoted) intensity *= 0.6;
+  if (mixed) intensity *= 0.85;
 
-  return { expressedEmotion: bestMatch.emotion, likelyCause: bestMatch.cause + (directedAtAI ? '，且与你有关' : ''), intensity: Math.round(intensity * 100) / 100, directedAtAI };
+  return {
+    expressedEmotion: bestMatch.emotion,
+    likelyCause: bestMatch.cause + (directedAtAI ? '，且与你有关' : '') + (quoted ? '（可能是引用/转述）' : '') + (mixed ? '（情绪可能混合）' : ''),
+    intensity: Math.round(intensity * 100) / 100,
+    directedAtAI,
+    evidence: t.slice(0, 80),
+    uncertainty: quoted ? 0.6 : mixed ? 0.45 : 0.25,
+  };
 }

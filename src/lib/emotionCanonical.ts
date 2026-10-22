@@ -48,6 +48,9 @@ const ALIASES: Record<string, CanonicalEmotion> = {
   // ── 否定形式优先（必须比对应的肯定词长，才能先命中）──
   不开心: 'sad', 不高兴: 'sad', 不愉快: 'sad', 不快乐: 'sad', 不爽: 'anger', 不舒服: 'sad',
   没精神: 'sad', 没劲: 'sad', 不想说话: 'sad',
+  // v2.03：否定的亲密表达不能归到 love（"不喜欢你" ≠ 喜欢）
+  不喜欢你: 'anger', 不喜欢: 'anger', 不爱你: 'anger', 不爱: 'anger',
+  讨厌你: 'anger', 没感觉: 'neutral', 不讨厌: 'love',
 
   // ── joy ──
   joy: 'joy', happy: 'joy', happiness: 'joy', glad: 'joy', excited: 'joy', excitement: 'joy',

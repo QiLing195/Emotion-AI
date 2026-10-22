@@ -79,6 +79,20 @@ function safeAbs(v: number): number {
 }
 
 /** 累加一个来源的绝对影响（纯函数，返回新对象） */
+/**
+ * v2.03：跨来源总预算生效后，把**非用户来源**的已记账量按 scale 缩回，
+ * 保证各来源之和与状态实际变化一致（否则超额部分会成为"凭空消失的账"）。
+ */
+export function scaleSourcesForBudget(
+  stats: EmergenceStats,
+  sources: EmotionSource[],
+  scale: number,
+): EmergenceStats {
+  const next: EmergenceStats = { ...stats };
+  for (const s of sources) next[s] = (next[s] ?? 0) * scale;
+  return next;
+}
+
 export function accumulateSource(
   stats: EmergenceStats,
   source: EmotionSource,

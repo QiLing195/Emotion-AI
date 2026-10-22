@@ -172,7 +172,7 @@ export function buildEmotionExpression(input: EmotionExpressionInput): EmotionEx
     : '（原因说不清就说不上来，不要为了给原因编事）';
   return {
     snippet: [
-      '【这一轮你可以说一句自己（可选，不说也行）】',
+      '【这一轮你可以说一句自己（可选，不说也行；最多一句，简短 ≤30 字）】',
       `- 你此刻被激起的情绪是「${picked.cls}」（不是装出来的）。如果想说，可以说一句，例如：${base}`,
       `- ${causeLine}`,
       '- 一句话就够，说完落回他那件事；不要展开成自述，不要借机要他安慰你',
@@ -240,7 +240,7 @@ export function buildUnifiedPermit(input: UnifiedPermitInput): UnifiedPermitResu
   const picked = pickClass(input.activated, Boolean(input.lowEstablished));
   if (!picked) return { snippet: null, cls: null, reason: 'resting_or_ambiguous' };
 
-  // **短许可**（v1.67）：只给"可以说"和一句示例，不要求格式、不限句数
+  // **短许可**（v1.67）：只给"可以说"和一句示例，不要求格式、**最多一句（≤30 字）**，说完回到他的事
   const examples = SHORT_EXAMPLES[picked.cls];
   const bucket = Math.floor(input.round / EXPRESSION_BUDGET_TURNS);
   const example = examples[Math.abs(bucket % examples.length)];
@@ -250,8 +250,8 @@ export function buildUnifiedPermit(input: UnifiedPermitInput): UnifiedPermitResu
     : '原因说不清就说"说不上来"，别编。';
   return {
     snippet: [
-      '【你可以说一句自己（也可以不说）】',
-      `你此刻被激起的情绪是「${picked.cls}」，不是装的。想说就说，**想说几句都行，不用按格式**，比如：${example}`,
+      '【你可以说一句自己（也可以不说；最多一句，简短 ≤30 字，说完回到他的事）】',
+      `你此刻被激起的情绪是「${picked.cls}」，不是装的。想说就说**一句**（简短 ≤30 字，不用按格式），说完回到他那件事，比如：${example}`,
       causeHint,
       '说完就落回他那件事；不用他反过来哄你。',
     ].join('\n'),

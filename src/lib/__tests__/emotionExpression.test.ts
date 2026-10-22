@@ -113,10 +113,12 @@ describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
     expect(unifiedExpressionEnabled({ ENABLE_UNIFIED_EXPRESSION: 'true' } as NodeJS.ProcessEnv)).toBe(true);
   });
 
-  it('短许可：只给"可以说"+示例+不限句数，**不给格式骨架**', () => {
+  it('短许可：只给"可以说"+示例+最多一句（≤30 字），**不给格式骨架**', () => {
     const r = buildUnifiedPermit({ activated: { sad: 0.3 }, round: 100 });
-    expect(r.snippet).toContain('你可以说一句自己（也可以不说）');
-    expect(r.snippet).toContain('想说几句都行');
+    expect(r.snippet).toContain('你可以说一句自己（也可以不说');
+    expect(r.snippet).toContain('最多一句');
+    expect(r.snippet).toContain('≤30 字');
+    expect(r.snippet).not.toContain('想说几句都行');
     expect(r.snippet).toContain('不用按格式');
     expect(r.snippet).toContain('落回他那件事');
     expect(r.snippet).not.toContain('状态：');
