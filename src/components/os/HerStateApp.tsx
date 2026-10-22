@@ -127,7 +127,9 @@ export default function HerStateApp() {
           </>
         ) : (
           <div className="mt-2 text-[11px] leading-relaxed text-slate-400">
-            小屋活动只在 <code className="rounded bg-white/10 px-1">ENABLE_HER_ROOM=true</code> 时记录；开着她会有"此刻在做什么"的真实状态。
+            {s?.roomEnabled
+              ? '小屋现在没记录到活动——她可能刚回到小屋，或者下一次活动还没到。'
+              : <>小屋活动只在 <code className="rounded bg-white/10 px-1">ENABLE_HER_ROOM=true</code> 时记录；开着她会有"此刻在做什么"的真实状态。</>}
           </div>
         )}
       </div>
