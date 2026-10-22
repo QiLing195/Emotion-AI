@@ -264,3 +264,18 @@ describe('v1.96：时间窗 + 低谷更矜持', () => {
     expect(d.thresholds).toEqual({ sustainMs: m.CARE_MIN_SUSTAIN_MS, cooldownMs: m.CARE_COOLDOWN_MS, maxPerDay: m.CARE_MAX_PER_DAY });
   });
 });
+describe('v1.97：平台优先（真实使用发现）', () => {
+  it('YouTube 上讲"AI 新岗位"的视频应算看视频，不是找工作', async () => {
+    const m = await import('../activityUnderstanding.js');
+    expect(m.classifyActivity('(5) 【十字路口】OpenAI 和 Anthropic 共同看好的 FDE：AI 时代的新岗位出现 - YouTube - Google Chrome', 'chrome')).toBe('video');
+    expect(m.classifyActivity('B站 - 招聘内幕揭秘（视频）', 'chrome')).toBe('video');
+    expect(m.classifyActivity('网易云音乐 - 岗位主题歌单', 'cloudmusic')).toBe('music');
+  });
+
+  it('真正的招聘网页仍然算找工作（平台优先不误伤）', () => {
+    return import('../activityUnderstanding.js').then(m => {
+      expect(m.classifyActivity('「杭州招聘」-BOSS直聘 - Google Chrome', 'chrome')).toBe('job');
+      expect(m.classifyActivity('拉勾 - 后端开发工程师 - 杭州', 'chrome')).toBe('job');
+    });
+  });
+});

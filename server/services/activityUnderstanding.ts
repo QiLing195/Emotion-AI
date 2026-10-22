@@ -107,10 +107,20 @@ export function resetKeywordTableCacheForTests(): void {
   cachedMtime = -1;
 }
 
-/** 把一条窗口标题/进程归到类别（按关键词表顺序，先命中先算） */
+/** 平台优先级（v1.97）：视频/音乐平台上的标题里的"岗位/招聘"是内容话题，不代表他在找工作 */
+const MEDIA_PLATFORM_HINTS: Array<{ key: ActivityCategory; hints: string[] }> = [
+  { key: 'video', hints: ['youtube', 'bilibili', 'b站', '哔哩哔哩', '抖音', '腾讯视频', '爱奇艺', '优酷', 'netflix'] },
+  { key: 'music', hints: ['网易云音乐', 'qq音乐', 'spotify', '酷狗音乐'] },
+];
+
+/** 把一条窗口标题/进程归到类别（先看平台，再看关键词表，先命中先算） */
 export function classifyActivity(title: string, processName?: string, table: CategoryDef[] = loadKeywordTable()): ActivityCategory | null {
   const hay = `${title ?? ''} ${processName ?? ''}`.toLowerCase();
   if (!hay.trim()) return null;
+  // 平台优先：在 YouTube/B站 上，"岗位/招聘/学习"多半是视频话题，不是他真在做这件事
+  for (const p of MEDIA_PLATFORM_HINTS) {
+    if (p.hints.some(h => hay.includes(h.toLowerCase()))) return p.key;
+  }
   for (const def of table) {
     for (const kw of def.keywords) {
       if (hay.includes(kw.toLowerCase())) return def.key;

@@ -107,6 +107,8 @@ export default function PetApp() {
   const [frameIdx, setFrameIdx] = useState(0);
   const [awake, setAwake] = useState(false);
   const [voiceLabel, setVoiceLabel] = useState('');
+  // v1.97 唤醒词从配置读（原来写死「安雅」，换成「二丫」后提示不对）
+  const wakeWordRef = useRef('二丫');
   const [undoAt, setUndoAt] = useState<number | null>(null);
   const bubbleTimer = useRef<number | null>(null);
   const actionTimer = useRef<number | null>(null);
@@ -230,7 +232,7 @@ export default function PetApp() {
         if (!r.ok) return;
         const d = await r.json() as { enabled?: boolean; ready?: boolean; seq?: number; events?: VoiceEvent[] };
         if (!alive) return;
-        setVoiceLabel(d.enabled ? (d.ready ? '等你说「安雅」' : '麦克风准备中…') : '语音未开启');
+        setVoiceLabel(d.enabled ? (d.ready ? `等你说「${wakeWordRef.current}」` : '麦克风准备中…') : '语音未开启');
         for (const ev of d.events ?? []) {
           voiceSeq.current = Math.max(voiceSeq.current, ev.seq);
           if (ev.kind === 'wake') {
@@ -287,6 +289,20 @@ export default function PetApp() {
   const resolved = resolveSprite(spriteTarget, available);
   const imageMode = probed && available.size > 0;
   const activeSprite = resolved ?? 'idle';
+
+  // v1.97 唤醒词来自服务端配置（设置窗口改完这里也跟着变；读不到就用默认）
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch('/api/pet/voice/config');
+        if (!r.ok) return;
+        const d = await r.json() as { wakeWords?: string[] };
+        const w = (d.wakeWords ?? []).find(x => x && x.trim());
+        if (w) wakeWordRef.current = w;
+      } catch { /* 配置读不到就用默认 */ }
+    })();
+  }, []);
+
   // 她"随口提一句"的主动消息（桌面回声等）：轮询待投递队列，用气泡显示
   useEffect(() => {
     let alive = true;
