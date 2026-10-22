@@ -109,6 +109,8 @@ import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
+import { readRecentActivity, startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
+import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled } from './services/mcpClient.js';
 import { getWeather, searchPlace, externalToolsEnabled } from './services/externalLookup.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
@@ -1258,6 +1260,11 @@ export class AIGirlfriendServer {
                 return addNote(note);
               },
               readNotes: (limit?: number) => (herNotesEnabled() ? listHerNotes(limit ?? 5) : []),
+              getActivity: (limit?: number) => readRecentActivity(limit ?? 6),
+              mcp: mcpClientEnabled() ? {
+                declarations: () => getMcpToolDeclarations(),
+                call: (name: string, args: Record<string, unknown>) => callMcpTool(name, args),
+              } : undefined,
               addFollowup: (what: string, dueInHours: number, dueAtLocal?: string | null) => {
                 if (!herFollowupEnabled()) return { ok: false, reason: 'followup_disabled（ENABLE_HER_FOLLOWUP=false）' };
                 return addFollowup({ what, dueInHours, dueAtLocal: dueAtLocal ?? null });
@@ -2556,6 +2563,9 @@ export class AIGirlfriendServer {
       // v1.12 动机驱动主动消息循环（ENABLE/DISABLE 由环境变量 + persona.proactive 共同控制）
       this.startProactiveLoop();
 
+      // v1.82 活动窗口采样（只读：只记窗口标题/进程名；ENABLE_ACTIVITY_WATCH 控制）
+      startActivitySampler();
+
       // Phase 2 PR 2: 周期性保存好奇心状态（每 30 秒）
       const curiositySaveTimer = setInterval(() => {
         saveCuriosityState();
@@ -2601,6 +2611,8 @@ export class AIGirlfriendServer {
   }
 
   async stop() {
+    stopActivitySampler();        // v1.82 停采样器（别留下孤儿 PowerShell）
+    await shutdownMcp();          // v1.82 断开外部 MCP server
     await mcpService.shutdown();
     if (this.server) {
       this.server.close();

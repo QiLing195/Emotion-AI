@@ -26,7 +26,7 @@ export function agentToolsEnabled(env: NodeJS.ProcessEnv = process.env): boolean
   return env.ENABLE_AGENT_TOOLS === 'true';
 }
 
-export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'read_my_notes' | 'set_followup' | 'get_weather' | 'search_map';
+export type ToolName = 'check_my_state' | 'recall_recent_events' | 'recall_memory' | 'time_now' | 'remember_this' | 'read_my_notes' | 'set_followup' | 'get_weather' | 'search_map' | 'read_my_activity';
 
 export interface ToolTraceEntry {
   round: number;
@@ -56,10 +56,17 @@ export interface ToolContext {
   searchMap?: (place: string) => Promise<unknown> | unknown;
   /** 翻她自己的便签（未接则返回 []） */
   readNotes?: (limit?: number) => unknown;
+  /** 看他在电脑上做什么（只读：窗口标题/进程；未接/没开都返回 enabled:false） */
+  getActivity?: (limit?: number) => unknown;
+  /** 外部 MCP server 的工具（声明 + 调用；没接就完全不出现） */
+  mcp?: {
+    declarations: () => Promise<Array<{ name: string; description: string; parameters: unknown }>> | Array<{ name: string; description: string; parameters: unknown }>;
+    call: (name: string, args: Record<string, unknown>) => Promise<unknown>;
+  };
 }
 
 /** 给 provider 的函数声明（Gemini 的 functionDeclarations 形状） */
-export function toolDeclarations(): unknown[] {
+export function toolDeclarations(extra: Array<{ name: string; description: string; parameters: unknown }> = []): unknown[] {
   return [
     {
       functionDeclarations: [
@@ -122,6 +129,17 @@ export function toolDeclarations(): unknown[] {
           },
         },
         {
+          name: 'read_my_activity',
+          description: '看**他此刻/刚才在电脑上做什么**（只读：前台窗口标题与程序名，不含你俩对话内容、不含键盘输入）。他问"我在干嘛/你猜我在做什么"、或你想知道他是不是在忙时用。',
+          parameters: {
+            type: 'object',
+            properties: {
+              limit: { type: 'number', description: '看几条，默认 6，最多 20' },
+            },
+            required: [],
+          },
+        },
+        {
           name: 'get_weather',
           description: '查某个城市现在的天气（温度/体感/湿度/风/天气）。他提到出门、天气、冷不冷热不热时可以用。查不到就如实说查不到。',
           parameters: {
@@ -154,6 +172,8 @@ export function toolDeclarations(): unknown[] {
             required: [],
           },
         },
+        // 外部 MCP 工具（v1.82）：形如 mcp__<server>__<tool>，由 mcpClient 生成
+        ...extra.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })),
       ],
     },
   ];
@@ -172,9 +192,26 @@ export async function executeTool(
 ): Promise<{ ok: boolean; result: unknown; ms: number }> {
   const t0 = Date.now();
   try {
+    // 外部 MCP 工具（v1.82）：mcp__<server>__<tool>
+    if (name.startsWith('mcp__')) {
+      if (!ctx.mcp) return { ok: false, result: { error: 'mcp_disabled（外部 MCP 没开）' }, ms: Date.now() - t0 };
+      const r = await ctx.mcp.call(name, args);
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
+    }
     if (name === 'check_my_state') {
       const result = ctx.getState();
       return { ok: true, result, ms: Date.now() - t0 };
+    }
+    if (name === 'read_my_activity') {
+      const raw = Number(args?.limit ?? 6);
+      const limit = Math.max(1, Math.min(20, Number.isFinite(raw) ? raw : 6));
+      const view = ctx.getActivity ? ctx.getActivity(limit) : { enabled: false, entries: [] };
+      const entries = (view as { entries?: unknown[] })?.entries ?? [];
+      return {
+        ok: true,
+        result: entries.length > 0 ? view : { ...(view as object), note: (view as { note?: string })?.note ?? '还没有活动记录。' },
+        ms: Date.now() - t0,
+      };
     }
     if (name === 'get_weather') {
       const city = String(args?.city ?? '').trim();
@@ -306,12 +343,23 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
   let rounds = 0;
   let modelCalls = 0;
 
+  // 外部 MCP 工具声明（懒加载一次；失败就当没有，不影响内置工具）
+  let mcpDeclarations: Array<{ name: string; description: string; parameters: unknown }> = [];
+  if (input.ctx.mcp) {
+    try {
+      mcpDeclarations = (await input.ctx.mcp.declarations()) ?? [];
+    } catch (e) {
+      console.warn(`[Agent] MCP 工具声明获取失败：${(e as Error).message}`);
+      mcpDeclarations = [];
+    }
+  }
+
   // 最多 maxRounds 轮**工具**调用；每轮之后如果模型不再要工具就直接收尾，
   // 工具轮用尽后再给一次**不带工具**的收尾生成（让"工具失败后还能改口/补救"）。
   for (let round = 1; round <= maxRounds; round++) {
     rounds = round;
     modelCalls++;
-    const out = await input.callModel(messages, toolDeclarations());
+    const out = await input.callModel(messages, toolDeclarations(mcpDeclarations));
     if (typeof out?.text === 'string' && out.text.trim()) lastText = out.text;
 
     const calls = Array.isArray(out?.functionCalls) ? out.functionCalls : [];

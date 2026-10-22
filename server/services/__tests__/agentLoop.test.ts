@@ -34,7 +34,7 @@ describe('开关与工具声明', () => {
   it('声明里恰好有两个只读工具，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'get_weather', 'search_map', 'recall_recent_events']);
+    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events']);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });
@@ -271,5 +271,48 @@ describe('remember_this 文本时间自动联动（v1.79）', () => {
     const r = await executeTool('remember_this', { note: '他今天心情不太好，别惹他' }, ctx);
     expect(r.ok).toBe(true);
     expect((r.result as { followup?: unknown }).followup).toBeUndefined();
+  });
+});
+describe('外部 MCP 工具（v1.82）：声明合并 + 路由', () => {
+  it('ctx.mcp 的声明会合并进工具表', async () => {
+    const seen: unknown[] = [];
+    await runAgentLoop({
+      systemPrompt: 's', userMessage: 'x', recentMessages: [],
+      ctx: { ...ctx, mcp: { declarations: () => [{ name: 'mcp__mock__echo', description: '回显', parameters: { type: 'object', properties: {} } }], call: async () => ({ ok: true }) } },
+      callModel: async (_m, tools) => { seen.push(tools); return { text: '好' }; },
+    });
+    const decls = JSON.stringify(seen[0]);
+    expect(decls).toContain('mcp__mock__echo');
+  });
+
+  it('mcp__ 调用被路由到 ctx.mcp.call（并保留 ok）', async () => {
+    const r = await executeTool('mcp__mock__echo', { text: 'hi' }, {
+      ...ctx,
+      mcp: { declarations: () => [], call: async (n, a) => ({ ok: true, name: n, got: a }) },
+    });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('mcp__mock__echo');
+  });
+
+  it('没接 MCP ⇒ 明确报 disabled，不假装成功', async () => {
+    const r = await executeTool('mcp__mock__echo', {}, ctx);
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('mcp_disabled');
+  });
+});
+describe('看他在做什么：read_my_activity（只读）', () => {
+  it('有记录 ⇒ 原样返回视图', async () => {
+    const r = await executeTool('read_my_activity', { limit: 3 }, {
+      ...ctx,
+      getActivity: (limit?: number) => ({ enabled: true, entries: [{ title: 'Visual Studio Code', process: 'Code', minutesAgo: 2, ts: 1 }], limit }),
+    });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('Visual Studio Code');
+  });
+
+  it('没记录/没开 ⇒ 如实给 note，不编造他在干嘛', async () => {
+    const r = await executeTool('read_my_activity', {}, { ...ctx, getActivity: () => ({ enabled: false, entries: [] }) });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('enabled');
   });
 });

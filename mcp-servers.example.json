@@ -1,0 +1,13 @@
+{
+  "// 说明": "MCP 客户端配置（v1.82）。复制为 mcp-servers.json 后生效；代码里默认关，需 ENABLE_MCP_CLIENT=true。",
+  "// 安全": "第一版只读：每个 server 必须 enabled:true；不写 allowTools 时只放行名字像只读的工具(read/list/search/get/find/view/stat/query/head/cat/show/describe/fetch/lookup/inspect)。",
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "E:\\允许她读的目录"],
+      "enabled": false,
+      "allowTools": ["read_file", "list_directory", "search_files", "directory_tree"],
+      "note": "只读文件系统：把 E:\\允许她读的目录 换成你自己的路径；enabled 改 true 才生效"
+    }
+  }
+}
