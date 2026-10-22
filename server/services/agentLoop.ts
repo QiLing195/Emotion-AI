@@ -110,11 +110,11 @@ export function toolDeclarations(): unknown[] {
         },
         {
           name: 'set_followup',
-          description: '安排一条"到点再问"：到时间后你会主动发一条消息，内容就是这句话。**当他说"明天提醒我/记得问我/到时候提醒我"时，必须调用本工具排一条**，不要只在嘴上答应。',
+          description: '把一件事记在心里：到时间你会**自己想起来**并主动提起（说什么、怎么说由你当时的感受决定，不是定时发一句预设的话）。**当他说"明天提醒我/记得问我"时用本工具记下这件事**。',
           parameters: {
             type: 'object',
             properties: {
-              what: { type: 'string', description: '到点想说的那句话（4~120 字）' },
+              what: { type: 'string', description: '这件事是什么（4~120 字，用你自己的话概括；不要写成一条预设消息）' },
               dueAtLocal: { type: 'string', description: '他说了具体时间就填这里，格式 YYYY-MM-DDTHH:mm（本地时间，如 2026-10-23T15:00）。**优先用它，别自己算小时**' },
               dueInHours: { type: 'number', description: '没说具体时间时才用：几小时后发出，0.5~336（14 天内）' },
             },

@@ -174,3 +174,12 @@ export function pickDueFollowup(
   const due = dueFollowups(now, path);
   return { take: due.length > 0, item: due[0] ?? null, dueCount: due.length };
 }
+
+/**
+ * v1.80：到点**不是**把她当初那句话原样发出去，而是给她一条"自己想起来的"线索，
+ * 让她在 proactive 通路里**用自己的话**重说一遍（语气/情绪/措辞都由她当时的状​态决定）。
+ */
+export function buildRecallHint(item: Followup): string {
+  const summary = String(item.what ?? '').trim();
+  return `（这件事是你自己记在心里的，不是谁提醒你的）${summary}`;
+}

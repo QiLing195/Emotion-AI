@@ -18,6 +18,7 @@ import {
   loadFollowups,
   markFollowupSent,
   pickDueFollowup,
+  buildRecallHint,
   parseDueAtLocal,
   validateFollowup,
 } from '../herFollowups.js';
@@ -158,5 +159,15 @@ describe('文本时间兜底（v1.79）：没给合法时间但话里带时间',
     const path = tmp();
     const r = addFollowup({ what: '记得问问他那件事', dueInHours: 0, now: Date.now(), path });
     expect(r.ok).toBe(false);
+  });
+});
+describe('到点是"她自己想起来"，不是原样发预设句（v1.80）', () => {
+  it('召回线索里写明"是你自己记着的，不是谁提醒"', () => {
+    const hint = buildRecallHint({
+      id: 'fu_1', what: '他下周三要去体检，问问结果', dueAt: Date.now(), createdAt: Date.now(), sentAt: null, cancelled: false,
+    });
+    expect(hint).toContain('自己');
+    expect(hint).toContain('不是谁提醒');
+    expect(hint).toContain('体检');
   });
 });

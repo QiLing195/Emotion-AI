@@ -107,7 +107,7 @@ import { replayBranch, listTimelineNodes, replayEnabled } from './services/branc
 import { runSandboxReplay, sandboxEnabled } from './services/replaySandbox.js';
 import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
-import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups } from './services/herFollowups.js';
+import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { getWeather, searchPlace, externalToolsEnabled } from './services/externalLookup.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
@@ -446,22 +446,58 @@ export class AIGirlfriendServer {
     const decision = describeProactiveDecision({ gates, motive: threshold });
     this._lastProactiveDecision = decision;
 
-    // v1.75 到点追问：她之前 set_followup 安排的那句话，到点由 proactive 通路发出
-    // （仍受全部 proactive 闸门约束：配额/时间窗/空闲/低谷矜持；发过即标记，不重发）
+    // v1.80 到点**自己想起来的**事：不是把她当初那句话原样发出去，
+    // 而是给她一条"这是我自己记着的"线索 ⇒ 由她**用自己的话**重新说一遍（语气受此刻状态影响）。
+    // 仍受全部 proactive 闸门约束（时间窗/配额/空闲/低谷矜持）；生成失败 ⇒ 不发送、也不标记，下一轮再试。
     if (herFollowupEnabled()) {
       const picked = pickDueFollowup(gates.allowed);
       const first = picked.item;
       if (first) {
-        this._proactivePending.push({
-          id: `followup_${first.id}`,
-          text: first.what,
-          createdAt: new Date().toISOString(),
-          motiveKind: 'followup',
-        });
-        rhythmController.recordProactiveSent(new Date());
-        markFollowupSent(first.id);
-        console.log(`[Proactive] (${trigger}) 发出(到点追问)：${first.what}`);
-        return { sent: true, reason: `followup_due（${picked.dueCount} 条到点）`, text: first.what };
+        const settingsForFollowup = this.readAISettings();
+        if (settingsForFollowup?.apiKey) {
+          try {
+            const rawFollowup = await generateAIResponse(
+              settingsForFollowup,
+              '你是一个有自己生活的女朋友。你想起了一件自己一直记着的事，于是主动发一条很短的消息给他。'
+                + '用你自己的话、按你此刻的心情说，不要复述"我之前记下了…"这类元描述。只输出消息正文。',
+              buildProactivePrompt({
+                motive: { content: buildRecallHint(first) } as never,
+                moodDescription: describeMood(state.internal?.mood, Date.now()),
+                minutesSinceLast: Number.isFinite(idleMinutes) ? idleMinutes : undefined,
+                relationshipStageLabel: this._relationshipState?.stage,
+                recentUserTexts: [],
+              }),
+              false,
+              0.85,
+            );
+            let textFollowup = sanitizeProactiveMessage(typeof rawFollowup === 'string' ? rawFollowup : '') ?? '';
+            // 与普通主动消息同一套接地校验：引用必须落在她的记忆/这件事上（防编造）
+            if (textFollowup) {
+              const groundingFollowup = checkMemoryGrounding(textFollowup, buildGroundingCorpus({
+                memories: episodicStore.episodes.slice(0, 20).flatMap(e => [e.eventSummary, e.narrativeFragment]),
+                conversation: [],
+                extra: [first.what],
+              }));
+              if (!groundingFollowup.ok) {
+                textFollowup = stripUngroundedClaims(textFollowup, groundingFollowup.violations);
+              }
+            }
+            if (textFollowup) {
+              this._proactivePending.push({
+                id: `followup_${first.id}`,
+                text: textFollowup,
+                createdAt: new Date().toISOString(),
+                motiveKind: 'followup_self_recall',
+              });
+              rhythmController.recordProactiveSent(new Date());
+              markFollowupSent(first.id);
+              console.log(`[Proactive] (${trigger}) 她想起「${first.what}」并主动提起：${textFollowup}`);
+              return { sent: true, reason: `followup_self_recall（${picked.dueCount} 条到点）`, text: textFollowup };
+            }
+          } catch (e) {
+            console.warn(`[Proactive] 到点追问生成失败（下轮再试）：${(e as Error).message}`);
+          }
+        }
       }
     }
 
