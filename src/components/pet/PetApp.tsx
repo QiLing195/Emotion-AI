@@ -9,6 +9,9 @@ declare global {
     /** desktop/preload.cjs 注入；浏览器里直接跑 /pet 时不存在（要判空） */
     petWindow?: {
       moveBy: (dx: number, dy: number) => void;
+    dragBegin?: () => void;
+    dragMove?: () => void;
+    dragEnd?: () => void;
       getPosition: () => Promise<{ x: number; y: number } | null>;
       openChat: () => void;
       showMenu: () => void;
@@ -103,6 +106,7 @@ export default function PetApp() {
   const [available, setAvailable] = useState<Set<PetSpriteState>>(new Set());
   const [probed, setProbed] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const draggingRef = useRef(false);
   const [frameUrls, setFrameUrls] = useState<string[]>([]);
   const [frameIdx, setFrameIdx] = useState(0);
   const [awake, setAwake] = useState(false);
@@ -113,7 +117,7 @@ export default function PetApp() {
   const bubbleTimer = useRef<number | null>(null);
   const actionTimer = useRef<number | null>(null);
   const lastTouch = useRef<number>(Date.now());
-  const dragRef = useRef<{ down: boolean; moved: number }>({ down: false, moved: 0 });
+  const dragRef = useRef<{ down: boolean; startX: number; startY: number; moved: number }>({ down: false, startX: 0, startY: 0, moved: 0 });
   const suppressClick = useRef(0);
   const voiceSeq = useRef(0);
   const busyReply = useRef(false);
@@ -365,36 +369,54 @@ export default function PetApp() {
 
   const wave = () => { playAction('wave', 2200); say('嘿，我在这儿。', 2600); };
 
+  // v2.07：整窗可拖 —— 之前只有底部 170x212 的她本人能拖，窗口上方约 190px 透明区域
+  // 没有任何事件目标，所以"往上拖"常常抓空。现在在整个窗口根节点上处理，
+  // 只排除按钮/输入等交互控件；拖动时在主进程里按屏幕光标位移移动窗口。
   const onPetPointerDown = (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
-    dragRef.current = { down: true, moved: 0 };
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select')) return;
+    dragRef.current = { down: true, startX: e.screenX, startY: e.screenY, moved: 0 };
+    window.petWindow?.dragBegin?.();
+    const onMove = (ev: PointerEvent) => {
+      const st = dragRef.current;
+      if (!st.down) return;
+      st.moved = Math.abs(ev.screenX - st.startX) + Math.abs(ev.screenY - st.startY);
+      if (st.moved > 3) {
+        if (!draggingRef.current) { draggingRef.current = true; setDragging(true); }
+        window.petWindow?.dragMove?.();
+      }
+    };
+    const onUp = () => {
+      const st = dragRef.current;
+      const wasDrag = draggingRef.current || st.moved > 3;
+      st.down = false;
+      draggingRef.current = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.petWindow?.dragEnd?.();
+      if (wasDrag) {
+        setDragging(false);
+        suppressClick.current = Date.now();
+        playAction('shocked', 500);
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
-  const onPetPointerMove = (e: ReactPointerEvent) => {
-    const st = dragRef.current;
-    if (!st.down) return;
-    const dx = e.movementX || 0;
-    const dy = e.movementY || 0;
-    st.moved += Math.abs(dx) + Math.abs(dy);
-    if (!dragging && st.moved > 3) setDragging(true);
-    if (dragging || st.moved > 3) window.petWindow?.moveBy(dx, dy);
-  };
-  const onPetPointerUp = (e: ReactPointerEvent) => {
-    const st = dragRef.current;
-    const wasDrag = dragging || st.moved > 3;
-    st.down = false;
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
-    if (wasDrag) {
-      setDragging(false);
-      suppressClick.current = Date.now();
-      playAction('shocked', 500);
-      return;
-    }
-    void touch();
-  };
+  const onPetPointerUp = () => { /* 拖动结束统一由 window 级 pointerup 处理 */ };
+  const onPetPointerMove = () => { /* 同上 */ };
   const onPetDoubleClick = () => {
     if (Date.now() - suppressClick.current < 400) return;
     wave();
+  };
+  const onRootClick = (e: ReactMouseEvent) => {
+    if (Date.now() - suppressClick.current < 400) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select')) return;
+    void touch();
   };
   const onContextMenu = (e: ReactMouseEvent) => {
     e.preventDefault();
@@ -412,8 +434,11 @@ export default function PetApp() {
   return (
     <div
       className="pet-root relative flex h-screen w-screen flex-col items-center justify-end overflow-hidden"
-      style={{ background: 'transparent' }}
+      style={{ background: 'transparent', cursor: dragging ? 'grabbing' : 'grab' }}
       onContextMenu={onContextMenu}
+      onPointerDown={onPetPointerDown}
+      onDoubleClick={onPetDoubleClick}
+      onClick={onRootClick}
     >
       <style>{PET_CSS}</style>
 
@@ -525,14 +550,9 @@ export default function PetApp() {
         )}
 
         <div
-          onPointerDown={onPetPointerDown}
-          onPointerMove={onPetPointerMove}
-          onPointerUp={onPetPointerUp}
-          onPointerCancel={onPetPointerUp}
-          onDoubleClick={onPetDoubleClick}
           title={dragging ? '放我下来…' : '摸她 / 按住拖动 / 双击挥手 / 右键菜单'}
           className="absolute inset-0 select-none border-none p-0 outline-none"
-          style={{ background: 'transparent', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+          style={{ background: 'transparent', touchAction: 'none' }}
         >
           {imageMode ? (
             <div className={`anya-state on ${action === 'pat' ? 'anya-pat' : ''}`}>
@@ -564,8 +584,6 @@ export default function PetApp() {
         {voiceLabel && <span className={`rounded-full px-2 py-[1px] backdrop-blur-sm ${awake ? 'bg-rose-500/25 text-rose-100' : 'bg-black/20 text-slate-400'}`}>{silence ? '听着…' : voiceLabel}</span>}
       </div>
 
-      {/* 顶部拖动条（透明区域也能拖窗口） */}
-      <div className="absolute left-0 top-0 h-9 w-full" style={{ WebkitAppRegion: 'drag' } as CSSProperties} />
     </div>
   );
 }

@@ -2,8 +2,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('petWindow', {
-  /** 相对移动窗口（用指针 movementX/Y 驱动，拖动手感才跟手） */
+  /** 相对移动窗口（旧接口；v2.07 起拖动改用 dragBegin/dragMove/dragEnd） */
   moveBy: (dx, dy) => ipcRenderer.send('pet:move-by', { dx, dy }),
+  /** v2.07：光标驱动的整窗拖动（主进程按屏幕光标位移移动窗口，避免 movementX 漂移/卡住） */
+  dragBegin: () => ipcRenderer.send('pet:drag-begin'),
+  dragMove: () => ipcRenderer.send('pet:drag-move'),
+  dragEnd: () => ipcRenderer.send('pet:drag-end'),
   /** 当前窗口位置（调试/边界回弹用） */
   getPosition: () => ipcRenderer.invoke('pet:get-position'),
   /** 打开聊天窗口 */

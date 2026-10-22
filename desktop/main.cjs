@@ -92,6 +92,10 @@ function createPetWindow() {
     },
   });
   petWin.setBackgroundColor('#00000000');
+  // v2.07：硬尺寸上限 —— 双击无边框窗口时 Windows 可能直接下发"最大化"，
+  // 而 maximizable:false 不能完全挡住；最大尺寸能让系统把窗口夹回 300x400。
+  petWin.setMinimumSize(300, 400);
+  petWin.setMaximumSize(300, 400);
   petWin.setAlwaysOnTop(true, 'screen-saver');
   petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   positionPet(petWin);
@@ -101,6 +105,29 @@ function createPetWindow() {
     overrideBrowserWindowOptions: { width: 1100, height: 760, backgroundColor: '#0f1120' },
   }));
   petWin.on('closed', () => { petWin = null; });
+
+  // v2.07：双击拖动区/系统手势会把无边框窗口最大化甚至全屏（用户实测变"挡屏"）——
+  // 统一恢复成桌宠的 300x400，并夹回工作区。
+  let petRestoring = false;
+  const restorePetWindow = (reason) => {
+    if (!petWin || petWin.isDestroyed() || petRestoring) return;
+    const [w, h] = petWin.getSize();
+    // 只拦"明显变大"（系统手势/双击最大化的典型值），不影响 DPI/边框造成的几像素差异
+    const badSize = w > 380 || h > 480;
+    const badState = petWin.isFullScreen() || petWin.isMaximized();
+    if (!badSize && !badState) return;
+    petRestoring = true;
+    console.log('[Pet] 窗口异常(' + w + 'x' + h + ')，恢复桌宠窗口（' + reason + '）');
+    if (petWin.isFullScreen()) petWin.setFullScreen(false);
+    if (petWin.isMaximized()) petWin.unmaximize();
+    petWin.setSize(300, 400);
+    positionPet(petWin);
+    setTimeout(() => { petRestoring = false; }, 300);
+  };
+  petWin.on('maximize', () => restorePetWindow('maximize'));
+  petWin.on('enter-full-screen', () => restorePetWindow('full-screen'));
+  // Windows 把无边框窗口双击当"最大化"时不一定发 maximize 事件，用 resize 兜底
+  petWin.on('resize', () => restorePetWindow('resize'));
 
   // Ctrl+Shift+P 打开/聚焦聊天窗口；Ctrl+Shift+Q 退出桌宠
   petWin.webContents.on('before-input-event', (event, input) => {
@@ -133,8 +160,32 @@ function movePetBy(dx, dy) {
   petWin.setPosition(nx, ny);
 }
 
+let petDrag = null;
+/** v2.07：整窗拖动开始 —— 记录屏幕光标起点（不再依赖 renderer 的 movementX） */
+function petDragBegin() {
+  if (!petWin || petWin.isDestroyed()) return;
+  // 曾被双击拖动区/系统手势意外最大化或全屏 → 先恢复，否则拖动坐标与窗口大小都会错
+  if (petWin.isFullScreen()) petWin.setFullScreen(false);
+  if (petWin.isMaximized()) petWin.unmaximize();
+  petDrag = { last: screen.getCursorScreenPoint() };
+}
+function petDragMove() {
+  if (!petDrag || !petWin || petWin.isDestroyed()) return;
+  const now = screen.getCursorScreenPoint();
+  const dx = now.x - petDrag.last.x;
+  const dy = now.y - petDrag.last.y;
+  if (dx || dy) {
+    movePetBy(dx, dy);
+    petDrag.last = now;
+  }
+}
+function petDragEnd() { petDrag = null; }
+
 function registerPetIpc() {
   const { ipcMain } = require('electron');
+  ipcMain.on('pet:drag-begin', () => petDragBegin());
+  ipcMain.on('pet:drag-move', () => petDragMove());
+  ipcMain.on('pet:drag-end', () => petDragEnd());
   ipcMain.on('pet:move-by', (_evt, payload) => {
     const dx = Number(payload?.dx ?? 0);
     const dy = Number(payload?.dy ?? 0);
@@ -187,6 +238,7 @@ function registerPetIpc() {
     Menu.buildFromTemplate([
       { label: '打开聊天窗口', click: () => openChat() },
       { label: '唤醒词设置…', click: () => openVoiceSettings() },
+      { label: '回到右下角', click: () => { if (petWin && !petWin.isDestroyed()) { if (petWin.isFullScreen()) petWin.setFullScreen(false); if (petWin.isMaximized()) petWin.unmaximize(); petWin.setSize(300, 400); positionPet(petWin); } } },
       { type: 'separator' },
       { label: '退出桌宠', click: () => app.quit() },
     ]).popup({ window: petWin });

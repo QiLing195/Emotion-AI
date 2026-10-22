@@ -99,3 +99,10 @@
 - [ ] plan 与 intrinsic 写进脱敏 trace 文件（现在只在内存 + /state）
 - [ ] 候选接口接“LLM 只提候选”的实验臂（不直接生效）
 - [ ] 场景集补：反讽 / 第三人称 / 替朋友难过
+
+### v2.07 桌宠拖动/双击全屏 bug（2026-10-23）
+- [x] 整窗可拖（原来只有底部 170x212 的她能拖，上方透明区域抓空）
+- [x] 去掉 `-webkit-app-region: drag` 顶部拖动条（Windows 双击会最大化/全屏，还会吞 pointer 事件）
+- [x] 主进程按 `screen.getCursorScreenPoint()` 位移移动窗口（避免 movementX 漂移）
+- [x] 窗口尺寸硬限制 300x400 + maximize/full-screen/resize 兜底恢复；右键菜单加「回到右下角」
+- [ ] 真机人工确认：按钮（允许/拒绝/撤销）在整窗拖动层下仍可点（已用 closest 排除，但未逐个人工点过）
