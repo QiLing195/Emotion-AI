@@ -39,6 +39,14 @@ wave → happy → idle
 如果一张图都没有 ⇒ 自动退回纯 CSS 小人（当前占位形象），功能不受影响
 ```
 
+## 动作帧（可选）
+
+` 
+public/pet/anya_<state>_1.png、_2.png …（最多 8 帧）
+只要 anya_walk_1.png 存在就按帧播放；没有就用单图 + CSS 动作；可以混用。
+建议：walk 4~6 帧、talk 3 帧（口型）、wave 3 帧、happy 2 帧，其余单帧即可。
+` 
+
 ## 图片规格
 
 ```

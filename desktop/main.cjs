@@ -87,6 +87,7 @@ function createPetWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'),
       backgroundThrottling: false,
     },
   });
@@ -117,6 +118,36 @@ function openChat() {
   chatWin.on('closed', () => { chatWin = null; });
 }
 
+/**
+ * v1.86：鼠标直接拖动桌宠（不走 -webkit-app-region，否则会把点击/双击吃掉）。
+ * 渲染层用 pointermove 的 movementX/Y 发相对位移，这里负责夹在屏幕工作区内。
+ */
+function movePetBy(dx, dy) {
+  if (!petWin || petWin.isDestroyed()) return;
+  const [x, y] = petWin.getPosition();
+  const [w, h] = petWin.getSize();
+  const display = screen.getDisplayNearestPoint({ x: x + Math.round(w / 2), y: y + Math.round(h / 2) });
+  const wa = display.workArea;
+  const nx = Math.min(Math.max(x + Math.round(dx), wa.x - 40), wa.x + wa.width - w + 40);
+  const ny = Math.min(Math.max(y + Math.round(dy), wa.y - 20), wa.y + wa.height - h + 40);
+  petWin.setPosition(nx, ny);
+}
+
+function registerPetIpc() {
+  const { ipcMain } = require('electron');
+  ipcMain.on('pet:move-by', (_evt, payload) => {
+    const dx = Number(payload?.dx ?? 0);
+    const dy = Number(payload?.dy ?? 0);
+    if (Number.isFinite(dx) && Number.isFinite(dy)) movePetBy(dx, dy);
+  });
+  ipcMain.handle('pet:get-position', () => {
+    if (!petWin || petWin.isDestroyed()) return null;
+    const [x, y] = petWin.getPosition();
+    return { x, y };
+  });
+  ipcMain.on('pet:open-chat', () => openChat());
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -133,6 +164,7 @@ if (!gotLock) {
       } catch { /* retry */ }
       await sleep(1000);
     }
+    registerPetIpc();
     createPetWindow();
     captureTimer = setInterval(pollCaptureOnce, POLL_MS);
     pollCaptureOnce();

@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { PET_SPRITE_KEYS, PET_SPRITE_PATH, fallbackChain, type PetSpriteState } from './petSprites';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  PET_SPRITE_KEYS, PET_SPRITE_PATH, PET_SPRITE_FRAME_PATH, PET_MAX_FRAMES, PET_FRAME_FPS,
+  fallbackChain, type PetSpriteState,
+} from './petSprites';
+
+declare global {
+  interface Window {
+    /** desktop/preload.cjs 注入；浏览器里直接跑 /pet 时不存在（要判空） */
+    petWindow?: {
+      moveBy: (dx: number, dy: number) => void;
+      getPosition: () => Promise<{ x: number; y: number } | null>;
+      openChat: () => void;
+    };
+  }
+}
 
 /**
  * 桌宠页（v1.85）
@@ -21,7 +35,7 @@ interface PetState {
 
 type Action =
   | 'idle' | 'pat' | 'wave' | 'sleep' | 'happy' | 'walk' | 'stretch' | 'talk'
-  | 'peanut' | 'coffee' | 'reading' | 'sit';
+  | 'peanut' | 'coffee' | 'reading' | 'sit' | 'shocked';
 
 const POLICY_LABEL: Record<string, string> = {
   on_demand_10: '按需 + 定时 10 分钟',
@@ -88,9 +102,14 @@ export default function PetApp() {
   const [zzz, setZzz] = useState(false);
   const [available, setAvailable] = useState<Set<PetSpriteState>>(new Set());
   const [probed, setProbed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [frameUrls, setFrameUrls] = useState<string[]>([]);
+  const [frameIdx, setFrameIdx] = useState(0);
   const bubbleTimer = useRef<number | null>(null);
   const actionTimer = useRef<number | null>(null);
   const lastTouch = useRef<number>(Date.now());
+  const dragRef = useRef<{ down: boolean; moved: number }>({ down: false, moved: 0 });
+  const suppressClick = useRef(0);
 
   const say = useCallback((text: string, ms = 3500) => {
     setBubble(text);
@@ -192,6 +211,46 @@ export default function PetApp() {
 
   const wave = () => { playAction('wave', 2200); say('嘿，我在这儿。', 2600); };
 
+  // ===== 鼠标拖动（v1.86）=====
+  // 不能给整块加 -webkit-app-region: drag（那会把点击/双击吃掉），
+  // 所以用 pointer 事件：位移 > 3px 判定为拖动 → 通过 IPC 移动窗口；没位移才算"摸她"。
+  const onPetPointerDown = (e: ReactPointerEvent) => {
+    if (e.button !== 0) return;
+    dragRef.current = { down: true, moved: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const onPetPointerMove = (e: ReactPointerEvent) => {
+    const st = dragRef.current;
+    if (!st.down) return;
+    const dx = e.movementX || 0;
+    const dy = e.movementY || 0;
+    st.moved += Math.abs(dx) + Math.abs(dy);
+    if (!dragging && st.moved > 3) setDragging(true);
+    if (dragging || st.moved > 3) {
+      window.petWindow?.moveBy(dx, dy);
+    }
+  };
+
+  const onPetPointerUp = (e: ReactPointerEvent) => {
+    const st = dragRef.current;
+    const wasDrag = dragging || st.moved > 3;
+    st.down = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (wasDrag) {
+      setDragging(false);
+      suppressClick.current = Date.now();
+      playAction('shocked', 500);
+      return;
+    }
+    void touch();
+  };
+
+  const onPetDoubleClick = () => {
+    if (Date.now() - suppressClick.current < 400) return;
+    wave();
+  };
+
   const captureOnce = async () => {
     try {
       const r = await fetch('/api/pet/capture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -227,6 +286,8 @@ export default function PetApp() {
 
   // 状态 → 图片状态（触发优先级：授权 > 交互动作 > 小屋活动 > 情绪 > 眨眼 > 待机）
   const spriteTarget = useMemo<PetSpriteState>(() => {
+    if (dragging) return 'shocked';
+    if (action === 'shocked') return 'shocked';
     if (s?.pendingApproval) return 'shocked';
     if (action === 'pat') return 'happy';
     if (action === 'happy') return 'happy';
@@ -253,8 +314,41 @@ export default function PetApp() {
   const imageMode = probed && available.size > 0;
   const activeSprite = resolved ?? 'idle';
 
+  // 动作帧（可选）：有 anya_<state>_1.png… 就播帧，没有就用单图 + CSS 动作
+  useEffect(() => {
+    let alive = true;
+    setFrameUrls([]);
+    setFrameIdx(0);
+    const probe = (i: number) => new Promise<boolean>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = `${PET_SPRITE_FRAME_PATH(activeSprite, i)}?v=1`;
+    });
+    (async () => {
+      const found: string[] = [];
+      for (let i = 1; i <= PET_MAX_FRAMES; i++) {
+        if (!(await probe(i))) break;
+        found.push(PET_SPRITE_FRAME_PATH(activeSprite, i));
+      }
+      if (alive) setFrameUrls(found);
+    })();
+    return () => { alive = false; };
+  }, [activeSprite]);
+
+  // 帧循环
+  useEffect(() => {
+    if (frameUrls.length < 2) return;
+    const fps = PET_FRAME_FPS[activeSprite] ?? 6;
+    const t = window.setInterval(() => setFrameIdx(i => (i + 1) % frameUrls.length), Math.max(40, Math.round(1000 / fps)));
+    return () => window.clearInterval(t);
+  }, [frameUrls, activeSprite]);
+
   const headColor = low ? '#8e9bb8' : '#f6c1cf';
   const bodyColor = low ? '#6b7896' : '#f7cbd5';
+  const spriteSrc = frameUrls.length > 1
+    ? frameUrls[Math.min(frameIdx, frameUrls.length - 1)]
+    : PET_SPRITE_PATH(activeSprite);
 
   return (
     <div className="pet-root relative flex h-screen w-screen flex-col items-center justify-end overflow-hidden" style={{ background: 'transparent' }}>
@@ -315,18 +409,20 @@ export default function PetApp() {
           </>
         )}
 
-        <button
-          onClick={() => void touch()}
-          onDoubleClick={() => wave()}
-          title="摸摸她（双击挥手）"
-          className="absolute inset-0 cursor-pointer border-none p-0 outline-none"
-          style={{ background: 'transparent' }}
+        <div
+          onPointerDown={onPetPointerDown}
+          onPointerMove={onPetPointerMove}
+          onPointerUp={onPetPointerUp}
+          onPointerCancel={onPetPointerUp}
+          onDoubleClick={onPetDoubleClick}
+          title={dragging ? '放我下来…' : '摸她一下 / 按住拖动 / 双击挥手'}
+          className="absolute inset-0 select-none border-none p-0 outline-none"
+          style={{ background: 'transparent', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
         >
           {imageMode ? (
             <div className={`anya-state on ${action === 'pat' ? 'anya-pat' : ''}`}>
               <img
-                key={activeSprite}
-                src={PET_SPRITE_PATH(activeSprite)}
+                src={spriteSrc}
                 alt="anya"
                 className={`anya-img anya-${activeSprite}`}
                 draggable={false}
@@ -351,7 +447,7 @@ export default function PetApp() {
               <span className="absolute bottom-[36px] right-[24px] h-[26px] w-[11px] rounded-full" style={{ background: headColor, transform: 'rotate(-12deg)' }} />
             </div>
           )}
-        </button>
+        </div>
       </div>
 
       <div className="mb-1 flex items-center gap-1.5 text-[10px] text-slate-300/90">

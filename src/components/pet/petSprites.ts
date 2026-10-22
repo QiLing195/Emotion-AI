@@ -59,3 +59,15 @@ export function fallbackChain(state: PetSpriteState): PetSpriteState[] {
   if (!out.includes('idle')) out.push('idle');
   return out;
 }
+
+/** 多帧动作（可选）：如果有 anya_<state>_1.png…anya_<state>_N.png，就按帧播放；没有就用单图 + CSS 动画 */
+export const PET_FRAME_FPS: Partial<Record<PetSpriteState, number>> = {
+  idle: 8, blink: 12, happy: 8, talk: 8, walk: 10, angry: 6, shocked: 8,
+  sleepy: 6, peanut: 8, coffee: 6, reading: 6, sad: 4, sit: 4, wave: 8, think: 4,
+};
+
+/** 单帧上限：超过这个数就认为你的命名不是帧序列 */
+export const PET_MAX_FRAMES = 8;
+
+export const PET_SPRITE_FRAME_PATH = (state: PetSpriteState, frame: number) =>
+  `/pet/anya_${state}_${frame}.png`;

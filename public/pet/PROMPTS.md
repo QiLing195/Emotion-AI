@@ -224,3 +224,67 @@ full body visible in each panel, consistent design
 Negative: lowres, bad anatomy, bad hands, extra fingers, deformed, blurry, text, labels, watermark,
 background scenery, cast shadow, cropped, multiple different characters, outfit change
 ```
+
+---
+
+## 7. 动作帧（可选）：什么时候需要多帧、怎么生成
+
+**先说结论：默认不需要帧。** 现在一张图就够 —— 呼吸/跳动/摇摆/发抖/挤压都由 CSS 做，
+状态切换是淡入淡出。**只有你嫌走动/说话/挥手"不够动"时，再给这几个状态加帧。**
+
+### 代码怎么认帧（已实现）
+
+```
+命名：public/pet/anya_<state>_1.png、_2.png、_3.png …（最多 8 帧）
+规则：只要发现 anya_walk_1.png 存在，就按帧播放；没有就用 anya_walk.png + CSS 动作
+帧率：idle 8 / blink 12 / happy 8 / talk 8 / walk 10 / angry 6 / shocked 8 /
+      sleepy 6 / peanut 8 / coffee 6 / reading 6 / sad 4 / sit 4 / wave 8 / think 4（fps）
+可以混用：walk 有帧、其他单图 —— 完全没问题
+```
+
+### 建议帧数（按"值不值得画"排）
+
+| 状态 | 建议帧数 | 为什么 |
+|---|---|---|
+| `walk` | 4~6 | 唯一真正需要"腿在动"的状态 |
+| `talk` | 3（闭口/半开/大开） | 说话时嘴型变化最明显 |
+| `wave` | 3（抬手/挥左/挥右） | 手部动作 |
+| `happy` | 2（普通/弹起） | 蹦一下更欢 |
+| `blink` | 2（睁/闭） | 有 `anya_blink.png` 其实就够，切一下就眨眼 |
+| 其余 | 1 | CSS 呼吸/摇摆已足够 |
+
+### 一致性生成法（关键：只改一个部位）
+
+```
+① 拿你满意的 anya_walk.png（或 idle）当底图
+② img2img / 参考图模式，强度 0.7~0.85（人物不能跑形）
+③ prompt 只改"腿/嘴/手"那句，其它一个字不动，固定 seed
+④ 逐帧检查：头的位置、脚底基线、衣服褶皱走向要一致
+```
+
+**walk 4 帧的逐帧描述（替换 STATE 段即可）**
+
+```
+frame1: left leg forward, right leg back, arms counter-swing, body leaning slightly forward
+frame2: legs passing, weight on left leg, body at highest point, arms near body
+frame3: right leg forward, left leg back, arms counter-swing, body leaning slightly forward
+frame4: legs passing, weight on right leg, body at highest point, arms near body
+```
+
+**talk 3 帧的逐帧描述**
+
+```
+frame1: mouth closed in a small neutral line
+frame2: mouth half open, oval
+frame3: mouth wide open, as if emphasizing a word
+```
+
+> 帧之间**不要**重新构图：同一画布、同一镜头距离、同一脚底位置。否则播放时会"抽搐"。
+> 生成完一起放到 512×640 画布上，叠图检查头和脚是否在同一个位置。
+
+### 现在没有帧也没关系
+
+```
+你只放单图 → 她依然会呼吸、被摸会挤、开心会跳、走动会左右滑（CSS 位移）
+等你哪天想更顺滑，只补 walk/talk/wave 的帧就行，其它不用动
+```
