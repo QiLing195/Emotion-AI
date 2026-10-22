@@ -91,3 +91,112 @@ describe('活动理解层（v1.94）', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 });
+
+describe('v1.95：关键词可配置 + 接进情绪/主动关心', () => {
+  it('activity-keywords.json 可以整类覆盖关键词（不用改代码）', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const m = await import('../activityUnderstanding.js');
+    const p = path.join(os.tmpdir(), `ak-${Date.now()}.json`);
+    fs.writeFileSync(p, JSON.stringify({ categories: { job: { keywords: ['岗位速递'] } } }), 'utf8');
+    m.resetKeywordTableCacheForTests();
+    const table = m.loadKeywordTable(p);
+    const job = table.find(d => d.key === 'job')!;
+    expect(job.keywords).toEqual(['岗位速递']);
+    // 覆盖后旧关键词不再命中 job（但可能命中别的类别，所以用无歧义词验证）
+    expect(m.classifyActivity('BOSS直聘 - 杭州招聘', 'chrome', table)).not.toBe('job');
+    expect(m.classifyActivity('岗位速递 - 某网站', 'chrome', table)).toBe('job');
+    // 没覆盖的类别仍用默认
+    expect(table.find(d => d.key === 'video')!.keywords.length).toBeGreaterThan(0);
+    fs.unlinkSync(p);
+    m.resetKeywordTableCacheForTests();
+  });
+
+  it('只有非 vague 的"关心类"活动才会变成 concern', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const strong = m.understandActivity(view([
+      { title: 'BOSS直聘 - 杭州岗位', minutesAgo: 1 },
+      { title: 'BOSS直聘 - 简历投递', minutesAgo: 2 },
+    ]));
+    const concern = m.toActivityConcern(strong);
+    expect(concern).not.toBeNull();
+    expect(concern!.category).toBe('job');
+    expect(concern!.type).toBe('activity_concern');
+    expect(concern!.intensity).toBeGreaterThan(0.3);
+    // 娱乐类不推动情绪
+    const fun = m.understandActivity(view([
+      { title: 'YouTube 视频', minutesAgo: 1 },
+      { title: 'YouTube 视频2', minutesAgo: 2 },
+    ]));
+    expect(m.toActivityConcern(fun)).toBeNull();
+    // 证据不足（vague）不推动
+    const weak = m.understandActivity(view([{ title: 'BOSS直聘', minutesAgo: 1 }]));
+    expect(m.toActivityConcern(weak)).toBeNull();
+  });
+
+  it('Prompt 行：只在看得清时给一行，关心类带提醒语气', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = m.understandActivity(view([
+      { title: 'BOSS直聘 - 杭州岗位', minutesAgo: 1 },
+      { title: '拉勾 - 后端', minutesAgo: 2 },
+    ]));
+    const line = m.activityPromptLine(u);
+    expect(line).toContain('【我看到的】');
+    expect(line).toContain('找工作');
+    expect(m.activityPromptLine(null)).toBe('');
+  });
+
+  it('持续观察：同类 ≥20 分钟才主动关心，之后 90 分钟冷却、每天 ≤2 次', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = m.understandActivity(view([
+      { title: 'BOSS直聘 - 杭州岗位', minutesAgo: 1 },
+      { title: 'BOSS直聘 - 简历投递', minutesAgo: 2 },
+    ]));
+    const t0 = 1_700_000_000_000;
+    let s = m.emptyCareStreak('2026-10-22');
+    let d = m.updateCareStreak(s, u, t0, '2026-10-22');
+    expect(d.shouldCare).toBe(false);
+    expect(d.reason).toBe('new_category');
+    s = d.streak;
+    d = m.updateCareStreak(s, u, t0 + 5 * 60_000, '2026-10-22');
+    expect(d.shouldCare).toBe(false);
+    expect(d.reason).toBe('not_long_enough');
+    s = d.streak;
+    d = m.updateCareStreak(s, u, t0 + 21 * 60_000, '2026-10-22');
+    expect(d.shouldCare).toBe(true);
+    s = d.streak;
+    d = m.updateCareStreak(s, u, t0 + 40 * 60_000, '2026-10-22');
+    expect(d.shouldCare).toBe(false);
+    expect(d.reason).toBe('cooldown');
+    s = d.streak;
+    // 过了冷却 → 第二次可以
+    d = m.updateCareStreak(s, u, t0 + 21 * 60_000 + 91 * 60_000, '2026-10-22');
+    expect(d.shouldCare).toBe(true);
+    s = d.streak;
+    // 第三次被每日上限挡住
+    d = m.updateCareStreak(s, u, t0 + 21 * 60_000 + 200 * 60_000, '2026-10-22');
+    expect(d.shouldCare).toBe(false);
+    expect(d.reason).toBe('daily_cap');
+  });
+
+  it('活动不是关心类 → 清空持续状态（不累积）', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = m.understandActivity(view([{ title: 'YouTube', minutesAgo: 1 }, { title: 'YouTube 2', minutesAgo: 2 }]));
+    const d = m.updateCareStreak({ ...m.emptyCareStreak('x'), category: 'job', since: 1, samples: 5 }, u, 1000, 'x');
+    expect(d.shouldCare).toBe(false);
+    expect(d.streak.category).toBeNull();
+  });
+
+  it('内在事件：activity_concern 只给很轻的 fear/love，且受总上限约束', async () => {
+    const { applyInternalEvents } = await import('../../../src/lib/emotionInternal.js');
+    const { INITIAL_EMOTION_STATE } = await import('../../../src/lib/emotionTypes.js');
+    const before = { ...INITIAL_EMOTION_STATE, internal: { ...(INITIAL_EMOTION_STATE as unknown as { internal?: object }).internal } } as never;
+    const after = applyInternalEvents(before, [{ type: 'activity_concern', intensity: 1 }]);
+    const b = (before as unknown as { emotions: Record<string, number> }).emotions;
+    const a = (after as unknown as { emotions: Record<string, number> }).emotions;
+    expect(a.fear - b.fear).toBeGreaterThan(0);
+    expect(a.fear - b.fear).toBeLessThanOrEqual(0.05);
+    expect(a.love - b.love).toBeGreaterThan(0);
+  });
+});

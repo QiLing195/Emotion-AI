@@ -27,6 +27,7 @@ export type InternalEventType =
   | 'interest'          // 检测到用户兴趣
   | 'discovery'         // 好奇心发现
   | 'insight'           // 生成的洞察
+  | 'activity_concern'  // v1.95 她看到他正在做的事（投简历/开会/学习/写代码）
   | 'proactive_ignored'; // 主动消息被忽略
 
 export interface InternalEffect {
@@ -48,6 +49,8 @@ export const INTERNAL_EFFECTS: Record<InternalEventType, InternalEffect> = {
   interest: { emotions: { joy: 0.03, calm: 0.01 }, valence: 0.02 },
   discovery: { emotions: { joy: 0.04 }, valence: 0.03 },
   insight: { emotions: { joy: 0.02, calm: 0.02 }, valence: 0.02 },
+  // 看到他正在做值得在意的事：替他悬着一点（fear/love），不喧哗
+  activity_concern: { emotions: { fear: 0.03, love: 0.03, sad: 0.01 }, valence: -0.02 },
   proactive_ignored: { emotions: { sad: 0.03, fear: 0.02 }, valence: -0.03 },
 };
 

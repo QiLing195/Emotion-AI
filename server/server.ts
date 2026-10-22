@@ -110,7 +110,7 @@ import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
 import { readRecentActivity } from './services/activityWatcher.js';
-import { understandActivity, describeUnderstanding } from './services/activityUnderstanding.js';
+import { understandActivity, describeUnderstanding, toActivityConcern, activityPromptLine, updateCareStreak, emptyCareStreak, type ActivityUnderstanding, type CareStreak } from './services/activityUnderstanding.js';
 import { startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled, loadMcpConfig, listAllMcpTools, isToolAllowedByServer, isMcpConnected, MCP_CONFIG_PATH } from './services/mcpClient.js';
 import { startVoiceSampler, stopVoiceSampler, restartVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
@@ -444,6 +444,79 @@ export class AIGirlfriendServer {
         } catch { /* 回声失败不影响主流程 */ }
       })();
     }, Number(process.env.DESKTOP_ECHO_DELAY_MS) > 0 ? Number(process.env.DESKTOP_ECHO_DELAY_MS) : 70_000);
+  }
+
+  // ===== v1.95 活动理解 → 情绪 / Prompt / 主动关心 =====
+
+  /** 30 秒缓存：一轮对话里多处要用（情绪 + Prompt + 界面），别重复读盘解析 */
+  private _activityUnderstandingCache: { at: number; value: ActivityUnderstanding | null } | null = null;
+  private _activityCareStreak: CareStreak = emptyCareStreak(new Date().toISOString().slice(0, 10));
+  private _activityCareTimer: ReturnType<typeof setInterval> | null = null;
+
+  private currentActivityUnderstanding(fresh = false): ActivityUnderstanding | null {
+    const now = Date.now();
+    if (!fresh && this._activityUnderstandingCache && now - this._activityUnderstandingCache.at < 30_000) {
+      return this._activityUnderstandingCache.value;
+    }
+    let value: ActivityUnderstanding | null = null;
+    try { value = understandActivity(readRecentActivity(6)); } catch { value = null; }
+    this._activityUnderstandingCache = { at: now, value };
+    return value;
+  }
+
+  private activityCareEnabled(): boolean {
+    return process.env.ENABLE_ACTIVITY_CARE === 'true';
+  }
+
+  private startActivityCareLoop(): void {
+    if (!this.activityCareEnabled() || this._activityCareTimer) return;
+    const tick = () => { void this.runActivityCareCheck(); };
+    tick();
+    this._activityCareTimer = setInterval(tick, 60_000);
+    console.log('[ActivityCare] 持续观察已启动：连续 ≥20 分钟同一类"值得关心"的事 → 主动提一句（90 分钟冷却 / 每天最多 2 次）');
+  }
+
+  private stopActivityCareLoop(): void {
+    if (this._activityCareTimer) { clearInterval(this._activityCareTimer); this._activityCareTimer = null; }
+  }
+
+  /**
+   * 一次"要不要主动关心"的判定 + 生成。
+   * 返回判定链（供端点与日志观测）；force=true 仅调试用（跳过"还没够久/冷却/次数"）。
+   */
+  private async runActivityCareCheck(force = false): Promise<{ ok: boolean; reason: string; sent?: boolean; text?: string; decision?: CareStreak }> {
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const u = this.currentActivityUnderstanding(true);   // 主动关心判定必须读最新，不能吃 30s 缓存
+    const decision = updateCareStreak(this._activityCareStreak, u, now, day);
+    this._activityCareStreak = decision.streak;
+    if (!u) return { ok: true, reason: 'no_understanding', decision: this._activityCareStreak };
+    if (!decision.shouldCare && !force) return { ok: true, reason: decision.reason, decision: this._activityCareStreak };
+    if (u.category === 'unknown') return { ok: true, reason: 'no_category', decision: this._activityCareStreak };
+    const settings = this.readAISettings();
+    if (!settings?.apiKey) return { ok: true, reason: 'no_api_key', decision: this._activityCareStreak };
+    try {
+      const raw = await generateAIResponse(
+        settings,
+        '你是一个有自己生活的女朋友。你注意到他连续一段时间在做同一件事（下面写着），想主动关心一句。'
+          + '用你自己的话说，≤40 字；别复述"我注意到你一直在…"这种监控腔，也别像提醒或客服。只输出消息正文。',
+        activityPromptLine(u),
+        false,
+        0.9,
+      );
+      const text = sanitizeProactiveMessage(typeof raw === 'string' ? raw : '') ?? '';
+      if (!text) return { ok: true, reason: 'empty', decision: this._activityCareStreak };
+      this._proactivePending.push({
+        id: `activity_care_${now}`,
+        text,
+        createdAt: new Date(now).toISOString(),
+        motiveKind: 'activity_care',
+      });
+      console.log(`[ActivityCare] 已入队（${decision.reason}）：${text.slice(0, 24)}`);
+      return { ok: true, reason: decision.reason, sent: true, text, decision: this._activityCareStreak };
+    } catch (e) {
+      return { ok: false, reason: (e as Error).message, decision: this._activityCareStreak };
+    }
   }
 
   /**
@@ -836,6 +909,8 @@ export class AIGirlfriendServer {
           activeValues: Object.keys(activeValueMap).length > 0 ? { ...activeValueMap } : undefined,
           // v1.33：`undefined` = 这轮没问 Laya（默认），`null` = 问了没拿到意见 → 用规则
           layaVerdict,
+          // v1.95：他正在做的事（投简历/开会/学习/写代码）也会轻轻牵动她（弱内在事件，受总量上限）
+          activityConcern: toActivityConcern(this.currentActivityUnderstanding()),
         });
 
         // v1.63 她的小屋：每轮推进"她此刻在做什么"（持久化事实；白名单外的外部生活不许编）
@@ -1191,6 +1266,12 @@ export class AIGirlfriendServer {
             { deferring: motiveSelection.deferredToUser, deferStyle: resolveDeferStyle() },
           );
           if (motiveSnippet) enrichedSystemPrompt += `\n\n${motiveSnippet}`;
+        }
+
+        // v1.95 她看到的（只在她真的看出来时注入一行；数据陈述，语气仍由她决定）
+        {
+          const observedLine = activityPromptLine(this.currentActivityUnderstanding());
+          if (observedLine) enrichedSystemPrompt += `\n\n${observedLine}`;
         }
 
         // v1.8 内在生活：底色心情 + 反刍提示（只在确有信号时注入，避免每轮同一句话）
@@ -2117,6 +2198,32 @@ export class AIGirlfriendServer {
         now: Date.now(),
       });
     });
+
+    // v1.95 活动理解 / 主动关心（调试与观测）
+    this.app.get('/api/activity/understanding', (req, res) => {
+      try {
+        const view = readRecentActivity(6);
+        const understanding = understandActivity(view);
+        res.json({
+          ok: true,
+          understanding,
+          understandingLine: describeUnderstanding(understanding),
+          concern: toActivityConcern(understanding),
+          care: { enabled: this.activityCareEnabled(), streak: this._activityCareStreak },
+        });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    this.app.post('/api/activity/care-check', async (req, res) => {
+      try {
+        const force = req.body?.force === true;
+        res.json(await this.runActivityCareCheck(force));
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
     // ===== v1.83 桌宠 + 屏幕观察 =====
     this.app.get('/api/pet/state', (req, res) => {
       try {
@@ -2539,6 +2646,8 @@ export class AIGirlfriendServer {
             })),
           };
         })(),
+        // v1.95 她"看到他正在做什么"是否牵动了她（本轮）
+        activityConcern: aiCoordinator.getLastActivityConcern(),
         // v1.9 动机层可观测：她此刻心里挂着的事（本轮说话的来源）
         motive: (() => {
           const m = es?.internal?.motive;
@@ -2863,6 +2972,8 @@ export class AIGirlfriendServer {
       // v1.82 活动窗口采样（只读：只记窗口标题/进程名；ENABLE_ACTIVITY_WATCH 控制）
       startActivitySampler();
     startVoiceSampler();   // v1.88 语音唤醒（ENABLE_VOICE_WAKE=true 时）
+      // v1.95 持续观察「他一直在做什么」→ 到点主动关心一句（ENABLE_ACTIVITY_CARE 控制）
+      this.startActivityCareLoop();
 
       // Phase 2 PR 2: 周期性保存好奇心状态（每 30 秒）
       const curiositySaveTimer = setInterval(() => {
@@ -2910,6 +3021,7 @@ export class AIGirlfriendServer {
 
   async stop() {
     stopActivitySampler();        // v1.82 停采样器（别留下孤儿 PowerShell）
+    this.stopActivityCareLoop();  // v1.95 停"主动关心"计时器
     stopVoiceSampler();           // v1.88 语音唤醒进程
     await shutdownMcp();          // v1.82 断开外部 MCP server
     await mcpService.shutdown();

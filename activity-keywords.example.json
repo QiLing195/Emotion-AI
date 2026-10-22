@@ -1,0 +1,7 @@
+{
+  "_comment": "活动理解的关键词表（可配置，不用改代码）。复制为 activity-keywords.json 后生效；只写你想覆盖/新增的类别即可，没写的类别用内置默认词表。每类格式：\"job\": { \"keywords\": [\"招聘\", \"boss直聘\"] }",
+  "categories": {
+    "job": { "keywords": ["招聘", "boss直聘", "拉勾", "猎聘", "求职", "岗位", "面试", "简历"] },
+    "dev": { "keywords": ["visual studio", "vscode", "terminal", "powershell", "github", "docker"] }
+  }
+}

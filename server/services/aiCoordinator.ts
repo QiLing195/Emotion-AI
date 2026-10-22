@@ -112,6 +112,11 @@ export interface TurnInput {
   emotionEvent?: EmotionEvent | null;
   /** 用户情感分析结果（可选，来自 NLU 管道） */
   userAnalysis?: UserEmotionAnalysis | null;
+  /**
+   * v1.95 她"看到他正在做什么"这件事本身也可能牵动她（投简历/开会/学习/写代码）。
+   * 由调用方从活动理解层算好传进来；作为一条弱内在事件施加（习惯化/总上限由 emotionInternal 统一管）。
+   */
+  activityConcern?: { type: 'activity_concern'; category: string; summary: string; intensity: number } | null;
   /** 最近 N 轮用户情绪效价 */
   recentUserMoods?: number[];
   /** 连续负面轮数 */
@@ -272,6 +277,8 @@ export class AICoordinator {
    * 没有它就无从判断"她到底有没有在理解他这件事"，只能看情绪数字。
    */
   private lastAppraisal: AppraisalResult | null = null;
+  /** v1.95 本轮用在情绪上的「她看到他正在做什么」（可观测；null = 这轮没有） */
+  private lastActivityConcern: { type: string; category: string; summary: string; intensity: number } | null = null;
   /** 🧠 思维图谱（跨轮共享，在情感引擎与策略引擎之间积累思维碎片） */
   private thoughtGraph = new ThoughtGraph();
   /** 🧩 记忆图谱（全局单例，统一四来源记忆 + BFS 激活扩散召回） */
@@ -933,6 +940,13 @@ export class AICoordinator {
       hasDiscovery: pendingDiscoveries.length > 0,
       hasInsight: generatedInsights.length > 0,
     });
+    // v1.95："他正在做的事"也是一条弱内在事件（她看到他投简历/开会/学习 → 替他悬着一点）
+    if (input.activityConcern) {
+      internalEvents.push({ type: 'activity_concern', intensity: input.activityConcern.intensity });
+      this.lastActivityConcern = input.activityConcern;
+    } else {
+      this.lastActivityConcern = null;
+    }
     if (internalEvents.length > 0) {
       const beforeTai = updatedEmotionState.taiji;
       const beforeEmo = { ...updatedEmotionState.emotions };
@@ -1345,6 +1359,11 @@ export class AICoordinator {
    */
   getLastAppraisal(): AppraisalResult | null {
     return this.lastAppraisal;
+  }
+
+  /** v1.95 本轮「她看到他正在做什么」是否牵动了她（null = 这轮没有） */
+  getLastActivityConcern() {
+    return this.lastActivityConcern;
   }
 
   /**

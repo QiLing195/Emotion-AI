@@ -27,3 +27,6 @@ memories/
 
 # MCP client local config (machine-specific paths; template: mcp-servers.example.json)
 mcp-servers.json
+
+# 活动关键词表（本机自定义，模板：activity-keywords.example.json）
+activity-keywords.json

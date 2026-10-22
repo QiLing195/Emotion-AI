@@ -7,6 +7,8 @@
  *   · **给她的是一句"理解" + 证据**，不是让她背的台词（她可以自己接话）；
  *   · 隐私一致：只读采样器给的窗口标题/进程（已脱敏），不读内容、不截屏。
  */
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ActivityView } from './activityWatcher.js';
 
 export type ActivityCategory =
@@ -66,11 +68,50 @@ export interface ActivityUnderstanding {
 const MAX_EVIDENCE = 3;
 const MIN_CONFIDENT_WINDOWS = 2;
 
+// ===== v1.95 关键词表可配置（activity-keywords.json；不写就用内置默认） =====
+
+export const ACTIVITY_KEYWORDS_PATH = 'activity-keywords.json';
+
+let cachedTable: CategoryDef[] | null = null;
+let cachedMtime = -1;
+
+/**
+ * 读取关键词表：内置默认 + activity-keywords.json 的覆盖。
+ * 同一类别写了 keywords 就**整类替换**（不是追加），方便用户完全接管。
+ * 文件不存在 / 解析失败 ⇒ 用默认表，不抛错。
+ */
+export function loadKeywordTable(path = ACTIVITY_KEYWORDS_PATH): CategoryDef[] {
+  try {
+    if (!existsSync(path)) return ACTIVITY_KEYWORDS;
+    const mtime = statSync(path).mtimeMs;
+    if (cachedTable && cachedMtime === mtime) return cachedTable;
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { categories?: Record<string, { keywords?: unknown }> };
+    const cats = raw && typeof raw === 'object' && raw.categories && typeof raw.categories === 'object' ? raw.categories : {};
+    const table = ACTIVITY_KEYWORDS.map(def => {
+      const override = cats[def.key];
+      if (!override || !Array.isArray(override.keywords)) return def;
+      const words = override.keywords.map(w => String(w ?? '').trim()).filter(w => w.length > 0).slice(0, 80);
+      return words.length > 0 ? { ...def, keywords: words } : def;
+    });
+    cachedTable = table;
+    cachedMtime = mtime;
+    return table;
+  } catch {
+    return ACTIVITY_KEYWORDS;
+  }
+}
+
+/** 测试/热更新用：清掉关键词表缓存 */
+export function resetKeywordTableCacheForTests(): void {
+  cachedTable = null;
+  cachedMtime = -1;
+}
+
 /** 把一条窗口标题/进程归到类别（按关键词表顺序，先命中先算） */
-export function classifyActivity(title: string, processName?: string): ActivityCategory | null {
+export function classifyActivity(title: string, processName?: string, table: CategoryDef[] = loadKeywordTable()): ActivityCategory | null {
   const hay = `${title ?? ''} ${processName ?? ''}`.toLowerCase();
   if (!hay.trim()) return null;
-  for (const def of ACTIVITY_KEYWORDS) {
+  for (const def of table) {
     for (const kw of def.keywords) {
       if (hay.includes(kw.toLowerCase())) return def.key;
     }
@@ -83,7 +124,7 @@ export function classifyActivity(title: string, processName?: string): ActivityC
  * @param view 活动采样视图（entries 是最近 N 条、已按时间倒序）
  * @param withinMinutes 只看最近多少分钟的记录（默认 45；更早的窗口不算"现在"）
  */
-export function understandActivity(view: ActivityView | null | undefined, withinMinutes = 45): ActivityUnderstanding | null {
+export function understandActivity(view: ActivityView | null | undefined, withinMinutes = 45, table: CategoryDef[] = loadKeywordTable()): ActivityUnderstanding | null {
   if (!view || !view.enabled) return null;
   const recent = (view.entries ?? []).filter(e => Number.isFinite(e.minutesAgo) && e.minutesAgo <= withinMinutes);
   if (recent.length === 0) {
@@ -97,7 +138,7 @@ export function understandActivity(view: ActivityView | null | undefined, within
   const counts = new Map<ActivityCategory, number>();
   const evidenceByCat = new Map<ActivityCategory, string[]>();
   for (const e of recent) {
-    const cat = classifyActivity(e.title, e.process);
+    const cat = classifyActivity(e.title, e.process, table);
     if (!cat) continue;
     counts.set(cat, (counts.get(cat) ?? 0) + 1);
     const list = evidenceByCat.get(cat) ?? [];
@@ -108,7 +149,7 @@ export function understandActivity(view: ActivityView | null | undefined, within
 
   const categories: ActivityCategoryHit[] = [...counts.entries()]
     .map(([key, count]) => {
-      const def = ACTIVITY_KEYWORDS.find(d => d.key === key);
+      const def = table.find(d => d.key === key);
       return { key, label: def?.label ?? key, count, share: Math.round((count / recent.length) * 100) / 100 };
     })
     .sort((a, b) => b.count - a.count)
@@ -125,7 +166,7 @@ export function understandActivity(view: ActivityView | null | undefined, within
   }
 
   const top = categories[0];
-  const def = ACTIVITY_KEYWORDS.find(d => d.key === top.key);
+  const def = table.find(d => d.key === top.key);
   const vague = recent.length < MIN_CONFIDENT_WINDOWS || top.share < 0.4;
   return {
     summary: def?.summary ?? '你在用电脑',
@@ -146,4 +187,85 @@ export function describeUnderstanding(u: ActivityUnderstanding | null): string {
   if (u.category === 'unknown') return u.summary;
   const span = u.spanMinutes > 0 ? `约 ${u.spanMinutes} 分钟里` : '刚才';
   return `${u.summary}（${span} ${u.windows} 个窗口，${Math.round(u.confidence * 100)}% 都是这一类）`;
+}
+
+// ===== v1.95 把"理解"接进她的情绪与主动关心 =====
+
+/** 值得她"心里记着"的活动类别（其他类别只展示，不推动她的情绪/主动消息） */
+export const CONCERN_CATEGORIES: ActivityCategory[] = ['job', 'meeting', 'study', 'dev'];
+
+export interface ActivityConcern {
+  type: 'activity_concern';
+  category: ActivityCategory;
+  summary: string;
+  /** 0~1：作为内在事件的强度传入（习惯化/总上限由 emotionInternal 统一管） */
+  intensity: number;
+}
+
+/** 理解 → 内在事件（只有非 vague 且属于"关心类"才有；否则 null，不硬编） */
+export function toActivityConcern(u: ActivityUnderstanding | null): ActivityConcern | null {
+  if (!u || u.vague) return null;
+  if (!CONCERN_CATEGORIES.includes(u.category)) return null;
+  const intensity = Math.max(0.3, Math.min(1, 0.4 + u.confidence * 0.6));
+  return { type: 'activity_concern', category: u.category, summary: u.summary, intensity };
+}
+
+/** 给 Prompt 的一行（只在她真的看出来时加；数据陈述，语气由人格决定） */
+export function activityPromptLine(u: ActivityUnderstanding | null): string {
+  if (!u || u.vague || u.category === 'unknown') return '';
+  const span = u.spanMinutes > 0 ? `约 ${u.spanMinutes} 分钟` : '刚才';
+  const ev = u.evidence.slice(0, 2).join(' / ');
+  const concern = CONCERN_CATEGORIES.includes(u.category) ? '（这件事你可能想自然关心一句，但别像在监控他）' : '';
+  return `【我看到的】他${span}一直在${u.label}${ev ? `：${ev}` : ''}${concern}`;
+}
+
+/** 主动关心去重/节流用的"持续观察"状态机（纯函数，便于测试） */
+export interface CareStreak {
+  category: ActivityCategory | null;
+  since: number;
+  samples: number;
+  lastCareAt: number;
+  caresToday: number;
+  day: string;
+}
+
+export function emptyCareStreak(day: string): CareStreak {
+  return { category: null, since: 0, samples: 0, lastCareAt: 0, caresToday: 0, day };
+}
+
+export const CARE_MIN_SUSTAIN_MS = 20 * 60_000;
+export const CARE_COOLDOWN_MS = 90 * 60_000;
+export const CARE_MAX_PER_DAY = 2;
+
+export interface CareDecision {
+  shouldCare: boolean;
+  reason: string;
+  streak: CareStreak;
+}
+
+/**
+ * 每次采样（约 1 分钟）调一次：累计"同一类关心活动持续了多久"，到点就值得主动提一句。
+ * 规则：同一类别连续出现 ≥ 持续阈值 → 冷却 ≥90 分钟 → 当天 ≤2 次。
+ */
+export function updateCareStreak(streak: CareStreak, u: ActivityUnderstanding | null, now: number, day: string): CareDecision {
+  const s: CareStreak = { ...streak };
+  if (s.day !== day) { s.day = day; s.caresToday = 0; }
+  const concern = toActivityConcern(u);
+  if (!concern) {
+    return { shouldCare: false, reason: 'not_a_concern', streak: { ...s, category: null, since: 0, samples: 0 } };
+  }
+  if (s.category !== concern.category) {
+    s.category = concern.category;
+    s.since = now;
+    s.samples = 1;
+    return { shouldCare: false, reason: 'new_category', streak: s };
+  }
+  s.samples += 1;
+  const sustained = now - s.since;
+  if (sustained < CARE_MIN_SUSTAIN_MS) return { shouldCare: false, reason: 'not_long_enough', streak: s };
+  if (now - s.lastCareAt < CARE_COOLDOWN_MS) return { shouldCare: false, reason: 'cooldown', streak: s };
+  if (s.caresToday >= CARE_MAX_PER_DAY) return { shouldCare: false, reason: 'daily_cap', streak: s };
+  s.lastCareAt = now;
+  s.caresToday += 1;
+  return { shouldCare: true, reason: `sustained_${concern.category}`, streak: s };
 }
