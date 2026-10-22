@@ -41,13 +41,11 @@ export function reconcileAttribution(
   const next: UserEmotionAnalysis = { ...analysis };
   const issues: string[] = [];
 
-  // 1) 用户情绪指向她，但情绪事件不是关于她的 → 矛盾
-  if (next.directedAtAI && event && event.intent && event.intent !== 'user') {
-    issues.push(`directedAtAI=true 但 event.intent=${event.intent}`);
-  }
-  // 2) 情绪事件是关于她的，但用户情绪被判成不指向她 → 矛盾
-  if (!next.directedAtAI && event && event.intent === 'user' && next.expressedEmotion !== 'neutral') {
-    issues.push('event.intent=user 但 directedAtAI=false');
+  // 1) 用户情绪指向她，但情绪事件明确属于第三方 → 矛盾
+  //    ⚠️ v2.04 更正：intent===user 的语义是"这件事和他有关"，不是"情绪指向 AI"；
+  //    他因为工作难过、但情绪并不针对她，是合理组合，不能判矛盾。
+  if (next.directedAtAI && event && event.intent === 'third_party') {
+    issues.push('directedAtAI=true 但 event.intent=third_party');
   }
   // 3) 强度很低但事件幅度很大 → 证据不一致，别做重判断
   if (next.expressedEmotion !== 'neutral' && next.intensity < 0.15 && event

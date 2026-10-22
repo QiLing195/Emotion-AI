@@ -22,17 +22,28 @@ describe('v2.03：事件归因 × 用户情绪归因的一致性（审查 P1-3�
     expect(r.analysis.directedAtAI).toBe(true);
   });
 
-  it('矛盾组合（intent=self 却说 directedAtAI）→ 降级、不强化、强度打折', () => {
+  it('intent=self + directedAtAI=true → 合理组合（事件关于她自己，情绪也可以冲她），不降级', () => {
     const r = reconcileAttribution(event('self'), analysis());
-    expect(r.consensus).toBe('downgraded');
-    expect(r.skipReinforcement).toBe(true);
-    expect(r.analysis.directedAtAI).toBe(false);
-    expect(r.analysis.intensity).toBeLessThan(0.7);
-    expect(r.analysis.attribution?.issues.length).toBeGreaterThan(0);
+    expect(r.consensus).toBe('consistent');
+    expect(r.skipReinforcement).toBe(false);
+    expect(r.analysis.directedAtAI).toBe(true);
   });
 
-  it('矛盾组合（intent=user 但 directedAtAI=false，且情绪非中性）→ 降级', () => {
-    const r = reconcileAttribution(event('user'), analysis({ directedAtAI: false }));
+  it('引用/转述证据 + 指向她 → 降级且不强化', () => {
+    const r = reconcileAttribution(event('user'), analysis({ evidence: '他说他不喜欢我' }));
+    expect(r.consensus).toBe('downgraded');
+    expect(r.skipReinforcement).toBe(true);
+    expect(r.analysis.intensity).toBeLessThan(0.7);
+  });
+
+  it('intent=user 但情绪不指向她 → 合理组合，不降级（v2.04 更正：intent 是"事件关于谁"，不是"情绪对象"）', () => {
+    const r = reconcileAttribution(event('user'), analysis({ directedAtAI: false, expressedEmotion: 'sad' }));
+    expect(r.consensus).toBe('consistent');
+    expect(r.skipReinforcement).toBe(false);
+  });
+
+  it('矛盾组合（intent=third_party 却判成指向她）→ 降级', () => {
+    const r = reconcileAttribution(event('third_party'), analysis());
     expect(r.consensus).toBe('downgraded');
     expect(r.skipReinforcement).toBe(true);
   });

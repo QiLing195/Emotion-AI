@@ -83,6 +83,24 @@ function safeAbs(v: number): number {
  * v2.03：跨来源总预算生效后，把**非用户来源**的已记账量按 scale 缩回，
  * 保证各来源之和与状态实际变化一致（否则超额部分会成为"凭空消失的账"）。
  */
+/**
+ * v2.04：只缩放**本轮新增**的来源量，历史累计保持不变。
+ * before = 本轮开始前快照；current = 已累加本轮后的累计。
+ */
+export function applySourceBudgetDelta(
+  before: EmergenceStats,
+  current: EmergenceStats,
+  sources: EmotionSource[],
+  scale: number,
+): EmergenceStats {
+  const next: EmergenceStats = { ...current };
+  for (const s of sources) {
+    const delta = (current[s] ?? 0) - (before[s] ?? 0);
+    next[s] = (before[s] ?? 0) + delta * scale;
+  }
+  return next;
+}
+
 export function scaleSourcesForBudget(
   stats: EmergenceStats,
   sources: EmotionSource[],

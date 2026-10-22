@@ -83,6 +83,19 @@ describe('aiCoordinator — activeValues 透传（S7 价值观调制）', () => 
     expect(after.appraisal - before.appraisal).toBe(0);
   });
 
+  it('v2.04：没有 emotionEvent 时，内部事件/心情/反刍仍受单轮预算约束', () => {
+    process.env.TURN_NONUSER_CAP = '0.001';
+    try {
+      run({ lastInteractionAt: Date.now() - 12 * HOUR, roundNumber: 1, emotionEvent: null, userAnalysis: null });
+      const budget = aiCoordinator.getLastTurnBudget();
+      expect(budget).not.toBeNull();
+      expect(budget!.totalBefore).toBeGreaterThan(0.001);
+      expect(budget!.scale).toBeLessThan(1);
+    } finally {
+      delete process.env.TURN_NONUSER_CAP;
+    }
+  });
+
   it('v2.03：非用户来源超预算时会缩放并记录（审查 P1-2）', () => {
     process.env.TURN_NONUSER_CAP = '0.01';
     try {

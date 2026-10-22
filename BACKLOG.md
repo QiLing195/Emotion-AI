@@ -72,3 +72,11 @@
 - [ ] P2 情绪识别"类别/强度/对象/证据/不确定度"完整分离：LLM Prompt 还没要求输出 evidence/一致性（当前靠代码侧启发式）
 - [ ] 引用/反讽/混合/非指向场景集 + 连续多轮回放（确认一次误判不会累积成错误关系状态）
 - [ ] ExpressionPlan（主意图/语气/自我披露/提问上限）由代码强制，而不是 Prompt 约束
+
+### v2.04 修 v2.03 审查项（2026-10-23）
+- [x] 归因语义：intent=user ≠ 情绪指向 AI，删除错误的矛盾判断（只保留 third_party 矛盾）
+- [x] 预算只缩放本轮增量，历史累计不回退（applySourceBudgetDelta + emergenceBeforeNonUser）
+- [x] 预算覆盖无 emotionEvent 的情况；预算结算移到 shadow 之后（含 shadow）；external 无事件记 0
+- [ ] LLM 分析 Prompt 输出 evidence/一致性（仍靠代码侧启发式）
+- [ ] 引用/反讽/混合/非指向场景集 + 连续多轮回放
+- [ ] ExpressionPlan 运行时强制（主意图/语气/自我披露/提问上限）

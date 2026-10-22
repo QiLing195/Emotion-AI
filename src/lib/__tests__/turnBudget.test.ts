@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { applyNonUserTurnBudget } from '../turnBudget.js';
-import { scaleSourcesForBudget, emptyEmergenceStats } from '../emergenceMetrics.js';
+import { applySourceBudgetDelta, scaleSourcesForBudget, emptyEmergenceStats } from '../emergenceMetrics.js';
 import type { EmotionState } from '../emotionTypes';
 
 function state(emotions: Record<string, number>, valence: number, arousal: number): EmotionState {
@@ -43,6 +43,17 @@ describe('v2.03：非用户来源的单轮总预算（审查 P1-2）', () => {
     // 方向保持（没有反转正负）
     expect(r.state.emotions.sad).toBeGreaterThan(base.emotions.sad);
     expect(r.state.taiji.valence).toBeLessThan(base.valence);
+  });
+
+  it('v2.04：只缩放本轮增量，历史累计不受影响', () => {
+    const before = { ...emptyEmergenceStats(), external: 1.2, contagion: 3.0, appraisal: 2.0, internal: 1.0, mood: 0.5, rumination: 0.5, shadow: 0.2 };
+    const current = { ...before, contagion: 3.2, appraisal: 2.1, internal: 1.1, mood: 0.6, rumination: 0.55, shadow: 0.25 };
+    const scaled = applySourceBudgetDelta(before, current, ['contagion', 'appraisal', 'internal', 'mood', 'rumination', 'shadow'], 0.5);
+    // 历史 3.0 保留，只把本轮 +0.2 缩成 +0.1
+    expect(scaled.contagion).toBeCloseTo(3.1);
+    expect(scaled.appraisal).toBeCloseTo(2.05);
+    expect(scaled.external).toBeCloseTo(1.2);
+    expect(scaled.contagion).toBeGreaterThan(before.contagion);
   });
 
   it('预算缩放后来源记账同步缩小（来源之和 ≈ 实际变化）', () => {

@@ -30,7 +30,7 @@ import {
   sumEmotionDelta,
   type EmergenceReport,
   type EmergenceStats,
-  scaleSourcesForBudget,
+  applySourceBudgetDelta,
 } from '../../src/lib/emergenceMetrics.js';
 import { applyNonUserTurnBudget } from '../../src/lib/turnBudget.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
@@ -898,6 +898,9 @@ export class AICoordinator {
     const valenceBeforeInternal = updatedEmotionState.taiji.valence;
     const arousalBeforeInternal = updatedEmotionState.taiji.arousal;
     // ① 情绪传染：用户情绪按共情度传染给她（此前 applyEmotionalContagion 从未接入主链）
+    // v2.04：本轮非用户来源开始前的累计快照 —— 预算只缩放"本轮增量"，不改历史
+    const emergenceBeforeNonUser: typeof this.emergence = { ...this.emergence };
+
     if (input.userAnalysis) {
       const beforeTai = updatedEmotionState.taiji;
       const beforeEmo = { ...updatedEmotionState.emotions };
@@ -1019,39 +1022,17 @@ export class AICoordinator {
         sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
       );
     }
-    // v2.03（审查 P1-2）：非用户来源的单轮总预算 —— 一句强情绪不能靠"多条通路各加一点"被反复计入。
-    // 以"直接刺激之后"为基准；超出 cap（默认 0.25）就等比缩回，并把各来源记账同步缩放，
-    // 保证"各来源之和 ≈ 状态实际变化"。
-    if (directStimulusAfter) {
-      const capEnv = Number(process.env.TURN_NONUSER_CAP);
-      const cap = Number.isFinite(capEnv) && capEnv > 0 ? capEnv : 0.25;
-      const budget = applyNonUserTurnBudget(updatedEmotionState, directStimulusAfter, cap);
-      if (budget.scale < 0.999) {
-        updatedEmotionState = budget.state;
-        this.emergence = scaleSourcesForBudget(
-          this.emergence,
-          ['contagion', 'appraisal', 'internal', 'mood', 'rumination', 'shadow'],
-          budget.scale,
-        );
-        this.lastTurnBudget = { scale: budget.scale, totalBefore: budget.totalBefore, cap, removed: budget.removed };
-        console.log(`[Budget] 非用户来源超预算 ${budget.totalBefore.toFixed(3)} > ${cap}，缩放到 ${budget.scale.toFixed(2)}`);
-      } else {
-        this.lastTurnBudget = { scale: 1, totalBefore: budget.totalBefore, cap, removed: budget.removed };
-      }
-    }
-
     // 用户话语直接刺激（阶段 3 的 applyEvent）作为 external 来源一并记账
     // v2.03（审查 P1-4）：external 只统计"本轮开始 → 直接刺激结束"，
     // 传染/评价/内在/心情/反刍各自记自己的来源（此前这里取到全部步骤结束后，导致重复计数）。
     this.emergence = accumulateSource(
       this.emergence,
       'external',
-      (directStimulusAfter?.valence ?? updatedEmotionState.taiji.valence) - input.currentEmotionState.taiji.valence,
-      (directStimulusAfter?.arousal ?? updatedEmotionState.taiji.arousal) - input.currentEmotionState.taiji.arousal,
-      sumEmotionDelta(
-        input.currentEmotionState.emotions,
-        (directStimulusAfter?.emotions ?? updatedEmotionState.emotions) as unknown as typeof input.currentEmotionState.emotions,
-      ),
+      directStimulusAfter ? directStimulusAfter.valence - input.currentEmotionState.taiji.valence : 0,
+      directStimulusAfter ? directStimulusAfter.arousal - input.currentEmotionState.taiji.arousal : 0,
+      directStimulusAfter
+        ? sumEmotionDelta(input.currentEmotionState.emotions, directStimulusAfter.emotions as unknown as typeof input.currentEmotionState.emotions)
+        : 0,
     );
 
     // ⑤ 回写内在状态：心情采样（本轮九情净效价）+ 反刍链推进（只看激活情绪）
@@ -1147,6 +1128,33 @@ export class AICoordinator {
           after.arousal - before.arousal,
           sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
         );
+      }
+    }
+
+    // v2.03/v2.04（审查 P1-2 修正）：非用户来源的单轮总预算 —— 在所有来源（含 shadow）都施加后统一结算。
+    // - 基准优先用"直接刺激之后"；没有 emotionEvent 时退回"本轮开始前"，保证无事件也受预算约束；
+    // - 只缩放**本轮增量**（emergenceBeforeNonUser → 现在），历史累计不动。
+    {
+      const budgetBase = directStimulusAfter ?? {
+        emotions: { ...input.currentEmotionState.emotions } as unknown as Record<string, number>,
+        valence: input.currentEmotionState.taiji.valence,
+        arousal: input.currentEmotionState.taiji.arousal,
+      };
+      const capEnv = Number(process.env.TURN_NONUSER_CAP);
+      const cap = Number.isFinite(capEnv) && capEnv > 0 ? capEnv : 0.25;
+      const budget = applyNonUserTurnBudget(updatedEmotionState, budgetBase, cap);
+      if (budget.scale < 0.999) {
+        updatedEmotionState = budget.state;
+        this.emergence = applySourceBudgetDelta(
+          emergenceBeforeNonUser,
+          this.emergence,
+          ['contagion', 'appraisal', 'internal', 'mood', 'rumination', 'shadow'],
+          budget.scale,
+        );
+        this.lastTurnBudget = { scale: budget.scale, totalBefore: budget.totalBefore, cap, removed: budget.removed };
+        console.log(`[Budget] 非用户来源超预算 ${budget.totalBefore.toFixed(3)} > ${cap}，缩放到 ${budget.scale.toFixed(2)}`);
+      } else {
+        this.lastTurnBudget = { scale: 1, totalBefore: budget.totalBefore, cap, removed: budget.removed };
       }
     }
 

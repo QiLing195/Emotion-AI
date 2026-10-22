@@ -98,7 +98,7 @@ describe('emotionAnalyzer', () => {
 
   it('v2.03：事件归因与用户情绪归因矛盾 → 降级 directedAtAI、不强化（审查 P1-3）', async () => {
     const generate = vi.fn(async () => JSON.stringify({
-      emotionEvent: { deltaA: 0.4, deltaB: -0.1, deltaR: 0, intent: 'self', GC: 0.4, agency: 0.1, fairness: 0.2, control: 0.3 },
+      emotionEvent: { deltaA: 0.4, deltaB: -0.1, deltaR: 0, intent: 'third_party', GC: 0.4, agency: 0.1, fairness: 0.2, control: 0.3 },
       userAnalysis: { expressedEmotion: 'love', likelyCause: 'affection', intensity: 1, directedAtAI: true },
     })) as any;
     const result = await analyzeEmotionEvent('hello', settings, generate);
