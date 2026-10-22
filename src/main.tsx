@@ -7,6 +7,7 @@ import './index.css';
 
 // v1.83：/pet 是 Electron 桌宠窗口用的极简页；其余路径仍是完整 OS 界面
 const isPet = window.location.pathname.replace(/\/+$/, '') === '/pet';
+if (isPet) document.documentElement.classList.add('pet-mode');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

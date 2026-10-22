@@ -239,3 +239,14 @@ body { margin: 0; background: #0b0d17; overflow: hidden; }
 .os-app-dark .glass-strong { background: rgba(23, 27, 44, 0.72); border-color: rgba(255, 255, 255, 0.12); }
 .os-app-dark .glass-warm { background: rgba(28, 24, 38, 0.6); border-color: rgba(255, 255, 255, 0.1); }
 .os-app-dark .msg-ai { background: linear-gradient(135deg, rgba(38, 32, 54, 0.92), rgba(30, 26, 44, 0.96)); color: #e8ebf6; }
+
+/* ── v1.84 桌宠模式：/pet 页面必须**完全透明**（否则 body 的深色底就是一个黑框） ── */
+html.pet-mode,
+html.pet-mode body,
+html.pet-mode #root {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+html.pet-mode body { overflow: hidden; }
+html.pet-mode * { scrollbar-width: none; }

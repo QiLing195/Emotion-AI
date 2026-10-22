@@ -73,6 +73,9 @@ function createPetWindow() {
     width: 300,
     height: 400,
     transparent: true,
+    backgroundColor: '#00000000',
+    roundedCorners: false,
+    thickFrame: false,
     frame: false,
     resizable: false,
     hasShadow: false,
@@ -87,6 +90,7 @@ function createPetWindow() {
       backgroundThrottling: false,
     },
   });
+  petWin.setBackgroundColor('#00000000');
   petWin.setAlwaysOnTop(true, 'screen-saver');
   petWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   positionPet(petWin);
