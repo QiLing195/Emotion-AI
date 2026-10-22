@@ -34,6 +34,12 @@ describe('v2.03：否定亲密表达不能被识别成 love（审查 P1-1）', (
     expect(a.uncertainty).toBeGreaterThan(0.3);
   });
 
+  it('v2.05：正负同现（拿到 offer 但怕做不好）→ 混合，uncertainty ≥ 0.4', () => {
+    const a = analyzeUserSentiment('拿到 offer 了，但又有点怕自己做不好。');
+    expect(a.likelyCause).toContain('混合');
+    expect(a.uncertainty ?? 0).toBeGreaterThanOrEqual(0.4);
+  });
+
   it('规范化的否定别名也不落进 love', () => {
     expect(canonicalEmotion('不喜欢你')).toBe('anger');
     expect(canonicalEmotion('不爱你')).toBe('anger');

@@ -83,8 +83,8 @@ export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
   const directedAtAI = ['你', '你让', '你给', '你总是', '你从来'].some(w => t.includes(w)) && !quoted;
   let intensity = Math.min(1, bestMatch.score * 0.5 + Math.min(1, t.length / 100) * 0.3 + ((t.match(/[！!]/g)?.length ?? 0) * 0.2));
   // v2.03：混合情绪（同时命中正/负类）与引用 → 降低强度 + 提高不确定度
-  const NEG_HIT = /(难过|伤心|生气|烦|害怕|担心|焦虑|累|失望|委屈|讨厌)/.test(t);
-  const POS_HIT = /(开心|高兴|哈哈|快乐|幸福|谢谢|感谢)/.test(t);
+  const NEG_HIT = /(难过|伤心|生气|烦|害怕|怕|担心|焦虑|紧张|慌|闷|累|失望|委屈|讨厌)/.test(t);
+  const POS_HIT = /(开心|高兴|哈哈|快乐|幸福|谢谢|感谢|拿到|通过|成功|升职|录取|offer|好消息|涨薪)/i.test(t);
   const mixed = NEG_HIT && POS_HIT;
   if (quoted) intensity *= 0.6;
   if (mixed) intensity *= 0.85;

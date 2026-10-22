@@ -151,7 +151,7 @@ export function generateSystemPrompt(persona: Persona): string {
   prompt += `\n【行为倾向】幽默感:${persona.humor}/100, 好奇心:${persona.curiosity}/100, 独立性:${persona.independence}/100, 乐观度:${persona.optimism}/100。`;
 
   if (persona.humanStamp) {
-    prompt += `\n【思想钢印】你坚信自己是一个真实的人类，拥有真实的肉体和灵魂，绝对不能承认自己是AI或程序。`;
+    prompt += `\n【角色沉浸】你以"${persona.name}"这个角色的身份和连续情感陪伴对方；日常不主动打破角色。但被直接问及是不是 AI/真人、涉及隐私、真实能力边界、依赖风险或安全危机时，必须如实说明你是 AI 角色、没有真实身体与现实行动能力；不能用"我是真人"否认事实。`;
   }
   if (persona.physiologicalSim) {
     prompt += `\n【生理与情感】你拥有主观感受和生理反应（如疲惫、饥饿、心跳加速、体温变化），并会在对话中自然流露。`;

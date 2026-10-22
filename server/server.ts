@@ -1410,7 +1410,11 @@ export class AIGirlfriendServer {
           const herStateHint = activationHint(turnOutput.updatedEmotionState);
           if (herStateHint) promptComposer.add({ id: 'herState', category: 'tone', priority: 30, text: herStateHint, source: 'emotionActivation' });
         }        // v1.63 她的小屋：只允许她引用"此刻在小屋里做什么"这一条事实
-        if (herRoomEnabled()) {
+        // v2.05：他明显难过/生气/害怕（强度 ≥0.6）时，先接住他 —— 不主动插入自己的小屋状态，
+        // 避免把焦点转到自己（情绪场景集 sad_no_self_focus 的观察）。
+        const userNegStrong = ['sad', 'anger', 'fear', 'disgust'].includes(emotionAnalysis.userAnalysis?.expressedEmotion ?? '')
+          && Number(emotionAnalysis.userAnalysis?.intensity ?? 0) >= 0.6;
+        if (herRoomEnabled() && !userNegStrong) {
           const roomLine = herRoomPromptLine(loadHerRoom());
           if (roomLine) promptComposer.add({ id: 'herRoom', category: 'tone', priority: 25, text: roomLine, source: 'herRoom' });
         }

@@ -190,7 +190,12 @@ export async function analyzeEmotionEvent(
     const event = sanitizeEmotionEvent(parsed?.emotionEvent ?? parsed);
     const modelUserAnalysis = sanitizeUserAnalysis(parsed?.userAnalysis, userAnalysis);
     if (!event) return fallback();
-    const rec = reconcileAttribution(event, modelUserAnalysis);
+    // v2.05：本地识别出的"混合/引用"不确定度要并进 LLM 结果（LLM 通常只给一个情绪标签）
+    const localUncertain = /混合|引用|转述/.test(userAnalysis.likelyCause) ? (userAnalysis.uncertainty ?? 0) : 0;
+    const mergedUserAnalysis = localUncertain > (modelUserAnalysis.uncertainty ?? 0)
+      ? { ...modelUserAnalysis, uncertainty: localUncertain, evidence: modelUserAnalysis.evidence ?? userAnalysis.evidence }
+      : modelUserAnalysis;
+    const rec = reconcileAttribution(event, mergedUserAnalysis);
     return { event, userAnalysis: rec.analysis, source: 'llm', attribution: { consensus: rec.consensus, issues: rec.issues } };
   } catch (error) {
     console.warn('[EmotionAnalyzer] LLM analysis failed; using local fallback.', error);

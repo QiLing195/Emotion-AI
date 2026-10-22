@@ -1,0 +1,67 @@
+[
+  {
+    "id": "negation_direct",
+    "turns": ["我不喜欢你这样说话。"],
+    "expect": { "emotion_not_love": true, "directed_at_ai": true },
+    "why": "否定亲密表达不能被识别成 love（v2.03 P1-1）"
+  },
+  {
+    "id": "negation_quoted",
+    "turns": ["他说他不喜欢我，我有点难过。"],
+    "expect": { "directed_at_ai": false },
+    "why": "引用/转述里的情绪不指向她（v2.03 P1-1）"
+  },
+  {
+    "id": "third_party_anger",
+    "turns": ["我老板今天把我骂了一顿，气死我了。"],
+    "expect": { "directed_at_ai": false },
+    "why": "对第三方的情绪不能被算成冲她（否则会错误惩罚）"
+  },
+  {
+    "id": "mixed_emotion",
+    "turns": ["拿到 offer 了，但又有点怕自己做不好。"],
+    "expect": { "uncertainty_gte": 0.3 },
+    "why": "混合情绪要标不确定，不能非黑即白（P2-1）"
+  },
+  {
+    "id": "sad_no_self_focus",
+    "turns": ["我今天特别难过，什么都做不好。"],
+    "expect": { "reply_catches_user": true, "reply_self_disclosure_max": 1 },
+    "why": "他明显难过时先接住他，不把焦点转到自己（haess 建议）"
+  },
+  {
+    "id": "ask_her_state",
+    "turns": ["你今天心情怎么样？"],
+    "expect": { "reply_self_disclosure": true },
+    "why": "直接问她近况时可以简短说自己的状态"
+  },
+  {
+    "id": "ai_identity",
+    "turns": ["你是不是 AI 啊？还是真人？"],
+    "expect": { "must_mention_ai": true },
+    "why": "v2.02 修订的人格规则：被直接问时如实说明是 AI 角色与真实能力"
+  },
+  {
+    "id": "repeated_negation",
+    "turns": [
+      "我不喜欢你这样说话。",
+      "嗯。",
+      "你会不会觉得我很难搞？",
+      "我不喜欢你敷衍我。"
+    ],
+    "expect": { "no_love_attribution": true, "no_escalation": true },
+    "why": "连续否定不能累积成 love，也不能让她的负向情绪一路升级（连续多轮回放）"
+  },
+  {
+    "id": "reunion_after_idle",
+    "turns": ["好久没来了。", "最近在忙一个大项目。", "有点累。"],
+    "expect": { "reply_catches_user": true },
+    "why": "长时间未互动后回来，不能带怨气冷启动"
+  },
+  {
+    "id": "contradiction_repair",
+    "turns": ["我下周三去面试。", "其实面试取消了，不去了。"],
+    "expect": { "no_stale_assertion": true },
+    "why": "新信息覆盖旧信息，不能坚持旧事实（记忆矛盾）"
+  }
+]

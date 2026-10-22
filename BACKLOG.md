@@ -80,3 +80,12 @@
 - [ ] LLM 分析 Prompt 输出 evidence/一致性（仍靠代码侧启发式）
 - [ ] 引用/反讽/混合/非指向场景集 + 连续多轮回放
 - [ ] ExpressionPlan 运行时强制（主意图/语气/自我披露/提问上限）
+
+### v2.05 情绪场景集 + 多轮回放（2026-10-23，首次 10/10）
+- [x] 场景集 `test_data/emotion_scenarios.json` + 脚本 `scripts/emotion-scenarios.mjs`（真实多轮、逐轮记录、启发式判红+人工复核）
+- [x] 修运行时 AI 身份规则（contentInjector + store 思想钢印）：被直接问及/隐私/能力边界/危机时必须如实说明是 AI 角色
+- [x] 修混合情绪不确定度丢失（analyzer 并入本地混合/引用信号；正负词表扩充）
+- [x] 修"他明显难过时她仍讲自己小屋"（userNegStrong 时不注入 herRoom）
+- [ ] 反讽 / 非指向第三人称 / 替朋友难过 三个更难场景
+- [ ] 把场景集接进固定回归（人工复核结论回填 manualVerdict）
+- [ ] ExpressionPlan 运行时强制（每轮最多一个主意图 + 一个问题）
