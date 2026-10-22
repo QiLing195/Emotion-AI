@@ -23,8 +23,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Speech
 
-function Write-Event([string]$kind, [string]$text) {
-  $obj = @{ ts = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); kind = $kind; text = $text } | ConvertTo-Json -Compress
+function Write-Event([string]$kind, [string]$text, [double]$conf = -1) {
+  $obj = @{ ts = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); kind = $kind; text = $text; confidence = $conf } | ConvertTo-Json -Compress
   Add-Content -Path $OutFile -Value $obj -Encoding UTF8
 }
 
@@ -33,6 +33,7 @@ if (Test-Path $ConfigFile) {
   try {
     $cfg = Get-Content $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($cfg.wakeWords -and $cfg.wakeWords.Count -gt 0) { $wakeWords = @($cfg.wakeWords) }
+    if ($null -ne $cfg.wakeMinConfidence) { $wakeMinConfidence = [double]$cfg.wakeMinConfidence }
   } catch { }
 }
 
@@ -83,7 +84,13 @@ try {
       if ($null -eq $wake) { continue }
     }
 
-    Write-Event 'wake' $wake.Text.Trim()
+    $wakeConf = [double]$wake.Confidence
+    if ($wakeConf -lt $wakeMinConfidence) {
+      # 置信度不够（多半是别的词被硬映射到唤醒词）⇒ 不算唤醒，继续等
+      if ($isWav) { $idx++ }
+      continue
+    }
+    Write-Event 'wake' $wake.Text.Trim() $wakeConf
 
     # ---------- 听一句话 ----------
     $engine.UnloadAllGrammars()
@@ -103,7 +110,7 @@ try {
       Write-Event 'no_speech' ''
     } else {
       $text = $utt.Text.Trim()
-      if ($text.Length -gt 0) { Write-Event 'utterance' $text } else { Write-Event 'no_speech' '' }
+      if ($text.Length -gt 0) { Write-Event 'utterance' $text ([double]$utt.Confidence) } else { Write-Event 'no_speech' '' }
     }
 
     if ($isWav) { $idx++ }
