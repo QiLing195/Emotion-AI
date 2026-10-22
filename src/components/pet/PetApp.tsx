@@ -12,15 +12,17 @@ declare global {
       getPosition: () => Promise<{ x: number; y: number } | null>;
       openChat: () => void;
       showMenu: () => void;
+      openPath: (p: string) => Promise<{ ok: boolean; error?: string }>;
     };
   }
 }
 
 /**
- * 桌宠页（v1.88）
+ * 桌宠页（v1.90）
  * - 透明、**无按钮**：只留她本人（可拖动/可摸/双击挥手），交互靠**语音唤醒**；
- * - 语音：说「安雅 / 小雅 / anya」唤醒 → 冒泡"嗯？" → 说一句话 → 走 /api/chat → 用**气泡**回话（不出声）；
- * - 右键 = 菜单（打开聊天 / 退出）；Ctrl+Shift+P 打开聊天；Ctrl+Shift+Q 退出。
+ * - 语音：说唤醒词（默认「二丫」）→ 冒泡"嗯？" → 说一句话 → 走 /api/chat → 用**气泡**回话（不出声）；
+ * - 桌面图标：她能读你桌面（只读），想打开某个东西时会弹授权卡；
+ * - 右键 = 菜单（打开聊天 / 唤醒词设置 / 退出）；Ctrl+Shift+P 聊天；Ctrl+Shift+Q 退出。
  */
 interface PetState {
   ok: boolean;
@@ -30,6 +32,7 @@ interface PetState {
   room: { enabled: boolean; active: boolean; label: string | null; minutes: number };
   screen: { policy: string; lastCaptureAt: number | null; lastCaptureOk: boolean | null; capturesToday: number };
   pendingApproval?: boolean;
+  pendingDesktopAction?: { id: string; path: string; name: string; reason: string; createdAt: number } | null;
   policies?: string[];
   voice?: { enabled: boolean; running: boolean; ready: boolean; seq: number };
 }
@@ -403,6 +406,27 @@ export default function PetApp() {
             <button className="flex-1 rounded-lg bg-white/10 py-1 text-[11px] text-slate-200" onClick={async () => {
               await fetch('/api/pet/deny', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
               say('好，不看。', 2200);
+              void refresh();
+            }}>拒绝</button>
+          </div>
+        </div>
+      )}
+
+      {/* 桌面图标授权卡（她想打开你桌面上的东西时才出现） */}
+      {s?.pendingDesktopAction && (
+        <div className="mb-1 w-[268px] rounded-2xl border border-sky-300/40 bg-[#12202e]/92 p-2.5 text-center shadow-lg backdrop-blur">
+          <div className="text-[12px] text-sky-100">她想打开桌面上的：</div>
+          <div className="mt-0.5 break-all text-[11px] font-medium text-white">{s.pendingDesktopAction.name}</div>
+          <div className="mt-2 flex gap-2">
+            <button className="flex-1 rounded-lg bg-emerald-500/90 py-1 text-[11px] font-medium text-white" onClick={async () => {
+              const r = await window.petWindow?.openPath(s.pendingDesktopAction!.path);
+              await fetch('/api/pet/desktop/ack', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: Boolean(r?.ok) }) });
+              say(r?.ok ? '打开了。' : (r?.error === 'blocked_type' ? '这个类型不能直接打开。' : '没打开成功。'), 2600);
+              void refresh();
+            }}>允许</button>
+            <button className="flex-1 rounded-lg bg-white/10 py-1 text-[11px] text-slate-200" onClick={async () => {
+              await fetch('/api/pet/desktop/ack', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: false }) });
+              say('好，不动。', 2200);
               void refresh();
             }}>拒绝</button>
           </div>

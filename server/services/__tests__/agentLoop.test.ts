@@ -34,7 +34,7 @@ describe('开关与工具声明', () => {
   it('声明里恰好有两个只读工具，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'look_at_my_screen', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events']);
+    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'read_my_desktop', 'open_desktop_item', 'look_at_my_screen', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events']);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });
@@ -339,5 +339,39 @@ describe('看屏幕：look_at_my_screen（只读，受策略/授权约束）', (
     const r = await executeTool('look_at_my_screen', {}, ctx);
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.result)).toContain('screen_disabled');
+  });
+});
+describe('桌面图标（v1.90）：只读列表 + 打开需授权', () => {
+  it('read_my_desktop 接了 ⇒ 返回列表', async () => {
+    const r = await executeTool('read_my_desktop', { limit: 10 }, {
+      ...ctx,
+      getDesktop: (limit?: number) => ({ ok: true, count: 2, items: [{ name: '简历.pdf', kind: 'document', ext: '.pdf', bytes: 100, canOpen: true }], truncated: false }),
+    });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('简历');
+  });
+
+  it('open_desktop_item 接了 ⇒ 返回 needsApproval（不直接开）', async () => {
+    const r = await executeTool('open_desktop_item', { name: '简历' }, {
+      ...ctx,
+      requestOpenDesktop: (q: string) => ({ ok: true, needsApproval: true, name: '简历.pdf' }),
+    });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('needsApproval');
+  });
+
+  it('exe 之类被拒绝时如实回错误原因', async () => {
+    const r = await executeTool('open_desktop_item', { name: 'setup.exe' }, {
+      ...ctx,
+      requestOpenDesktop: () => ({ ok: false, name: 'setup.exe', reason: '可执行文件/脚本不能直接打开（安全限制）' }),
+    });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('安全限制');
+  });
+
+  it('没接桌面能力 ⇒ 明确 disabled', async () => {
+    const r = await executeTool('read_my_desktop', {}, ctx);
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('desktop_disabled');
   });
 });

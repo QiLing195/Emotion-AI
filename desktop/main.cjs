@@ -146,15 +146,55 @@ function registerPetIpc() {
     return { x, y };
   });
   ipcMain.on('pet:open-chat', () => openChat());
+
+  // 打开桌面上的条目：主进程再做一次校验（只允许桌面路径 + 不允许 exe/脚本），然后交给系统默认程序
+  ipcMain.handle('pet:open-path', async (_evt, p) => {
+    const target = String(p ?? '');
+    const { shell } = require('electron');
+    const path = require('node:path');
+    const fs = require('node:fs');
+    const roots = [path.join(process.env.USERPROFILE || '', 'Desktop')];
+    if (process.env.PUBLIC) roots.push(path.join(process.env.PUBLIC, 'Desktop'));
+    const abs = path.resolve(target);
+    const inDesktop = roots.some((r) => abs.startsWith(path.resolve(r) + path.sep) || abs === path.resolve(r));
+    if (!inDesktop) return { ok: false, error: 'not_in_desktop' };
+    const ext = path.extname(abs).toLowerCase();
+    const blocked = ['.exe', '.bat', '.cmd', '.ps1', '.vbs', '.js', '.msi', '.dll', '.scr', '.com', '.reg'];
+    if (blocked.includes(ext)) return { ok: false, error: 'blocked_type' };
+    if (!fs.existsSync(abs)) return { ok: false, error: 'missing' };
+    const err = await shell.openPath(abs);
+    if (err) return { ok: false, error: err };
+    console.log('[Pet] 打开桌面条目：' + path.basename(abs));
+    return { ok: true };
+  });
+
+  ipcMain.on('pet:open-voice-settings', () => openVoiceSettings());
+
   ipcMain.on('pet:show-menu', () => {
     if (!petWin || petWin.isDestroyed()) return;
     const { Menu } = require('electron');
     Menu.buildFromTemplate([
       { label: '打开聊天窗口', click: () => openChat() },
+      { label: '唤醒词设置…', click: () => openVoiceSettings() },
       { type: 'separator' },
       { label: '退出桌宠', click: () => app.quit() },
     ]).popup({ window: petWin });
   });
+}
+
+let voiceSettingsWin = null;
+function openVoiceSettings() {
+  if (voiceSettingsWin && !voiceSettingsWin.isDestroyed()) { voiceSettingsWin.show(); voiceSettingsWin.focus(); return; }
+  voiceSettingsWin = new BrowserWindow({
+    width: 460,
+    height: 520,
+    resizable: false,
+    title: '唤醒词设置',
+    backgroundColor: '#12141f',
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  voiceSettingsWin.loadURL(`${APP_URL}/pet/settings`);
+  voiceSettingsWin.on('closed', () => { voiceSettingsWin = null; });
 }
 
 const gotLock = app.requestSingleInstanceLock();

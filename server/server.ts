@@ -111,7 +111,9 @@ import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, lis
 import { buildRememberedView } from './services/herRemembered.js';
 import { readRecentActivity, startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled } from './services/mcpClient.js';
-import { startVoiceSampler, stopVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
+import { startVoiceSampler, stopVoiceSampler, restartVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
+import { loadVoiceConfig, saveVoiceConfig } from './services/voiceConfig.js';
+import { listDesktopForModel, getPendingDesktopAction, clearPendingDesktopAction, requestOpenDesktopItem, isDesktopPath } from './services/desktopItems.js';
 import { decideCapture, writeCaptureRequest, readCaptureRequest, clearCaptureRequest, readCaptureResult, clearCaptureResult, loadPetSettings, savePetSettings, grantScreenSession, SCREEN_POLICIES, readCaptureAudit, auditCapture, cleanupOldScreens, SCREEN_DIR, revokeScreenSession, CAPTURE_RESULT_PATH, type ScreenPolicy } from './services/screenWatch.js';
 import { buildPetState } from './services/petState.js';
 import { runOcr, compactOcrText } from './services/ocr.js';
@@ -1286,6 +1288,8 @@ export class AIGirlfriendServer {
                 }
                 return { ok: false, reason: 'pet_window_not_running（Electron 桌宠没开，截不了屏）' };
               },
+              getDesktop: (limit?: number) => listDesktopForModel(limit ?? 40),
+              requestOpenDesktop: (query: string) => requestOpenDesktopItem(query),
               mcp: mcpClientEnabled() ? {
                 declarations: () => getMcpToolDeclarations(),
                 call: (name: string, args: Record<string, unknown>) => callMcpTool(name, args),
@@ -2059,7 +2063,7 @@ export class AIGirlfriendServer {
     this.app.get('/api/pet/state', (req, res) => {
       try {
         const base = buildPetState({ emotionState: this.aiEngine.emotionState });
-        res.json({ ...base, pendingApproval: Boolean(this._screenApprovalPending), policies: SCREEN_POLICIES, voice: voiceView() });
+        res.json({ ...base, pendingApproval: Boolean(this._screenApprovalPending), pendingDesktopAction: getPendingDesktopAction(), policies: SCREEN_POLICIES, voice: voiceView() });
       } catch (e) {
         res.status(500).json({ ok: false, error: (e as Error).message });
       }
@@ -2161,6 +2165,31 @@ export class AIGirlfriendServer {
     this.app.get('/api/pet/voice', (req, res) => {
       const after = Number(req.query.after ?? 0);
       res.json({ ok: true, ...voiceView(), events: voiceEventsAfter(Number.isFinite(after) ? after : 0) });
+    });
+
+    // v1.90 唤醒词设置：桌宠右键菜单 → 设置窗口；保存后自动重启识别进程
+    this.app.get('/api/pet/voice/config', (req, res) => {
+      res.json({ ok: true, ...loadVoiceConfig() });
+    });
+
+    this.app.post('/api/pet/voice/config', (req, res) => {
+      const r = saveVoiceConfig({ wakeWords: req.body?.wakeWords, wakeMinConfidence: req.body?.wakeMinConfidence });
+      if (!r.ok) return res.status(400).json(r);
+      restartVoiceSampler();
+      console.log(`[Voice] 唤醒词已更新：${r.config?.wakeWords.join(' / ')}（置信度 ${r.config?.wakeMinConfidence}）`);
+      res.json({ ok: true, ...r.config });
+    });
+
+    // v1.90 桌面图标：她请求打开后，桌宠页点完「允许/拒绝」来这里清掉待确认动作
+    this.app.post('/api/pet/desktop/ack', (req, res) => {
+      clearPendingDesktopAction();
+      res.json({ ok: true });
+    });
+
+    // 调试/观测：桌面图标只读列表（不含绝对路径）
+    this.app.get('/api/pet/desktop/list', (req, res) => {
+      const limit = Number(req.query.limit ?? 40);
+      res.json(listDesktopForModel(Number.isFinite(limit) ? limit : 40));
     });
 
     this.app.get('/state', (req, res) => {

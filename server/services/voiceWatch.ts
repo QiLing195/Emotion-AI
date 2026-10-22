@@ -9,6 +9,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs';
+import { loadVoiceConfig } from './voiceConfig.js';
 import { dirname, join } from 'node:path';
 
 export const VOICE_EVENTS_PATH = join('memories', 'voice_events.jsonl');
@@ -121,7 +122,8 @@ export function startVoiceSampler(): void {
     child.on('exit', () => { child = null; ready = false; });
     child.on('error', (e) => { child = null; ready = false; console.warn('[Voice] 识别进程启动失败：' + e.message); });
     pollTimer = setInterval(pumpVoiceEvents, VOICE_POLL_MS);
-    console.log('[Voice] 语音唤醒已启动（说「安雅」/「小雅」/「anya」唤醒，之后说一句话）');
+    const cfg = loadVoiceConfig();
+    console.log(`[Voice] 语音唤醒已启动（说「${cfg.wakeWords.join(' / ')}」唤醒，置信度门槛 ${cfg.wakeMinConfidence}，之后说一句话）`);
   } catch (e) {
     console.warn('[Voice] 启动失败：' + (e as Error).message);
   }
@@ -155,4 +157,12 @@ export function injectVoiceEvent(kind: VoiceEventKind, text: string, ts = Date.n
   if (kind === 'error') ready = false;
   last = ev;
   return ev;
+}
+
+/** 改完唤醒词后重启识别进程（重读 scripts/voice-config.json） */
+export function restartVoiceSampler(): void {
+  const wasEnabled = voiceWakeEnabled();
+  stopVoiceSampler();
+  if (!wasEnabled) return;
+  setTimeout(() => startVoiceSampler(), 300);
 }

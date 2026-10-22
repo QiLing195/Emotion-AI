@@ -60,6 +60,10 @@ export interface ToolContext {
   getActivity?: (limit?: number) => unknown;
   /** 看一眼他的屏幕（Electron 截屏 + OCR；策略/授权由 server 决定） */
   lookAtScreen?: () => Promise<unknown>;
+  /** 只读：他桌面上的图标（名称/类型/大小，不含路径与内容） */
+  getDesktop?: (limit?: number) => unknown;
+  /** 请求打开桌面上的某个东西（需要他点允许；返回 needsApproval） */
+  requestOpenDesktop?: (query: string) => unknown;
   /** 外部 MCP server 的工具（声明 + 调用；没接就完全不出现） */
   mcp?: {
     declarations: () => Promise<Array<{ name: string; description: string; parameters: unknown }>> | Array<{ name: string; description: string; parameters: unknown }>;
@@ -128,6 +132,24 @@ export function toolDeclarations(extra: Array<{ name: string; description: strin
               dueInHours: { type: 'number', description: '没说具体时间时才用：几小时后发出，0.5~336（14 天内）' },
             },
             required: ['what', 'dueInHours'],
+          },
+        },
+        {
+          name: 'read_my_desktop',
+          description: '看他**桌面上的图标**（只读：文件名/类型/大小，不含路径、不读内容）。他说"我桌面有什么/帮我看看桌面"、或你想聊他桌面上那些东西时用。',
+          parameters: {
+            type: 'object',
+            properties: { limit: { type: 'number', description: '看几个，默认 40，最多 80' } },
+            required: [],
+          },
+        },
+        {
+          name: 'open_desktop_item',
+          description: '请求**打开他桌面上的某个图标**（文件夹/快捷方式/文档/图片/音视频）。会先在他桌宠上弹授权卡，他点"允许"才会打开；exe/脚本类一律不允许。',
+          parameters: {
+            type: 'object',
+            properties: { name: { type: 'string', description: '要打开的东西的名字（桌面上显示的名字，可省略扩展名）' } },
+            required: ['name'],
           },
         },
         {
@@ -208,6 +230,17 @@ export async function executeTool(
     if (name === 'check_my_state') {
       const result = ctx.getState();
       return { ok: true, result, ms: Date.now() - t0 };
+    }
+    if (name === 'read_my_desktop') {
+      if (!ctx.getDesktop) return { ok: false, result: { error: 'desktop_disabled（桌面列表没接）' }, ms: Date.now() - t0 };
+      const rawLimit = Number(args?.limit ?? 40);
+      const lim = Number.isFinite(rawLimit) ? Math.max(1, Math.min(80, Math.round(rawLimit))) : 40;
+      return { ok: true, result: ctx.getDesktop(lim), ms: Date.now() - t0 };
+    }
+    if (name === 'open_desktop_item') {
+      if (!ctx.requestOpenDesktop) return { ok: false, result: { error: 'desktop_disabled（桌面打开没接）' }, ms: Date.now() - t0 };
+      const r = await ctx.requestOpenDesktop(String(args?.name ?? ''));
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
     }
     if (name === 'look_at_my_screen') {
       if (!ctx.lookAtScreen) return { ok: false, result: { error: 'screen_disabled（屏幕观察没接）' }, ms: Date.now() - t0 };

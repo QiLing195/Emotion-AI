@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('petWindow', {
   getPosition: () => ipcRenderer.invoke('pet:get-position'),
   /** 打开聊天窗口 */
   openChat: () => ipcRenderer.send('pet:open-chat'),
-  /** 右键菜单（打开聊天 / 退出） */
+  /** 打开桌面上的某个东西（主进程校验路径 + 类型后再 shell.openPath） */
+  openPath: (p) => ipcRenderer.invoke('pet:open-path', p),
+  /** 打开唤醒词设置窗口 */
+  openVoiceSettings: () => ipcRenderer.send('pet:open-voice-settings'),
+  /** 右键菜单（打开聊天 / 唤醒词设置 / 退出） */
   showMenu: () => ipcRenderer.send('pet:show-menu'),
 });
