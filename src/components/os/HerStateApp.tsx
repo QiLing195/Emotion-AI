@@ -46,6 +46,13 @@ interface HerState {
       vague: boolean;
     } | null;
   };
+  /** v1.96 她主动关心过的（她心里挂着的"他的近况"） */
+  care?: {
+    recent: Array<{
+      id: string; ts: number; category: string; label: string; summary: string; text: string; evidence: string[];
+    }>;
+    pendingFollowUp: { id: string; ts: number; text: string; label: string; summary: string } | null;
+  };
   now?: number;
 }
 
@@ -194,6 +201,27 @@ export default function HerStateApp() {
             </>
           )}
         </div>
+
+        {/* v1.96 她主动关心过的（心里挂着的"他的近况"） */}
+        {s?.care && (s.care.recent.length > 0 || s.care.pendingFollowUp) && (
+          <div className="mt-2 rounded-lg border border-rose-300/20 bg-rose-400/[0.06] px-2 py-1.5">
+            <div className="text-[10px] text-rose-200/90">她心里记着的你的事</div>
+            {s.care.recent.slice(0, 3).map(r => (
+              <div key={r.id} className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                <span className="truncate">
+                  {r.label || r.summary || r.category}
+                  <span className="ml-1 text-[10px] text-slate-500">「{r.text}」</span>
+                </span>
+                <span className="shrink-0 text-[10px] text-slate-500">{r.ts > 0 ? ago(r.ts, now) : ''}</span>
+              </div>
+            ))}
+            {s.care.pendingFollowUp && (
+              <div className="mt-1 text-[10px] text-amber-200/90">
+                可以接着问结果：{s.care.pendingFollowUp.label || s.care.pendingFollowUp.summary || '他最近在忙的事'}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 眼前看到的（她的理解 + 原始窗口标题；标题级、敏感已隐藏） */}
         <div className="mt-3 border-t border-white/10 pt-2">

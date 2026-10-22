@@ -111,6 +111,7 @@ import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, lis
 import { buildRememberedView } from './services/herRemembered.js';
 import { readRecentActivity } from './services/activityWatcher.js';
 import { understandActivity, describeUnderstanding, toActivityConcern, activityPromptLine, updateCareStreak, emptyCareStreak, type ActivityUnderstanding, type CareStreak } from './services/activityUnderstanding.js';
+import { recordCare, recentCareAsks, findPendingFollowUp, buildFollowUpHint } from './services/herCareMemory.js';
 import { startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled, loadMcpConfig, listAllMcpTools, isToolAllowedByServer, isMcpConnected, MCP_CONFIG_PATH } from './services/mcpClient.js';
 import { startVoiceSampler, stopVoiceSampler, restartVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
@@ -484,36 +485,54 @@ export class AIGirlfriendServer {
    * 一次"要不要主动关心"的判定 + 生成。
    * 返回判定链（供端点与日志观测）；force=true 仅调试用（跳过"还没够久/冷却/次数"）。
    */
-  private async runActivityCareCheck(force = false): Promise<{ ok: boolean; reason: string; sent?: boolean; text?: string; decision?: CareStreak }> {
+  private async runActivityCareCheck(force = false): Promise<{ ok: boolean; reason: string; sent?: boolean; text?: string; decision?: CareStreak; followedUp?: string }> {
     const now = Date.now();
     const day = new Date(now).toISOString().slice(0, 10);
     const u = this.currentActivityUnderstanding(true);   // 主动关心判定必须读最新，不能吃 30s 缓存
-    const decision = updateCareStreak(this._activityCareStreak, u, now, day);
+    // v1.96：时间窗 + 低谷期更矜持（接 v1.40：她那阵子自己沉，就别追着问）
+    const inLowPeriod = Boolean(lowPeriodOf(this.aiEngine.emotionState as never)?.established);
+    const decision = updateCareStreak(this._activityCareStreak, u, now, day, {
+      inLowPeriod,
+      hour: new Date(now).getHours(),
+    });
     this._activityCareStreak = decision.streak;
     if (!u) return { ok: true, reason: 'no_understanding', decision: this._activityCareStreak };
     if (!decision.shouldCare && !force) return { ok: true, reason: decision.reason, decision: this._activityCareStreak };
     if (u.category === 'unknown') return { ok: true, reason: 'no_category', decision: this._activityCareStreak };
     const settings = this.readAISettings();
     if (!settings?.apiKey) return { ok: true, reason: 'no_api_key', decision: this._activityCareStreak };
+    // v1.96：她记着"关心过什么"——同类别上次问过，这次接着问结果，不重复原话
+    const pending = findPendingFollowUp(now, { category: u.category });
+    const followUpHint = buildFollowUpHint(pending);
     try {
       const raw = await generateAIResponse(
         settings,
         '你是一个有自己生活的女朋友。你注意到他连续一段时间在做同一件事（下面写着），想主动关心一句。'
-          + '用你自己的话说，≤40 字；别复述"我注意到你一直在…"这种监控腔，也别像提醒或客服。只输出消息正文。',
-        activityPromptLine(u),
+          + '用你自己的话说，≤40 字；别复述"我注意到你一直在…"这种监控腔，也别像提醒或客服。只输出消息正文。'
+          + (followUpHint ? '如果下面说"上次你为这件事关心过"，这次要接着问**结果/进展**，别重复上次那句话。' : ''),
+        [activityPromptLine(u), followUpHint].filter(Boolean).join('\n\n'),
         false,
         0.9,
       );
       const text = sanitizeProactiveMessage(typeof raw === 'string' ? raw : '') ?? '';
       if (!text) return { ok: true, reason: 'empty', decision: this._activityCareStreak };
+      // 记下这次关心（供下次"接着问结果"与界面展示）
+      recordCare({ ts: now, category: u.category, label: u.label, summary: u.summary, text, evidence: u.evidence });
       this._proactivePending.push({
         id: `activity_care_${now}`,
         text,
         createdAt: new Date(now).toISOString(),
         motiveKind: 'activity_care',
       });
-      console.log(`[ActivityCare] 已入队（${decision.reason}）：${text.slice(0, 24)}`);
-      return { ok: true, reason: decision.reason, sent: true, text, decision: this._activityCareStreak };
+      console.log(`[ActivityCare] 已入队（${decision.reason}${pending ? '，接着上次问' : ''}）：${text.slice(0, 24)}`);
+      return {
+        ok: true,
+        reason: decision.reason,
+        sent: true,
+        text,
+        decision: this._activityCareStreak,
+        ...(pending ? { followedUp: pending.text } : {}),
+      };
     } catch (e) {
       return { ok: false, reason: (e as Error).message, decision: this._activityCareStreak };
     }
@@ -2195,6 +2214,11 @@ export class AIGirlfriendServer {
           const understanding = understandActivity(view);
           return { ...view, understanding, understandingLine: describeUnderstanding(understanding) };
         })(),
+        // v1.96 她主动关心过的（她心里挂着的"他的近况"）
+        care: {
+          recent: recentCareAsks(5),
+          pendingFollowUp: findPendingFollowUp(),
+        },
         now: Date.now(),
       });
     });
@@ -2209,7 +2233,13 @@ export class AIGirlfriendServer {
           understanding,
           understandingLine: describeUnderstanding(understanding),
           concern: toActivityConcern(understanding),
-          care: { enabled: this.activityCareEnabled(), streak: this._activityCareStreak },
+          care: {
+            enabled: this.activityCareEnabled(),
+            streak: this._activityCareStreak,
+            // v1.96 她记着"关心过什么"
+            recent: recentCareAsks(5),
+            pendingFollowUp: findPendingFollowUp(),
+          },
         });
       } catch (e) {
         res.status(500).json({ ok: false, error: (e as Error).message });

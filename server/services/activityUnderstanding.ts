@@ -237,35 +237,69 @@ export const CARE_MIN_SUSTAIN_MS = 20 * 60_000;
 export const CARE_COOLDOWN_MS = 90 * 60_000;
 export const CARE_MAX_PER_DAY = 2;
 
+/** v1.96 时间窗：她只在这个时段"顺口关心"（凌晨不打扰；与主动消息的 9-22 点同一条原则） */
+export const CARE_WINDOW_START_HOUR = 8;
+export const CARE_WINDOW_END_HOUR = 23;
+
+/** v1.96 低谷期更矜持（接 v1.40 "降低但不是没有"）：更久才开口、更长冷却、每天只 1 次 */
+export const CARE_LOW_SUSTAIN_MS = 40 * 60_000;
+export const CARE_LOW_COOLDOWN_MS = 180 * 60_000;
+export const CARE_LOW_MAX_PER_DAY = 1;
+
+export interface CareOptions {
+  /** 她处在已成段低谷 → 门槛抬高（默认为 false） */
+  inLowPeriod?: boolean;
+  /** 本地小时（0-23）；给了就做时间窗判断，不给则不做 */
+  hour?: number;
+}
+
 export interface CareDecision {
   shouldCare: boolean;
   reason: string;
   streak: CareStreak;
+  /** 本次判定用的门槛（可观测：低谷时确实更矜持） */
+  thresholds?: { sustainMs: number; cooldownMs: number; maxPerDay: number };
 }
 
 /**
  * 每次采样（约 1 分钟）调一次：累计"同一类关心活动持续了多久"，到点就值得主动提一句。
- * 规则：同一类别连续出现 ≥ 持续阈值 → 冷却 ≥90 分钟 → 当天 ≤2 次。
+ * 规则：时间窗内 → 同一类别连续出现 ≥ 持续阈值 → 冷却 → 当天次数上限；
+ *      低谷期门槛更高（40 分钟 / 180 分钟 / 每天 1 次）。
  */
-export function updateCareStreak(streak: CareStreak, u: ActivityUnderstanding | null, now: number, day: string): CareDecision {
+export function updateCareStreak(
+  streak: CareStreak,
+  u: ActivityUnderstanding | null,
+  now: number,
+  day: string,
+  opts: CareOptions = {},
+): CareDecision {
+  const low = opts.inLowPeriod === true;
+  const thresholds = {
+    sustainMs: low ? CARE_LOW_SUSTAIN_MS : CARE_MIN_SUSTAIN_MS,
+    cooldownMs: low ? CARE_LOW_COOLDOWN_MS : CARE_COOLDOWN_MS,
+    maxPerDay: low ? CARE_LOW_MAX_PER_DAY : CARE_MAX_PER_DAY,
+  };
   const s: CareStreak = { ...streak };
   if (s.day !== day) { s.day = day; s.caresToday = 0; }
   const concern = toActivityConcern(u);
   if (!concern) {
-    return { shouldCare: false, reason: 'not_a_concern', streak: { ...s, category: null, since: 0, samples: 0 } };
+    return { shouldCare: false, reason: 'not_a_concern', streak: { ...s, category: null, since: 0, samples: 0 }, thresholds };
+  }
+  if (typeof opts.hour === 'number' && (opts.hour < CARE_WINDOW_START_HOUR || opts.hour >= CARE_WINDOW_END_HOUR)) {
+    return { shouldCare: false, reason: 'outside_window', streak: s, thresholds };
   }
   if (s.category !== concern.category) {
     s.category = concern.category;
     s.since = now;
     s.samples = 1;
-    return { shouldCare: false, reason: 'new_category', streak: s };
+    return { shouldCare: false, reason: 'new_category', streak: s, thresholds };
   }
   s.samples += 1;
   const sustained = now - s.since;
-  if (sustained < CARE_MIN_SUSTAIN_MS) return { shouldCare: false, reason: 'not_long_enough', streak: s };
-  if (now - s.lastCareAt < CARE_COOLDOWN_MS) return { shouldCare: false, reason: 'cooldown', streak: s };
-  if (s.caresToday >= CARE_MAX_PER_DAY) return { shouldCare: false, reason: 'daily_cap', streak: s };
+  if (sustained < thresholds.sustainMs) return { shouldCare: false, reason: 'not_long_enough', streak: s, thresholds };
+  if (now - s.lastCareAt < thresholds.cooldownMs) return { shouldCare: false, reason: 'cooldown', streak: s, thresholds };
+  if (s.caresToday >= thresholds.maxPerDay) return { shouldCare: false, reason: 'daily_cap', streak: s, thresholds };
   s.lastCareAt = now;
   s.caresToday += 1;
-  return { shouldCare: true, reason: `sustained_${concern.category}`, streak: s };
+  return { shouldCare: true, reason: `sustained_${concern.category}`, streak: s, thresholds };
 }

@@ -200,3 +200,67 @@ describe('v1.95：关键词可配置 + 接进情绪/主动关心', () => {
     expect(a.love - b.love).toBeGreaterThan(0);
   });
 });
+describe('v1.96：时间窗 + 低谷更矜持', () => {
+  const jobU = async () => {
+    const m = await import('../activityUnderstanding.js');
+    return m.understandActivity(view([
+      { title: 'BOSS直聘 - 杭州岗位', minutesAgo: 1 },
+      { title: 'BOSS直聘 - 简历投递', minutesAgo: 2 },
+    ]));
+  };
+
+  it('时间窗外不开关心（凌晨不打扰）', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = await jobU();
+    const t0 = 1_700_000_000_000;
+    const d = m.updateCareStreak(
+      { ...m.emptyCareStreak('d'), category: 'job', since: t0 - 30 * 60_000, samples: 5 },
+      u, t0, 'd', { hour: 2 },
+    );
+    expect(d.shouldCare).toBe(false);
+    expect(d.reason).toBe('outside_window');
+  });
+
+  it('白天同条件可以开（窗口边界：8 点开，23 点关）', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = await jobU();
+    const t0 = 1_700_000_000_000;
+    const streak = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 30 * 60_000, samples: 5 };
+    expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 8 }).shouldCare).toBe(true);
+    expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 22 }).shouldCare).toBe(true);
+    expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 23 }).reason).toBe('outside_window');
+    expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 7 }).reason).toBe('outside_window');
+  });
+
+  it('低谷期门槛更高：20 分钟不够，40 分钟才开口；冷却 180 分钟；每天 1 次', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = await jobU();
+    const t0 = 1_700_000_000_000;
+    let s = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 21 * 60_000, samples: 5 };
+    let d = m.updateCareStreak(s, u, t0, 'd', { hour: 10, inLowPeriod: true });
+    expect(d.shouldCare).toBe(false);
+    expect(d.reason).toBe('not_long_enough');
+    expect(d.thresholds!.sustainMs).toBe(m.CARE_LOW_SUSTAIN_MS);
+    s = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 41 * 60_000, samples: 5 };
+    d = m.updateCareStreak(s, u, t0, 'd', { hour: 10, inLowPeriod: true });
+    expect(d.shouldCare).toBe(true);
+    // 冷却 180 分钟
+    const after1h = m.updateCareStreak(d.streak, u, t0 + 60 * 60_000, 'd', { hour: 11, inLowPeriod: true });
+    expect(after1h.reason).toBe('cooldown');
+    // 过了 180 分钟也不放第二次（每天 1 次）
+    const after4h = m.updateCareStreak(d.streak, u, t0 + 181 * 60_000, 'd', { hour: 13, inLowPeriod: true });
+    expect(after4h.reason).toBe('daily_cap');
+  });
+
+  it('非低谷 → 默认门槛仍是 20 分钟 / 90 分钟 / 每天 2 次', async () => {
+    const m = await import('../activityUnderstanding.js');
+    const u = await jobU();
+    const t0 = 1_700_000_000_000;
+    const d = m.updateCareStreak(
+      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 21 * 60_000, samples: 3 },
+      u, t0, 'd', { hour: 15 },
+    );
+    expect(d.shouldCare).toBe(true);
+    expect(d.thresholds).toEqual({ sustainMs: m.CARE_MIN_SUSTAIN_MS, cooldownMs: m.CARE_COOLDOWN_MS, maxPerDay: m.CARE_MAX_PER_DAY });
+  });
+});
