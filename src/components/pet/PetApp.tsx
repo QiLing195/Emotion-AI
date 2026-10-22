@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   PET_SPRITE_KEYS, PET_SPRITE_PATH, PET_SPRITE_FRAME_PATH, PET_MAX_FRAMES, PET_FRAME_FPS,
   fallbackChain, type PetSpriteState,
@@ -11,16 +11,16 @@ declare global {
       moveBy: (dx: number, dy: number) => void;
       getPosition: () => Promise<{ x: number; y: number } | null>;
       openChat: () => void;
+      showMenu: () => void;
     };
   }
 }
 
 /**
- * 桌宠页（v1.85）
- * - **透明**：html.pet-mode 已清掉 body 背景，窗口里只有她本人；
- * - **图片模式**：`public/pet/anya_<state>.png` 一张图一个状态，CSS 负责呼吸/跳动/摇摆/发抖等动作，
- *   状态切换淡入淡出；**缺图自动回落**（coffee→sit→idle 之类），一张都没有时退回纯 CSS 小人；
- * - 状态来源：她的情绪/低谷/小屋活动 + 你的交互 + 随机小动作。
+ * 桌宠页（v1.88）
+ * - 透明、**无按钮**：只留她本人（可拖动/可摸/双击挥手），交互靠**语音唤醒**；
+ * - 语音：说「安雅 / 小雅 / anya」唤醒 → 冒泡"嗯？" → 说一句话 → 走 /api/chat → 用**气泡**回话（不出声）；
+ * - 右键 = 菜单（打开聊天 / 退出）；Ctrl+Shift+P 打开聊天；Ctrl+Shift+Q 退出。
  */
 interface PetState {
   ok: boolean;
@@ -31,18 +31,19 @@ interface PetState {
   screen: { policy: string; lastCaptureAt: number | null; lastCaptureOk: boolean | null; capturesToday: number };
   pendingApproval?: boolean;
   policies?: string[];
+  voice?: { enabled: boolean; running: boolean; ready: boolean; seq: number };
+}
+
+interface VoiceEvent {
+  seq: number;
+  ts: number;
+  kind: 'ready' | 'wake' | 'utterance' | 'no_speech' | 'error';
+  text: string;
 }
 
 type Action =
   | 'idle' | 'pat' | 'wave' | 'sleep' | 'happy' | 'walk' | 'stretch' | 'talk'
   | 'peanut' | 'coffee' | 'reading' | 'sit' | 'shocked';
-
-const POLICY_LABEL: Record<string, string> = {
-  on_demand_10: '按需 + 定时 10 分钟',
-  on_demand_5: '按需 + 定时 5 分钟',
-  explicit_only: '只在你明确说的时候',
-  auto_no_prompt: '她自己决定（不弹授权）',
-};
 
 const PET_CSS = `
   @keyframes anyaBreathe { 0%,100% { transform: scale(1,1) } 50% { transform: scale(1.02,0.985) } }
@@ -53,13 +54,12 @@ const PET_CSS = `
   @keyframes anyaShiver { 0%,100% { transform: translate(0,0) } 33% { transform: translate(1px,-1px) } 66% { transform: translate(-1px,1px) } }
   @keyframes petSway { 0%,100% { transform: rotate(-2.5deg) } 50% { transform: rotate(2.5deg) } }
   @keyframes patPop { 0% { transform: scale(1,1) } 30% { transform: scale(1.1,0.9) } 60% { transform: scale(0.95,1.05) } 100% { transform: scale(1,1) } }
-  @keyframes waveArm { 0%,100% { transform: rotate(14deg) } 25% { transform: rotate(-58deg) } 50% { transform: rotate(-24deg) } 75% { transform: rotate(-64deg) } }
   @keyframes heartUp { 0% { opacity: 0; transform: translate(0,4px) scale(.6) } 25% { opacity: 1 } 100% { opacity: 0; transform: translate(var(--hx,6px),-46px) scale(1.1) } }
   @keyframes zzzUp { 0% { opacity: 0; transform: translate(0,6px) scale(.8) } 30% { opacity: .95 } 100% { opacity: 0; transform: translate(14px,-26px) scale(1.15) } }
   @keyframes sparkle { 0% { opacity: 0; transform: scale(.4) rotate(0deg) } 40% { opacity: 1 } 100% { opacity: 0; transform: scale(1.25) rotate(60deg) } }
   @keyframes bubbleIn { 0% { opacity: 0; transform: translateY(6px) scale(.97) } 100% { opacity: 1; transform: translateY(0) scale(1) } }
+  @keyframes listenRing { 0%,100% { opacity: .12; transform: scale(1) } 50% { opacity: .40; transform: scale(1.05) } }
 
-  /* 图片状态机：一张图 + CSS 动作 */
   .anya-img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: bottom center;
               filter: drop-shadow(0 10px 18px rgba(0,0,0,.35)); transition: opacity .16s ease; }
   .anya-state { position: absolute; inset: 0; opacity: 0; transition: opacity .16s ease; }
@@ -76,12 +76,10 @@ const PET_CSS = `
   .anya-talk    { animation: anyaBreathe 2.6s ease-in-out infinite; }
   .anya-coffee, .anya-reading, .anya-sit, .anya-peanut, .anya-think { animation: anyaBreathe 4.4s ease-in-out infinite; transform-origin: 50% 92%; }
   .anya-blink   { animation: none; }
-
-  /* CSS 小人（没有图片资源时的回退） */
   .pet-stage { animation: anyaBreathe 3.6s ease-in-out infinite; }
   .pet-head-idle { animation: petSway 5s ease-in-out infinite; transform-origin: 50% 100%; }
-  .pet-stage.act-wave .arm-r { animation: waveArm .9s ease-in-out infinite; }
   .bubble-in { animation: bubbleIn .18s ease-out; }
+  .listen-ring { animation: listenRing 2.4s ease-in-out infinite; }
 `;
 
 function resolveSprite(state: PetSpriteState, available: Set<PetSpriteState>): PetSpriteState | null {
@@ -94,7 +92,6 @@ function resolveSprite(state: PetSpriteState, available: Set<PetSpriteState>): P
 export default function PetApp() {
   const [s, setS] = useState<PetState | null>(null);
   const [bubble, setBubble] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [action, setAction] = useState<Action>('idle');
   const [blink, setBlink] = useState(false);
@@ -105,13 +102,17 @@ export default function PetApp() {
   const [dragging, setDragging] = useState(false);
   const [frameUrls, setFrameUrls] = useState<string[]>([]);
   const [frameIdx, setFrameIdx] = useState(0);
+  const [awake, setAwake] = useState(false);
+  const [voiceLabel, setVoiceLabel] = useState('');
   const bubbleTimer = useRef<number | null>(null);
   const actionTimer = useRef<number | null>(null);
   const lastTouch = useRef<number>(Date.now());
   const dragRef = useRef<{ down: boolean; moved: number }>({ down: false, moved: 0 });
   const suppressClick = useRef(0);
+  const voiceSeq = useRef(0);
+  const busyReply = useRef(false);
 
-  const say = useCallback((text: string, ms = 3500) => {
+  const say = useCallback((text: string, ms = 4500) => {
     setBubble(text);
     if (bubbleTimer.current) window.clearTimeout(bubbleTimer.current);
     bubbleTimer.current = window.setTimeout(() => setBubble(''), ms);
@@ -137,7 +138,7 @@ export default function PetApp() {
     }
   }, []);
 
-  // 探测哪些状态图存在（一张都没有 ⇒ 回退纯 CSS 小人）
+  // 探测状态图
   useEffect(() => {
     let alive = true;
     const results = new Set<PetSpriteState>();
@@ -151,15 +152,14 @@ export default function PetApp() {
       img.onerror = () => {
         if (--pending <= 0 && alive) { setAvailable(new Set(results)); setProbed(true); }
       };
-      img.src = PET_SPRITE_PATH(key) + '?v=1';
+      img.src = PET_SPRITE_PATH(key) + '?v=2';
     }
     return () => { alive = false; };
   }, []);
 
-  // 状态轮询
   useEffect(() => {
     void refresh();
-    const t = window.setInterval(refresh, 3000);
+    const t = window.setInterval(refresh, 4000);
     return () => window.clearInterval(t);
   }, [refresh]);
 
@@ -172,7 +172,7 @@ export default function PetApp() {
     return () => window.clearInterval(t);
   }, []);
 
-  // 空闲随机：小动作 + 她自己的生活（喝咖啡/读书/吃花生/坐着）
+  // 空闲随机小动作（咖啡/读书/吃花生/坐着/散步）
   useEffect(() => {
     const t = window.setInterval(() => {
       const low = Boolean(s?.lowPeriod?.active);
@@ -188,103 +188,73 @@ export default function PetApp() {
     return () => window.clearInterval(t);
   }, [action, s, playAction]);
 
-  // 状态驱动：授权请求=震惊；情绪驱动=生气/开心
   useEffect(() => {
-    if (s?.pendingApproval) { setAction('idle'); setZzz(false); }
+    if (s?.pendingApproval) { setZzz(false); }
     const low = Boolean(s?.lowPeriod?.active);
     if (!low && action === 'sleep') { setAction('idle'); setZzz(false); }
   }, [s, action]);
 
-  const touch = async () => {
-    playAction('pat', 700);
-    setHearts(prev => [...prev, Date.now()]);
-    window.setTimeout(() => setHearts(prev => prev.slice(1)), 1600);
+  // ===== 语音：处理一句话 =====
+  const handleUtterance = useCallback(async (text: string) => {
+    if (!text.trim() || busyReply.current) return;
+    busyReply.current = true;
+    setAwake(false);
+    setAction('talk');
     try {
-      const r = await fetch('/api/pet/interact', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'click' }),
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, userId: 'pet-voice', recentMessages: [] }),
       });
-      const d = await r.json() as { text?: string };
-      say(d.text ?? '嗯？');
-    } catch { say('……'); }
-  };
-
-  const wave = () => { playAction('wave', 2200); say('嘿，我在这儿。', 2600); };
-
-  // ===== 鼠标拖动（v1.86）=====
-  // 不能给整块加 -webkit-app-region: drag（那会把点击/双击吃掉），
-  // 所以用 pointer 事件：位移 > 3px 判定为拖动 → 通过 IPC 移动窗口；没位移才算"摸她"。
-  const onPetPointerDown = (e: ReactPointerEvent) => {
-    if (e.button !== 0) return;
-    dragRef.current = { down: true, moved: 0 };
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-  };
-
-  const onPetPointerMove = (e: ReactPointerEvent) => {
-    const st = dragRef.current;
-    if (!st.down) return;
-    const dx = e.movementX || 0;
-    const dy = e.movementY || 0;
-    st.moved += Math.abs(dx) + Math.abs(dy);
-    if (!dragging && st.moved > 3) setDragging(true);
-    if (dragging || st.moved > 3) {
-      window.petWindow?.moveBy(dx, dy);
+      const d = await r.json() as { response?: string; text?: string; reply?: string };
+      const reply = String(d.response ?? d.text ?? d.reply ?? '').trim();
+      say(reply || '……嗯。', Math.min(14000, 4200 + reply.length * 130));
+    } catch {
+      say('我这边走神了，再说一次？', 3000);
+    } finally {
+      busyReply.current = false;
+      setAction('idle');
     }
-  };
+  }, [say]);
 
-  const onPetPointerUp = (e: ReactPointerEvent) => {
-    const st = dragRef.current;
-    const wasDrag = dragging || st.moved > 3;
-    st.down = false;
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
-    if (wasDrag) {
-      setDragging(false);
-      suppressClick.current = Date.now();
-      playAction('shocked', 500);
-      return;
-    }
-    void touch();
-  };
-
-  const onPetDoubleClick = () => {
-    if (Date.now() - suppressClick.current < 400) return;
-    wave();
-  };
-
-  const captureOnce = async () => {
-    try {
-      const r = await fetch('/api/pet/capture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      const d = await r.json() as { ok?: boolean; reason?: string };
-      say(d.ok ? '我去看看。' : (d.reason ?? '现在不行'), 4200);
-      if (d.ok) playAction('think', 5000);
-    } catch { say('连不上。'); }
-  };
-
-  const approve = async (allow: boolean) => {
-    try {
-      await fetch(allow ? '/api/pet/approve' : '/api/pet/deny', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'screen' }),
-      });
-      say(allow ? '那我看一眼。' : '好，不看。', 2600);
-      void refresh();
-    } catch { /* ignore */ }
-  };
-
-  const setPolicy = async (policy: string) => {
-    try {
-      await fetch('/api/pet/settings', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ screenPolicy: policy }),
-      });
-      void refresh();
-    } catch { /* ignore */ }
-  };
+  // ===== 语音：轮询事件 =====
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/pet/voice?after=${voiceSeq.current}`);
+        if (!r.ok) return;
+        const d = await r.json() as { enabled?: boolean; ready?: boolean; seq?: number; events?: VoiceEvent[] };
+        if (!alive) return;
+        setVoiceLabel(d.enabled ? (d.ready ? '等你说「安雅」' : '麦克风准备中…') : '语音未开启');
+        for (const ev of d.events ?? []) {
+          voiceSeq.current = Math.max(voiceSeq.current, ev.seq);
+          if (ev.kind === 'wake') {
+            setAwake(true);
+            playAction('happy', 900);
+            say('嗯？我在。', 4500);
+          } else if (ev.kind === 'utterance') {
+            void handleUtterance(ev.text);
+          } else if (ev.kind === 'no_speech') {
+            setAwake(false);
+            say('没听清，再说一遍？', 2400);
+          } else if (ev.kind === 'error') {
+            setAwake(false);
+            setVoiceLabel('麦克风出问题了');
+          }
+        }
+      } catch { /* server 不在就静默 */ }
+    };
+    void tick();
+    const t = window.setInterval(tick, 600);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [handleUtterance, playAction, say]);
 
   const mood = s?.mood.label ?? '静息';
   const low = Boolean(s?.lowPeriod?.active);
   const room = s?.room.active ? s.room.label : null;
   const talking = bubble.length > 0;
-
-  // 状态 → 图片状态（触发优先级：授权 > 交互动作 > 小屋活动 > 情绪 > 眨眼 > 待机）
+  const silence = awake && !talking;
   const spriteTarget = useMemo<PetSpriteState>(() => {
     if (dragging) return 'shocked';
     if (action === 'shocked') return 'shocked';
@@ -308,13 +278,12 @@ export default function PetApp() {
     if ((top === 'anger' || top === 'disgust') && (s?.mood.delta ?? 0) >= 0.1) return 'angry';
     if (blink) return 'blink';
     return 'idle';
-  }, [s, action, room, low, talking, blink]);
+  }, [s, action, room, low, talking, blink, dragging]);
 
   const resolved = resolveSprite(spriteTarget, available);
   const imageMode = probed && available.size > 0;
   const activeSprite = resolved ?? 'idle';
-
-  // 动作帧（可选）：有 anya_<state>_1.png… 就播帧，没有就用单图 + CSS 动作
+  // 帧（可选多帧）
   useEffect(() => {
     let alive = true;
     setFrameUrls([]);
@@ -323,7 +292,7 @@ export default function PetApp() {
       const img = new Image();
       img.onload = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = `${PET_SPRITE_FRAME_PATH(activeSprite, i)}?v=1`;
+      img.src = `${PET_SPRITE_FRAME_PATH(activeSprite, i)}?v=2`;
     });
     (async () => {
       const found: string[] = [];
@@ -336,7 +305,6 @@ export default function PetApp() {
     return () => { alive = false; };
   }, [activeSprite]);
 
-  // 帧循环
   useEffect(() => {
     if (frameUrls.length < 2) return;
     const fps = PET_FRAME_FPS[activeSprite] ?? 6;
@@ -344,59 +312,108 @@ export default function PetApp() {
     return () => window.clearInterval(t);
   }, [frameUrls, activeSprite]);
 
-  const headColor = low ? '#8e9bb8' : '#f6c1cf';
-  const bodyColor = low ? '#6b7896' : '#f7cbd5';
+  // ===== 交互：摸 / 拖 / 双击 =====
+  const touch = async () => {
+    playAction('pat', 700);
+    setHearts(prev => [...prev, Date.now()]);
+    window.setTimeout(() => setHearts(prev => prev.slice(1)), 1600);
+    try {
+      const r = await fetch('/api/pet/interact', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'click' }),
+      });
+      const d = await r.json() as { text?: string };
+      say(d.text ?? '嗯？', 2600);
+    } catch { say('……'); }
+  };
+
+  const wave = () => { playAction('wave', 2200); say('嘿，我在这儿。', 2600); };
+
+  const onPetPointerDown = (e: ReactPointerEvent) => {
+    if (e.button !== 0) return;
+    dragRef.current = { down: true, moved: 0 };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onPetPointerMove = (e: ReactPointerEvent) => {
+    const st = dragRef.current;
+    if (!st.down) return;
+    const dx = e.movementX || 0;
+    const dy = e.movementY || 0;
+    st.moved += Math.abs(dx) + Math.abs(dy);
+    if (!dragging && st.moved > 3) setDragging(true);
+    if (dragging || st.moved > 3) window.petWindow?.moveBy(dx, dy);
+  };
+  const onPetPointerUp = (e: ReactPointerEvent) => {
+    const st = dragRef.current;
+    const wasDrag = dragging || st.moved > 3;
+    st.down = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (wasDrag) {
+      setDragging(false);
+      suppressClick.current = Date.now();
+      playAction('shocked', 500);
+      return;
+    }
+    void touch();
+  };
+  const onPetDoubleClick = () => {
+    if (Date.now() - suppressClick.current < 400) return;
+    wave();
+  };
+  const onContextMenu = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    window.petWindow?.showMenu();
+  };
+
+
   const spriteSrc = frameUrls.length > 1
     ? frameUrls[Math.min(frameIdx, frameUrls.length - 1)]
     : PET_SPRITE_PATH(activeSprite);
 
+  const headColor = low ? '#8e9bb8' : '#f6c1cf';
+  const bodyColor = low ? '#6b7896' : '#f7cbd5';
+
   return (
-    <div className="pet-root relative flex h-screen w-screen flex-col items-center justify-end overflow-hidden" style={{ background: 'transparent' }}>
+    <div
+      className="pet-root relative flex h-screen w-screen flex-col items-center justify-end overflow-hidden"
+      style={{ background: 'transparent' }}
+      onContextMenu={onContextMenu}
+    >
       <style>{PET_CSS}</style>
 
       {err && <div className="mb-1 rounded bg-rose-500/25 px-2 py-1 text-[10px] text-rose-100">{err}</div>}
 
+      {/* 气泡：她只用气泡说话，不出声 */}
       {bubble && (
-        <div className="bubble-in mb-1 max-w-[260px] rounded-2xl border border-white/25 bg-[#1a1c2e]/90 px-3 py-1.5 text-center text-[12px] leading-snug text-slate-100 shadow-lg backdrop-blur">
+        <div className="bubble-in mb-1 max-w-[268px] rounded-2xl border border-white/25 bg-[#1a1c2e]/90 px-3 py-1.5 text-center text-[12px] leading-snug text-slate-100 shadow-lg backdrop-blur">
           {bubble}
         </div>
       )}
 
+      {/* 屏幕授权卡（她请求看你屏幕时才出现；这是安全确认，不是功能按钮） */}
       {s?.pendingApproval && (
-        <div className="mb-1 w-[270px] rounded-2xl border border-amber-300/40 bg-[#241f14]/90 p-2.5 text-center shadow-lg backdrop-blur">
+        <div className="mb-1 w-[268px] rounded-2xl border border-amber-300/40 bg-[#241f14]/90 p-2.5 text-center shadow-lg backdrop-blur">
           <div className="text-[12px] text-amber-100">她想看一眼你的屏幕</div>
-          <div className="mt-0.5 text-[10px] text-amber-200/70">
-            {POLICY_LABEL[s?.screen.policy ?? ''] ?? s?.screen.policy} · 批准后 15 分钟内不再问
-          </div>
           <div className="mt-2 flex gap-2">
-            <button className="flex-1 rounded-lg bg-emerald-500/90 py-1 text-[11px] font-medium text-white" onClick={() => void approve(true)}>允许</button>
-            <button className="flex-1 rounded-lg bg-white/10 py-1 text-[11px] text-slate-200" onClick={() => void approve(false)}>拒绝</button>
-          </div>
-        </div>
-      )}
-
-      {showSettings && (
-        <div className="mb-1 w-[270px] rounded-2xl border border-white/15 bg-[#16182a]/92 p-3 shadow-lg backdrop-blur">
-          <div className="text-[11px] font-medium text-slate-200">她看屏幕的方式</div>
-          <div className="mt-1.5 space-y-1">
-            {Object.entries(POLICY_LABEL).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => void setPolicy(key)}
-                className={`w-full rounded-lg px-2 py-1 text-left text-[11px] ${s?.screen.policy === key ? 'bg-rose-500/30 text-rose-100' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
-              >
-                {s?.screen.policy === key ? '● ' : '○ '}{label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 text-[10px] text-slate-400">
-            今日已看 {s?.screen.capturesToday ?? 0} 次 · 密码/银行类窗口会自动跳过
+            <button className="flex-1 rounded-lg bg-emerald-500/90 py-1 text-[11px] font-medium text-white" onClick={async () => {
+              await fetch('/api/pet/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'screen' }) });
+              say('那我看一眼。', 2400);
+              void refresh();
+            }}>允许</button>
+            <button className="flex-1 rounded-lg bg-white/10 py-1 text-[11px] text-slate-200" onClick={async () => {
+              await fetch('/api/pet/deny', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+              say('好，不看。', 2200);
+              void refresh();
+            }}>拒绝</button>
           </div>
         </div>
       )}
 
       {/* ===== 她本人 ===== */}
-      <div className="relative" style={{ width: 160, height: 200 }}>
+      <div className="relative" style={{ width: 170, height: 212 }}>
+        {awake && (
+          <span className="listen-ring pointer-events-none absolute inset-x-3 bottom-3 top-4 rounded-full border border-rose-200/40" />
+        )}
         {hearts.map(h => (
           <span key={h} className="pointer-events-none absolute left-1/2 top-[40px] z-10 text-[15px]"
                 style={{ animation: 'heartUp 1.5s ease-out forwards', ['--hx' as string]: `${(Math.random() * 40 - 20).toFixed(0)}px` }}>💗</span>
@@ -415,55 +432,41 @@ export default function PetApp() {
           onPointerUp={onPetPointerUp}
           onPointerCancel={onPetPointerUp}
           onDoubleClick={onPetDoubleClick}
-          title={dragging ? '放我下来…' : '摸她一下 / 按住拖动 / 双击挥手'}
+          title={dragging ? '放我下来…' : '摸她 / 按住拖动 / 双击挥手 / 右键菜单'}
           className="absolute inset-0 select-none border-none p-0 outline-none"
           style={{ background: 'transparent', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
         >
           {imageMode ? (
             <div className={`anya-state on ${action === 'pat' ? 'anya-pat' : ''}`}>
-              <img
-                src={spriteSrc}
-                alt="anya"
-                className={`anya-img anya-${activeSprite}`}
-                draggable={false}
-              />
+              <img src={spriteSrc} alt="anya" className={`anya-img anya-${activeSprite}`} draggable={false} />
             </div>
           ) : (
-            /* 没有图片资源时的纯 CSS 小人（占位） */
-            <div className="absolute inset-0">
-              <div className="pet-head-idle absolute left-1/2 top-2 h-[86px] w-[86px] -translate-x-1/2 rounded-full"
+            <div className="pet-stage absolute inset-0">
+              <div className="pet-head-idle absolute left-1/2 top-2 h-[92px] w-[92px] -translate-x-1/2 rounded-full"
                    style={{ background: headColor, boxShadow: '0 8px 22px rgba(0,0,0,.35)' }}>
-                <div className="absolute left-[20px] top-[38px] flex gap-[22px]">
+                <div className="absolute left-[22px] top-[40px] flex gap-[24px]">
                   {[0, 1].map(i => (
                     <span key={i} className="block w-[9px] rounded-full bg-[#2a2633]" style={{ height: blink || action === 'sleep' ? 2 : 11 }} />
                   ))}
                 </div>
-                <div className="absolute left-1/2 top-[58px] h-[9px] w-[20px] -translate-x-1/2 rounded-b-full border-b-[2.5px] border-[#2a2633]"
+                <div className="absolute left-1/2 top-[62px] h-[9px] w-[20px] -translate-x-1/2 rounded-b-full border-b-[2.5px] border-[#2a2633]"
                      style={{ transform: low ? 'translateX(-50%) rotate(180deg)' : 'translateX(-50%)' }} />
               </div>
-              <div className="absolute bottom-[24px] left-1/2 h-[64px] w-[56px] -translate-x-1/2 rounded-t-[26px] rounded-b-[18px]"
+              <div className="absolute bottom-[26px] left-1/2 h-[68px] w-[60px] -translate-x-1/2 rounded-t-[28px] rounded-b-[20px]"
                    style={{ background: bodyColor, boxShadow: '0 8px 18px rgba(0,0,0,.28)' }} />
-              <span className="absolute bottom-[36px] left-[24px] h-[26px] w-[11px] rounded-full" style={{ background: headColor, transform: 'rotate(12deg)' }} />
-              <span className="absolute bottom-[36px] right-[24px] h-[26px] w-[11px] rounded-full" style={{ background: headColor, transform: 'rotate(-12deg)' }} />
             </div>
           )}
         </div>
       </div>
 
-      <div className="mb-1 flex items-center gap-1.5 text-[10px] text-slate-300/90">
+      {/* 状态小字（非按钮）：情绪 / 聆听提示 */}
+      <div className="mb-2 mt-1 flex items-center gap-1.5 text-[10px] text-slate-300/90">
         <span className="rounded-full bg-black/25 px-2 py-[1px] backdrop-blur-sm">{mood}</span>
-        {room && <span className="max-w-[140px] truncate rounded-full bg-black/20 px-2 py-[1px] text-slate-300/80 backdrop-blur-sm">小屋：{room}</span>}
-        {action === 'sleep' && <span className="rounded-full bg-black/20 px-2 py-[1px] text-slate-400 backdrop-blur-sm">打盹</span>}
-        {imageMode && <span className="rounded-full bg-black/20 px-2 py-[1px] text-slate-500 backdrop-blur-sm">图 {activeSprite}</span>}
+        {room && <span className="max-w-[130px] truncate rounded-full bg-black/20 px-2 py-[1px] text-slate-300/80 backdrop-blur-sm">小屋：{room}</span>}
+        {voiceLabel && <span className={`rounded-full px-2 py-[1px] backdrop-blur-sm ${awake ? 'bg-rose-500/25 text-rose-100' : 'bg-black/20 text-slate-400'}`}>{silence ? '听着…' : voiceLabel}</span>}
       </div>
 
-      <div className="mb-2 flex items-center gap-1.5">
-        <button className="rounded-lg bg-rose-500/85 px-2.5 py-1 text-[11px] text-white shadow" onClick={() => window.open('/', '_blank')}>聊天</button>
-        <button className="rounded-lg bg-black/30 px-2.5 py-1 text-[11px] text-slate-100 backdrop-blur-sm hover:bg-black/40" onClick={() => void captureOnce()}>看一眼</button>
-        <button className="rounded-lg bg-black/30 px-2.5 py-1 text-[11px] text-slate-100 backdrop-blur-sm hover:bg-black/40" onClick={() => setShowSettings(v => !v)}>设置</button>
-        <button className="rounded-lg bg-black/25 px-2 py-1 text-[11px] text-slate-400 backdrop-blur-sm" onClick={() => window.close()}>藏起来</button>
-      </div>
-
+      {/* 顶部拖动条（透明区域也能拖窗口） */}
       <div className="absolute left-0 top-0 h-9 w-full" style={{ WebkitAppRegion: 'drag' } as CSSProperties} />
     </div>
   );

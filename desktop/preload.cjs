@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld('petWindow', {
   getPosition: () => ipcRenderer.invoke('pet:get-position'),
   /** 打开聊天窗口 */
   openChat: () => ipcRenderer.send('pet:open-chat'),
+  /** 右键菜单（打开聊天 / 退出） */
+  showMenu: () => ipcRenderer.send('pet:show-menu'),
 });

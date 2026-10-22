@@ -102,12 +102,12 @@ function createPetWindow() {
   }));
   petWin.on('closed', () => { petWin = null; });
 
-  // Ctrl+Shift+P 打开/聚焦聊天窗口
+  // Ctrl+Shift+P 打开/聚焦聊天窗口；Ctrl+Shift+Q 退出桌宠
   petWin.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.shift && input.key.toLowerCase() === 'p') {
-      openChat();
-      event.preventDefault();
-    }
+    if (!input.control || !input.shift) return;
+    const key = input.key.toLowerCase();
+    if (key === 'p') { openChat(); event.preventDefault(); }
+    if (key === 'q') { app.quit(); event.preventDefault(); }
   });
 }
 
@@ -146,6 +146,15 @@ function registerPetIpc() {
     return { x, y };
   });
   ipcMain.on('pet:open-chat', () => openChat());
+  ipcMain.on('pet:show-menu', () => {
+    if (!petWin || petWin.isDestroyed()) return;
+    const { Menu } = require('electron');
+    Menu.buildFromTemplate([
+      { label: '打开聊天窗口', click: () => openChat() },
+      { type: 'separator' },
+      { label: '退出桌宠', click: () => app.quit() },
+    ]).popup({ window: petWin });
+  });
 }
 
 const gotLock = app.requestSingleInstanceLock();

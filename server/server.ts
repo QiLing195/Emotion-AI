@@ -111,6 +111,7 @@ import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, lis
 import { buildRememberedView } from './services/herRemembered.js';
 import { readRecentActivity, startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled } from './services/mcpClient.js';
+import { startVoiceSampler, stopVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
 import { decideCapture, writeCaptureRequest, readCaptureRequest, clearCaptureRequest, readCaptureResult, clearCaptureResult, loadPetSettings, savePetSettings, grantScreenSession, SCREEN_POLICIES, readCaptureAudit, auditCapture, cleanupOldScreens, SCREEN_DIR, revokeScreenSession, CAPTURE_RESULT_PATH, type ScreenPolicy } from './services/screenWatch.js';
 import { buildPetState } from './services/petState.js';
 import { runOcr, compactOcrText } from './services/ocr.js';
@@ -2058,7 +2059,7 @@ export class AIGirlfriendServer {
     this.app.get('/api/pet/state', (req, res) => {
       try {
         const base = buildPetState({ emotionState: this.aiEngine.emotionState });
-        res.json({ ...base, pendingApproval: Boolean(this._screenApprovalPending), policies: SCREEN_POLICIES });
+        res.json({ ...base, pendingApproval: Boolean(this._screenApprovalPending), policies: SCREEN_POLICIES, voice: voiceView() });
       } catch (e) {
         res.status(500).json({ ok: false, error: (e as Error).message });
       }
@@ -2154,6 +2155,12 @@ export class AIGirlfriendServer {
       };
       const pool = replies[type] ?? replies.click;
       res.json({ ok: true, text: pool[Math.floor(Math.random() * pool.length)] });
+    });
+
+    // v1.88 语音事件：桌宠页每 ~600ms 轮询一次；after 是上次收到的 seq
+    this.app.get('/api/pet/voice', (req, res) => {
+      const after = Number(req.query.after ?? 0);
+      res.json({ ok: true, ...voiceView(), events: voiceEventsAfter(Number.isFinite(after) ? after : 0) });
     });
 
     this.app.get('/state', (req, res) => {
@@ -2691,6 +2698,7 @@ export class AIGirlfriendServer {
 
       // v1.82 活动窗口采样（只读：只记窗口标题/进程名；ENABLE_ACTIVITY_WATCH 控制）
       startActivitySampler();
+    startVoiceSampler();   // v1.88 语音唤醒（ENABLE_VOICE_WAKE=true 时）
 
       // Phase 2 PR 2: 周期性保存好奇心状态（每 30 秒）
       const curiositySaveTimer = setInterval(() => {
@@ -2738,6 +2746,7 @@ export class AIGirlfriendServer {
 
   async stop() {
     stopActivitySampler();        // v1.82 停采样器（别留下孤儿 PowerShell）
+    stopVoiceSampler();           // v1.88 语音唤醒进程
     await shutdownMcp();          // v1.82 断开外部 MCP server
     await mcpService.shutdown();
     if (this.server) {
