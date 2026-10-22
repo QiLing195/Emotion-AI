@@ -280,6 +280,44 @@ export class MemoryGraph {
     return [...this.nodeMap.values()].filter(n => !n.archived);
   }
 
+  /**
+   * v2.00：删除一个节点（含它的边与邻接记录）。
+   * 用途：用户删除记忆时，图谱里不能留下"幽灵节点"（否则 BFS 还能扩散到它）。
+   * 返回是否真删了（不存在 = false）。
+   */
+  removeNode(nodeId: string): boolean {
+    if (!this.nodeMap.has(nodeId)) return false;
+    this.nodeMap.delete(nodeId);
+    // 删掉与该节点相连的所有边
+    const edgeIds = this.adjacency.get(nodeId) ?? new Set<string>();
+    for (const edgeId of edgeIds) {
+      const edge = this.edgeMap.get(edgeId);
+      if (!edge) continue;
+      this.edgeMap.delete(edgeId);
+      const other = edge.sourceNodeId === nodeId ? edge.targetNodeId : edge.sourceNodeId;
+      this.adjacency.get(other)?.delete(edgeId);
+    }
+    this.adjacency.delete(nodeId);
+    // 兜底：任何仍指向该节点的边（邻接不一致时）
+    for (const [eid, edge] of [...this.edgeMap]) {
+      if (edge.sourceNodeId === nodeId || edge.targetNodeId === nodeId) {
+        this.edgeMap.delete(eid);
+        this.adjacency.get(edge.sourceNodeId)?.delete(eid);
+        this.adjacency.get(edge.targetNodeId)?.delete(eid);
+      }
+    }
+    return true;
+  }
+
+  /** v2.00：按来源对象删除（删记忆时用 source+sourceId 精确匹配） */
+  removeBySource(source: MemoryNodeSource, sourceId: string): number {
+    let removed = 0;
+    for (const node of this.getAllNodes()) {
+      if (node.source === source && node.sourceId === sourceId && this.removeNode(node.id)) removed += 1;
+    }
+    return removed;
+  }
+
   /** 获取所有节点（含归档） */
   getAllNodes(): MemoryNode[] {
     return [...this.nodeMap.values()];

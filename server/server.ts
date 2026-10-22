@@ -109,6 +109,7 @@ import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
+import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, memoriesDir } from './services/memoryAdmin.js';
 import { readRecentActivity } from './services/activityWatcher.js';
 import { understandActivity, describeUnderstanding, toActivityConcern, activityPromptLine, updateCareStreak, emptyCareStreak, type ActivityUnderstanding, type CareStreak } from './services/activityUnderstanding.js';
 import { recordCare, recentCareAsks, findPendingFollowUp, buildFollowUpHint } from './services/herCareMemory.js';
@@ -345,9 +346,17 @@ export class AIGirlfriendServer {
   }
 
   private setupMiddleware() {
-    const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+    // v2.00：CORS 只放行**明确的本地源**（默认 3000 应用 + 5173 Vite 开发），
+    // 不再对"任意 localhost 端口"放行；需要更多源用 CORS_ALLOWED_ORIGINS 显式追加。
+    const defaultOrigins = [
+      'http://localhost:3000', 'http://127.0.0.1:3000',
+      'http://localhost:5173', 'http://127.0.0.1:5173',
+    ];
+    const extraOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const allowedOrigins = new Set([...defaultOrigins, ...extraOrigins]);
     this.app.use(cors({
-      origin: (origin, callback) => callback(null, !origin || localOrigin.test(origin)),
+      origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
     }));
     this.app.use('/api/vision', bodyParser.json({ limit: '12mb' }));
     this.app.use(bodyParser.json({ limit: '1mb' }));
@@ -361,6 +370,10 @@ export class AIGirlfriendServer {
         && !req.path.startsWith('/channel/wechat/callback')
         && !req.is('application/json')
       ) {
+        // v2.00：DELETE 常常不带 body（删除就是靠 URL 指定对象）；没有 body 的 DELETE 放行，
+        // 这样既保住"表单跨站提交必须 JSON"的原意，又不会把 REST 删除挡在门外。
+        const hasBody = Number(req.headers['content-length'] || 0) > 0 || Boolean(req.headers['transfer-encoding']);
+        if (req.method === 'DELETE' && !hasBody) { next(); return; }
         res.status(415).json({ error: 'Content-Type must be application/json' });
         return;
       }
@@ -383,6 +396,30 @@ export class AIGirlfriendServer {
       rateBuckets.set(key, recent);
       next();
     });
+
+    // v2.00（P0-2）：CORS 不是鉴权。设置 API_TOKEN 后，**非本机来源**的 /api 必须带 token；
+    // REQUIRE_API_TOKEN_ALWAYS=true 时连本机来源也要求（偏执模式，会需要给桌宠/前端注入 token）。
+    const apiToken = (process.env.API_TOKEN || '').trim();
+    const tokenAlways = process.env.REQUIRE_API_TOKEN_ALWAYS === 'true';
+    if (tokenAlways && !apiToken) {
+      console.error('[Security] REQUIRE_API_TOKEN_ALWAYS=true 但没有设置 API_TOKEN：拒绝启动');
+      throw new Error('REQUIRE_API_TOKEN_ALWAYS requires API_TOKEN');
+    }
+    if (apiToken) {
+      this.app.use('/api', (req, res, next) => {
+        const addr = String(req.socket.remoteAddress || '').replace('::ffff:', '');
+        const isLocal = addr === '127.0.0.1' || addr === '::1';
+        if (isLocal && !tokenAlways) return next();
+        const header = String(req.headers['x-api-token'] ?? '');
+        const auth = String(req.headers.authorization ?? '');
+        const given = header || (auth.startsWith('Bearer ') ? auth.slice(7) : '');
+        if (given !== apiToken) {
+          res.status(401).json({ error: 'unauthorized', hint: 'request requires x-api-token' });
+          return;
+        }
+        next();
+      });
+    }
 
     // XML parser for WeChat
     this.app.use('/api/channel/wechat/callback', bodyParser.text({ type: 'text/xml' }));
@@ -2068,6 +2105,57 @@ export class AIGirlfriendServer {
       });
     });
 
+    // ── v2.00 用户可控的记忆闭环：查看 / 纠错 / 删除 / 导出 ──
+    // 注意：/export 必须在 /:id 之前注册，否则会被 :id 吃掉。
+    this.app.get('/api/memories/export', (_req, res) => {
+      try {
+        const data = exportMemories('memories');
+        const stamp = new Date().toISOString().replace(/[-:T]/g, '').replace(/\..*$/, '');
+        res.setHeader('Content-Disposition', `attachment; filename="memories-${stamp}.json"`);
+        res.json({ ok: true, ...data });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    this.app.get('/api/memories/:id', (req, res) => {
+      const id = String(req.params.id || '');
+      if (!id || id.length > 200) return res.status(400).json({ ok: false, error: 'invalid id' });
+      const ep = viewEpisode(episodicStore, id);
+      if (!ep) return res.status(404).json({ ok: false, error: 'not_found' });
+      res.json({ ok: true, episode: ep });
+    });
+
+    this.app.patch('/api/memories/:id', (req, res) => {
+      const id = String(req.params.id || '');
+      if (!id || id.length > 200) return res.status(400).json({ ok: false, error: 'invalid id' });
+      const body = req.body ?? {};
+      const result = updateEpisode(episodicStore, memoryGraph, id, {
+        eventSummary: typeof body.eventSummary === 'string' ? body.eventSummary : undefined,
+        narrativeFragment: typeof body.narrativeFragment === 'string' ? body.narrativeFragment : undefined,
+        tags: Array.isArray(body.tags) ? body.tags : undefined,
+      });
+      if (!result.ok) return res.status(result.reason === 'not_found' ? 404 : 400).json(result);
+      saveEpisodicStore();
+      saveMemoryGraph();
+      console.log(`[MemoryAdmin] 更正 ${id}：${result.changed.join(',')}`);
+      res.json(result);
+    });
+
+    this.app.delete('/api/memories/:id', (req, res) => {
+      const id = String(req.params.id || '');
+      if (!id || id.length > 200) return res.status(400).json({ ok: false, error: 'invalid id' });
+      const purge = req.query.purgeBackups === '1' || req.query.purgeBackups === 'true';
+      const result = deleteEpisode(episodicStore, memoryGraph, id, {
+        backupDir: memoriesDir(),
+        purgeBackups: purge,
+      });
+      if (!result.ok) return res.status(404).json(result);
+      saveEpisodicStore();
+      saveMemoryGraph();
+      console.log(`[MemoryAdmin] 删除 ${id}：episode=${result.removedEpisode} graph=${result.removedGraphNodes} bak=${result.scrubbedBackups}`);
+      res.json(result);
+    });
     // ── v1.3 记忆治理：人工核实热同步（Obsidian review 无需重启 server）──
     this.app.post('/api/memories/governance', async (req, res) => {
       try {
@@ -3050,11 +3138,26 @@ export class AIGirlfriendServer {
       // ponytail: process.env.HOST is often set by build systems (e.g. Conda) to
       // platform triples like "x86_64-conda-linux-gnu", not a network hostname.
       // Use BIND_HOST to avoid collision.
-      const host = process.env.BIND_HOST || '127.0.0.1';
-      this.server.listen(port, host, () => {        console.log(`Server started on http://${host}:${port}`);
+      //
+      // v2.00（P0-2 暴露保护）：本应用没有账号体系，所以**绑非回环地址就必须有 API_TOKEN**，
+      // 否则拒绝启动 —— 防止一次 BIND_HOST=0.0.0.0 把记忆/工具/截图接口裸奔到局域网。
+      const host = (process.env.BIND_HOST || '127.0.0.1').trim();
+      const isLoopbackHost = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+      const apiToken = (process.env.API_TOKEN || '').trim();
+      if (!isLoopbackHost && !apiToken) {
+        const msg =
+          `[Security] 拒绝启动：BIND_HOST=${host} 不是回环地址，但未设置 API_TOKEN。\n`
+          + '本应用没有账号鉴权；绑定到局域网/公网会让 /api/*（对话、记忆、截屏、桌面、工具）对他人可用。\n'
+          + '解决：① 不暴露（去掉 BIND_HOST，保持 127.0.0.1）；或 ② 设置 API_TOKEN=<长随机串> 后重启。';
+        console.error(msg);
+        throw new Error(msg);
+      }
+      this.server.listen(port, host, () => {
+        console.log(`Server started on http://${host}:${port}`);
         console.log(`Health check: http://localhost:${port}/health`);
         console.log(`Test endpoint: http://localhost:${port}/api/test`);
         console.log(`Web interface: http://localhost:${port}`);
+        if (!isLoopbackHost) console.log('[Security] 已启用非回环绑定：非本机请求需带 x-api-token（或 Authorization: Bearer）');
       });
 
       return this.server;

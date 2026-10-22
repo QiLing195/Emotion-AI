@@ -33,25 +33,27 @@ import {
 } from '../src/lib/relationshipProgressionV2.js';
 
 // ── 文件路径 ──
-const EPISODIC_MEMORY_FILE = path.join(__dirname, '../memories/episodic_memory.json');
-const VALUE_SYSTEM_FILE = path.join(__dirname, '../memories/value_system.json');
-const CURIOSITY_STATE_FILE = path.join(__dirname, '../memories/curiosity_state.json');
-const SEMANTIC_MEMORY_FILE = path.join(__dirname, '../memories/semantic_memory.json');
-const SEMANTIC_EMBEDDINGS_FILE = path.join(__dirname, '../memories/semantic_embeddings.json');
-const MEMORY_GRAPH_FILE = path.join(__dirname, '../memories/memory_graph.json');
-const EMOTION_STATE_FILE = path.join(__dirname, '../memories/emotion_state.json');
-const RELATIONSHIP_STATE_FILE = path.join(__dirname, '../memories/relationship_state_v2.json');
-const MEMORY_LEDGER_FILE = path.join(__dirname, '../memories/memory_ledger.json');
+// v2.00：测试/多实例隔离——可用 MEMORIES_DIR 覆盖数据目录（默认仓库 memories/）
+const MEMORIES_DIR = process.env.MEMORIES_DIR ? path.resolve(process.env.MEMORIES_DIR) : path.join(__dirname, '../memories');
+const EPISODIC_MEMORY_FILE = path.join(MEMORIES_DIR, 'episodic_memory.json');
+const VALUE_SYSTEM_FILE = path.join(MEMORIES_DIR, 'value_system.json');
+const CURIOSITY_STATE_FILE = path.join(MEMORIES_DIR, 'curiosity_state.json');
+const SEMANTIC_MEMORY_FILE = path.join(MEMORIES_DIR, 'semantic_memory.json');
+const SEMANTIC_EMBEDDINGS_FILE = path.join(MEMORIES_DIR, 'semantic_embeddings.json');
+const MEMORY_GRAPH_FILE = path.join(MEMORIES_DIR, 'memory_graph.json');
+const EMOTION_STATE_FILE = path.join(MEMORIES_DIR, 'emotion_state.json');
+const RELATIONSHIP_STATE_FILE = path.join(MEMORIES_DIR, 'relationship_state_v2.json');
+const MEMORY_LEDGER_FILE = path.join(MEMORIES_DIR, 'memory_ledger.json');
 /** v1.9 会话状态：上一轮互动时间（孤独/重逢通路依赖它，重启后仍有效） */
-const SESSION_STATE_FILE = path.join(__dirname, '../memories/session_state.json');
+const SESSION_STATE_FILE = path.join(MEMORIES_DIR, 'session_state.json');
 /** v1.9 身份叙事缓存：随经历刷新，供 Prompt 注入与 /api/identity 复用 */
-const IDENTITY_NARRATIVE_FILE = path.join(__dirname, '../memories/identity_narrative.json');
+const IDENTITY_NARRATIVE_FILE = path.join(MEMORIES_DIR, 'identity_narrative.json');
 /** v1.10 动机反馈学习账本（L1：只学权重，可随时删除回到中性） */
-const MOTIVE_LEARNING_FILE = path.join(__dirname, '../memories/motive_learning.json');
+const MOTIVE_LEARNING_FILE = path.join(MEMORIES_DIR, 'motive_learning.json');
 /** v1.13 潜意识层状态（traits 置信度与证据；此前只在内存，重启清零） */
-const SHADOW_STATE_FILE = path.join(__dirname, '../memories/shadow_state.json');
+const SHADOW_STATE_FILE = path.join(MEMORIES_DIR, 'shadow_state.json');
 /** v1.13 策略学习统计（潜意识「策略证据」与策略学习都依赖它，此前重启清零） */
-const REWARD_STATS_FILE = path.join(__dirname, '../memories/reward_stats.json');
+const REWARD_STATS_FILE = path.join(MEMORIES_DIR, 'reward_stats.json');
 
 // ── 运行时状态 ──
 export let episodicStore: EpisodicMemoryStore = createEpisodicMemoryStore();

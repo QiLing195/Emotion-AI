@@ -10,8 +10,8 @@
 | A1 | 服务默认只监听本机回环 | `server/server.ts:3053` `BIND_HOST \|\| '127.0.0.1'` | 代码 + 启动日志 `Server started on http://127.0.0.1:3000` | 已验证 |
 | A2 | 跨源请求被限制在本机源 | `setupMiddleware()` CORS 白名单 `/^https?:\/\/(localhost\|127\.0\.0\.1)/` | 代码 | 已实现 |
 | A3 | 变更类接口要求 JSON（缓解跨站表单） | `server/server.ts:356-368` 415 分支 | 代码 | 已实现 |
-| A4 | 高频接口有速率限制 | `server/server.ts:370-385`（chat 30/min、vision 12/min、其余 60/min） | 代码 | 已实现 |
-| A5 | 无账号/无 token | — | 代码中无 auth 中间件 | 按设计不适用（单用户） |
+| A4b | CORS 只放行明确本地源（3000/5173，可 env 追加） | `setupMiddleware()` | v2.00 预检实测：3997/外站 415 无 ACAO | 已验证 |`r`n| A4 | 高频接口有速率限制 | `server/server.ts:370-385`（chat 30/min、vision 12/min、其余 60/min） | 代码 | 已实现 |
+| A5 | 无账号/无 token | — | 代码中无 auth 中间件；v2.00 起：非回环绑定强制 API_TOKEN，否则拒绝启动（实测） | 部分（默认回环=单用户；暴露时已挡） |
 
 ## B. 工具与副作用
 
@@ -34,7 +34,7 @@
 | C5 | 生成后接地校验（防编造） | `src/lib/memoryGrounding.ts` | `memoryGrounding.test.ts`；`scripts/check-grounding.ts`（编造被重写/删除） | 已验证 |
 | C6 | RAG 检索质量有固定评测集 | — | 只有 `test_data/` 的对话质量评测（LLM Judge），**没有** recall@k/groundedness 分层固定集 | 部分 |
 | C7 | 用户可查看记忆 | 部分：`/api/her-state`、Obsidian 导出脚本 | `scripts` 里 obsidian-export | 部分 |
-| C8 | 用户可删除/纠正/导出全部记忆 | — | 只有 `POST /api/memories/governance`（状态回滚），无删除/导出 API | 缺口 |
+| C8 | 用户可删除/纠正/导出全部记忆 | `server/services/memoryAdmin.ts` + `/api/memories/:id`(GET/PATCH/DELETE) + `/api/memories/export` | v2.00 实测：删除传播到 episodic+图谱+`.bak`，真实文件哈希不变（隔离）；无 UI 面板 | 部分（API 已验证，UI 缺） |
 
 ## D. AI 质量与安全
 
@@ -63,7 +63,7 @@
 | F1 | 截图 7 天自动清理 | `screenWatch.ts:29,164-173` | 代码 | 已实现 |
 | F2 | 关心记忆 ≤20 条 / 14 天 | `herCareMemory.ts:17-18` | 代码 + 单测 | 已验证 |
 | F3 | 便签 512KB 滚动、时间线 2MB 滚动 | `herNotes.ts`、`emotionTimeline.ts` | 代码 | 已实现 |
-| F4 | 运行数据默认不入库 | `.gitignore`（`memories/*.json|jsonl`、`.env*`、`data/`） | `.gitignore` | 已验证 |
+| F7 | 测试/多实例可用 MEMORIES_DIR 隔离数据目录 | `server/persistence.ts`、`memoryAdmin.memoriesDir()` | v2.00 隔离验证：真实文件哈希前后一致 | 已验证 |`r`n| F4 | 运行数据默认不入库 | `.gitignore`（`memories/*.json|jsonl`、`.env*`、`data/`） | `.gitignore` | 已验证 |
 | F5 | 数据默认不出本机 | 模型只发 prompt 片段；Firestore 无凭证不启用 | `firebase.ts:26-34`；本机无凭证 | 已验证（本机） |
 | F6 | 供应商数据处理条款已核查 | — | 无记录 | 缺口 |
 

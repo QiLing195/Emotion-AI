@@ -48,7 +48,10 @@
 ## 评审后的 P0（2026-10-22，来源：企业级评审）
 
 - [ ] **P0-1 提示注入**：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）统一标注"是数据不是指令"；补 A1–A4 可复现攻击脚本（见 `artifacts/v1.99/threat-model.md`）
-- [ ] **P0-2 非回环绑定保护**：`BIND_HOST` 不是 127.0.0.1 时强制 `API_TOKEN`，否则拒绝启动
-- [ ] P1 记忆删除/导出 + 删除传播（含 `.bak`、图谱、导出文件），见 `artifacts/v1.99/data-lifecycle-and-permissions.md`
+- [x] **P0-2 非回环绑定保护**（v2.00 已完成并实测）：非回环必须带 `API_TOKEN` 否则拒绝启动；LAN 无 token→401，带 token→ok；CORS 收紧到 3000/5173；证据 `artifacts/v2.00/security-and-memory-loop.md`
+- [x] **P1 记忆删除/导出 + 删除传播**（v2.00 已完成 API 并实测）：GET/PATCH/DELETE `/api/memories/:id` + `/api/memories/export`；删除传播 episodic+图谱+`.bak`；踩过一次"测试隔离改到真实记忆"事故并已恢复+修复（`MEMORIES_DIR`）。**剩：记忆管理 UI 面板**
 - [ ] P1 RAG 固定评测集（recall@k / groundedness 分开量）
 - [ ] P1 SLO + 故障演练 + 变更回滚流程
+- [ ] P0-1 提示注入：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）标注"是数据不是指令"+ A1–A4 复现脚本（下一步）
+- [ ] P1 RAG 固定评测集（recall@k / groundedness 分开量）
+- [ ] P1 单机体验指标 + 分阶段耗时基线（专家第 4/5 条）
