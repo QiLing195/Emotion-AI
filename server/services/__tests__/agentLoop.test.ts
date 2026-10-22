@@ -34,7 +34,7 @@ describe('开关与工具声明', () => {
   it('声明里恰好有两个只读工具，且都带说明', () => {
     const decls = toolDeclarations() as Array<{ functionDeclarations: Array<{ name: string; description: string }> }>;
     const names = decls[0].functionDeclarations.map(d => d.name);
-    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events']);
+    expect(names).toEqual(['check_my_state', 'recall_memory', 'time_now', 'remember_this', 'read_my_notes', 'set_followup', 'look_at_my_screen', 'read_my_activity', 'get_weather', 'search_map', 'recall_recent_events']);
     for (const d of decls[0].functionDeclarations) expect(d.description.length).toBeGreaterThan(10);
   });
 });
@@ -314,5 +314,30 @@ describe('看他在做什么：read_my_activity（只读）', () => {
     const r = await executeTool('read_my_activity', {}, { ...ctx, getActivity: () => ({ enabled: false, entries: [] }) });
     expect(r.ok).toBe(true);
     expect(JSON.stringify(r.result)).toContain('enabled');
+  });
+});
+describe('看屏幕：look_at_my_screen（只读，受策略/授权约束）', () => {
+  it('接了截屏 ⇒ 原样返回 OCR 文本', async () => {
+    const r = await executeTool('look_at_my_screen', {}, {
+      ...ctx,
+      lookAtScreen: async () => ({ ok: true, text: '屏幕上有 YouTube 页面', ocrChars: 12 }),
+    });
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.result)).toContain('YouTube');
+  });
+
+  it('需要授权 ⇒ ok=false + needsApproval（她应如实说"要你点允许"）', async () => {
+    const r = await executeTool('look_at_my_screen', {}, {
+      ...ctx,
+      lookAtScreen: async () => ({ ok: false, reason: '需要你先允许她看屏幕', needsApproval: true }),
+    });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('needsApproval');
+  });
+
+  it('没接 ⇒ 明确 disabled，不假装看到', async () => {
+    const r = await executeTool('look_at_my_screen', {}, ctx);
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.result)).toContain('screen_disabled');
   });
 });

@@ -15,7 +15,8 @@
     "obsidian:export": "node scripts/export-obsidian.cjs",
     "obsidian:review": "tsx scripts/obsidian-review.ts",
     "smoke:emotion": "tsx scripts/smoke-internal-emotion.ts",
-    "gate:v160:agreement": "node node_modules/tsx/dist/cli.mjs scripts/v160-gate.ts"
+    "gate:v160:agreement": "node node_modules/tsx/dist/cli.mjs scripts/v160-gate.ts",
+    "desktop:pet": "node scripts/run-pet.cjs"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
@@ -41,6 +42,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/xml2js": "^0.4.14",
+    "electron": "^45.0.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.23.1",
     "typescript": "~5.8.2",

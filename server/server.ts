@@ -111,6 +111,9 @@ import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, lis
 import { buildRememberedView } from './services/herRemembered.js';
 import { readRecentActivity, startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled } from './services/mcpClient.js';
+import { decideCapture, writeCaptureRequest, readCaptureRequest, clearCaptureRequest, readCaptureResult, clearCaptureResult, loadPetSettings, savePetSettings, grantScreenSession, SCREEN_POLICIES, readCaptureAudit, auditCapture, cleanupOldScreens, SCREEN_DIR, revokeScreenSession, CAPTURE_RESULT_PATH, type ScreenPolicy } from './services/screenWatch.js';
+import { buildPetState } from './services/petState.js';
+import { runOcr, compactOcrText } from './services/ocr.js';
 import { getWeather, searchPlace, externalToolsEnabled } from './services/externalLookup.js';
 import {
   herRoomEnabled, loadHerRoom, saveHerRoom, advanceHerRoom, herRoomPromptLine, herRoomView,
@@ -273,6 +276,8 @@ export class AIGirlfriendServer {
   private _chatQueue: Promise<void> = Promise.resolve();
   private _serverAISettingsLoaded = false;
   private _serverAISettings: any = null;
+  /** v1.83 她请求看屏幕时，桌宠上等你点"允许" */
+  private _screenApprovalPending = false;
   private _lastVision: { text: string; emotion: string; ts: number } | null = null;
   private _visionCooldown = 0;
   /** v1.3 记忆增强：上次整合时间（遗忘+去重，≥6h 触发一次） */
@@ -1261,6 +1266,25 @@ export class AIGirlfriendServer {
               },
               readNotes: (limit?: number) => (herNotesEnabled() ? listHerNotes(limit ?? 5) : []),
               getActivity: (limit?: number) => readRecentActivity(limit ?? 6),
+              lookAtScreen: async () => {
+                const d = decideCapture('her');
+                if (!d.allowed) {
+                  if (d.needsApproval) this._screenApprovalPending = true;
+                  return { ok: false, reason: d.reason, needsApproval: d.needsApproval };
+                }
+                clearCaptureResult();
+                const req = writeCaptureRequest('her', d.reason);
+                const deadline = Date.now() + 12_000;
+                while (Date.now() < deadline) {
+                  const r = readCaptureResult();
+                  if (r && r.id === req.id) {
+                    if (!r.ocrOk) return { ok: false, reason: 'ocr_failed: ' + (r.ocrError || 'unknown') };
+                    return { ok: true, text: String(r.ocrText || '').slice(0, 1500), bytes: r.bytes, width: r.width, height: r.height, ocrChars: String(r.ocrText || '').length };
+                  }
+                  await new Promise(res => setTimeout(res, 300));
+                }
+                return { ok: false, reason: 'pet_window_not_running（Electron 桌宠没开，截不了屏）' };
+              },
               mcp: mcpClientEnabled() ? {
                 declarations: () => getMcpToolDeclarations(),
                 call: (name: string, args: Record<string, unknown>) => callMcpTool(name, args),
@@ -2030,6 +2054,108 @@ export class AIGirlfriendServer {
         now: Date.now(),
       });
     });
+    // ===== v1.83 桌宠 + 屏幕观察 =====
+    this.app.get('/api/pet/state', (req, res) => {
+      try {
+        const base = buildPetState({ emotionState: this.aiEngine.emotionState });
+        res.json({ ...base, pendingApproval: Boolean(this._screenApprovalPending), policies: SCREEN_POLICIES });
+      } catch (e) {
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    this.app.get('/api/pet/settings', (req, res) => {
+      res.json({ ok: true, ...loadPetSettings(), policies: SCREEN_POLICIES });
+    });
+
+    this.app.post('/api/pet/settings', (req, res) => {
+      const policy = String(req.body?.screenPolicy ?? '') as ScreenPolicy;
+      if (!SCREEN_POLICIES.includes(policy)) return res.status(400).json({ ok: false, error: 'bad_policy' });
+      res.json({ ok: true, ...savePetSettings({ screenPolicy: policy }) });
+    });
+
+    // 用户点"允许她看屏幕"（15 分钟免问）
+    this.app.post('/api/pet/approve', (req, res) => {
+      const kind = String(req.body?.kind ?? 'screen');
+      if (kind !== 'screen') return res.status(400).json({ ok: false, error: 'unsupported_kind' });
+      this._screenApprovalPending = false;
+      const s = grantScreenSession();
+      console.log('[Pet] 用户批准她看屏幕（15 分钟）');
+      res.json({ ok: true, ...s });
+    });
+
+    this.app.post('/api/pet/deny', (req, res) => {
+      this._screenApprovalPending = false;
+      revokeScreenSession();
+      console.log('[Pet] 用户拒绝她看屏幕');
+      res.json({ ok: true });
+    });
+
+    // Electron 轮询：有没有截屏请求
+    this.app.get('/api/pet/capture/request', (req, res) => {
+      const r = readCaptureRequest();
+      if (!r) return res.status(204).end();
+      res.json({ ok: true, ...r });
+    });
+
+    // Electron 截完回写：存图 + OCR + 审计
+    this.app.post('/api/pet/capture/result', async (req, res) => {
+      const body = req.body ?? {};
+      const id = String(body.id ?? '');
+      const imagePath = String(body.imagePath ?? '');
+      const t0 = Date.now();
+      clearCaptureRequest();
+      clearCaptureResult();
+      try {
+        const allowedDir = path.resolve(SCREEN_DIR);
+        const abs = path.resolve(imagePath);
+        if (!abs.startsWith(allowedDir)) {
+          auditCapture({ ts: Date.now(), trigger: 'auto', ok: false, reason: 'bad_image_path' });
+          return res.status(400).json({ ok: false, error: 'bad_image_path' });
+        }
+        const ocr = await runOcr(abs);
+        const ocrText = ocr.ok ? compactOcrText(ocr.text ?? '') : '';
+        const result = {
+          id, ok: true, imagePath: abs, bytes: Number(body.bytes ?? 0),
+          width: Number(body.width ?? 0), height: Number(body.height ?? 0),
+          ocrOk: ocr.ok, ocrText, ocrError: ocr.error ?? '', createdAt: Date.now(), ms: Date.now() - t0,
+        };
+        fs.writeFileSync(CAPTURE_RESULT_PATH, JSON.stringify(result), 'utf8');
+        auditCapture({ ts: Date.now(), trigger: 'auto', ok: true, imagePath: abs, ocrChars: ocrText.length, ms: Date.now() - t0 });
+        console.log(`[Screen] 截屏完成 OCR ${ocrText.length} 字（${Date.now() - t0}ms）`);
+        res.json({ ok: true, ocrChars: ocrText.length });
+      } catch (e) {
+        auditCapture({ ts: Date.now(), trigger: 'auto', ok: false, reason: (e as Error).message });
+        res.status(500).json({ ok: false, error: (e as Error).message });
+      }
+    });
+
+    // 用户手动让她截一张（不需要授权）
+    this.app.post('/api/pet/capture', (req, res) => {
+      const d = decideCapture('user');
+      if (!d.allowed) return res.status(429).json({ ok: false, reason: d.reason });
+      const r = writeCaptureRequest('user', d.reason);
+      res.json({ ok: true, queued: true, id: r.id });
+    });
+
+    // 截屏记录（她自己/你都能看）
+    this.app.get('/api/pet/captures', (req, res) => {
+      const limit = Number(req.query.limit ?? 20);
+      res.json({ ok: true, captures: readCaptureAudit(Number.isFinite(limit) ? limit : 20) });
+    });
+
+    // 桌宠点她一下：规则回复，不花 token
+    this.app.post('/api/pet/interact', (req, res) => {
+      const type = String(req.body?.type ?? 'click');
+      const replies: Record<string, string[]> = {
+        click: ['嗯？', '毛都要被你摸顺了。', '你戳我干嘛。'],
+        double: ['我在呢。', '想聊聊天？', '我听着。'],
+        drag: ['别把我拖太远。', '放着这儿也行。'],
+      };
+      const pool = replies[type] ?? replies.click;
+      res.json({ ok: true, text: pool[Math.floor(Math.random() * pool.length)] });
+    });
+
     this.app.get('/state', (req, res) => {
       const es = this.aiEngine.emotionState;
       const t = es?.taiji;

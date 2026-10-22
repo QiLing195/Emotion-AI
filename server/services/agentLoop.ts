@@ -58,6 +58,8 @@ export interface ToolContext {
   readNotes?: (limit?: number) => unknown;
   /** 看他在电脑上做什么（只读：窗口标题/进程；未接/没开都返回 enabled:false） */
   getActivity?: (limit?: number) => unknown;
+  /** 看一眼他的屏幕（Electron 截屏 + OCR；策略/授权由 server 决定） */
+  lookAtScreen?: () => Promise<unknown>;
   /** 外部 MCP server 的工具（声明 + 调用；没接就完全不出现） */
   mcp?: {
     declarations: () => Promise<Array<{ name: string; description: string; parameters: unknown }>> | Array<{ name: string; description: string; parameters: unknown }>;
@@ -127,6 +129,11 @@ export function toolDeclarations(extra: Array<{ name: string; description: strin
             },
             required: ['what', 'dueInHours'],
           },
+        },
+        {
+          name: 'look_at_my_screen',
+          description: '看一眼他此刻的屏幕（只读：截图 + OCR 出来的屏幕文字，不含键盘输入）。他问"你能看到我屏幕吗/你看我在干嘛"、或你想确认他在做什么时用。可能被策略拦下（需要他先允许）。',
+          parameters: { type: 'object', properties: {}, required: [] },
         },
         {
           name: 'read_my_activity',
@@ -201,6 +208,11 @@ export async function executeTool(
     if (name === 'check_my_state') {
       const result = ctx.getState();
       return { ok: true, result, ms: Date.now() - t0 };
+    }
+    if (name === 'look_at_my_screen') {
+      if (!ctx.lookAtScreen) return { ok: false, result: { error: 'screen_disabled（屏幕观察没接）' }, ms: Date.now() - t0 };
+      const r = await ctx.lookAtScreen();
+      return { ok: Boolean((r as { ok?: boolean })?.ok), result: r, ms: Date.now() - t0 };
     }
     if (name === 'read_my_activity') {
       const raw = Number(args?.limit ?? 6);
