@@ -62,3 +62,13 @@
 - [x] 最小运行诊断：`GET /api/diagnostics`（不含原文/密钥）；`DEBUG_TIMINGS=true` 时 chat 返回分阶段耗时
 - [x] 模型不可用降级：实测 103s/HTTP500、进程存活 → 改为 503 `model_unavailable` + 可行动 hint；`AI_MAX_RETRIES` 可调
 - [ ] 仍缺：单轮生成总预算（P1）、RAG 检索层评测（P1）、提示注入输入侧标注（P0-1）
+
+### v2.03 静态审查修复（2026-10-22）
+- [x] P1-1 否定亲密表达误判 love：NLU 否定表 + 引用/混合不确定度 + canonical 否定别名 + analyzer 英文否定
+- [x] P1-2 多通路重复影响：非用户来源单轮总预算（TURN_NONUSER_CAP=0.25）+ 来源记账同步缩放 + /state.turnBudget
+- [x] P1-3 事件/用户情绪归因矛盾：reconcileAttribution（降级 + 跳过强化 + 强度打折）+ /api/chat.attribution
+- [x] P1-4 external 重复计数：直接刺激后快照，external 只记该区间
+- [x] P2 表达许可收紧：最多一句 ≤30 字，说完回到他的事
+- [ ] P2 情绪识别"类别/强度/对象/证据/不确定度"完整分离：LLM Prompt 还没要求输出 evidence/一致性（当前靠代码侧启发式）
+- [ ] 引用/反讽/混合/非指向场景集 + 连续多轮回放（确认一次误判不会累积成错误关系状态）
+- [ ] ExpressionPlan（主意图/语气/自我披露/提问上限）由代码强制，而不是 Prompt 约束
