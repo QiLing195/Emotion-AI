@@ -89,3 +89,13 @@
 - [ ] 反讽 / 非指向第三人称 / 替朋友难过 三个更难场景
 - [ ] 把场景集接进固定回归（人工复核结论回填 manualVerdict）
 - [ ] ExpressionPlan 运行时强制（每轮最多一个主意图 + 一个问题）
+
+### v2.06 内在活动候选接口 + ExpressionPlan（2026-10-23）
+- [x] `intrinsicActivity.ts`：候选接口 + 去重/过期/证据/置信度/单轮上限校验；coordinator 只施加通过校验的候选
+- [x] `expressionPlan.ts`：结构化表达计划（decision/emotion/tone/duration/evidence/confidence/句数与问题上限）；transient 禁说“这两天/一直”
+- [x] `ENABLE_UNIFIED_EXPRESSION=true` 时走计划器；`/state.expressionPlan`、`/state.intrinsic` 可观测
+- [x] 场景脚本记录逐轮 plan+intrinsic；全局检查 transient 不得说持续状态词；最近 10/10
+- [ ] ExpressionPlan / unified expression 的真管道 A/B（开/关两臂，多轮+人工）再定默认值
+- [ ] plan 与 intrinsic 写进脱敏 trace 文件（现在只在内存 + /state）
+- [ ] 候选接口接“LLM 只提候选”的实验臂（不直接生效）
+- [ ] 场景集补：反讽 / 第三人称 / 替朋友难过
