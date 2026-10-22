@@ -109,7 +109,9 @@ import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
-import { readRecentActivity, startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
+import { readRecentActivity } from './services/activityWatcher.js';
+import { understandActivity, describeUnderstanding } from './services/activityUnderstanding.js';
+import { startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled, loadMcpConfig, listAllMcpTools, isToolAllowedByServer, isMcpConnected, MCP_CONFIG_PATH } from './services/mcpClient.js';
 import { startVoiceSampler, stopVoiceSampler, restartVoiceSampler, voiceEventsAfter, voiceView } from './services/voiceWatch.js';
 import { loadVoiceConfig, saveVoiceConfig } from './services/voiceConfig.js';
@@ -1311,7 +1313,11 @@ export class AIGirlfriendServer {
                 return addNote(note);
               },
               readNotes: (limit?: number) => (herNotesEnabled() ? listHerNotes(limit ?? 5) : []),
-              getActivity: (limit?: number) => readRecentActivity(limit ?? 6),
+              getActivity: (limit?: number) => {
+                const view = readRecentActivity(limit ?? 6);
+                const understanding = understandActivity(view);
+                return { ...view, understanding, understandingLine: describeUnderstanding(understanding) };
+              },
               lookAtScreen: async () => {
                 const d = decideCapture('her');
                 if (!d.allowed) {
@@ -2103,7 +2109,11 @@ export class AIGirlfriendServer {
           now: Date.now(),
         }),
         // v1.93 她看到的活动（只读、标题级；敏感窗口采样器与 Node 两侧都已脱敏）
-        activity: readRecentActivity(6),
+        activity: (() => {
+          const view = readRecentActivity(6);
+          const understanding = understandActivity(view);
+          return { ...view, understanding, understandingLine: describeUnderstanding(understanding) };
+        })(),
         now: Date.now(),
       });
     });

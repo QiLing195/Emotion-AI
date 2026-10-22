@@ -27,11 +27,24 @@ interface HerState {
     notes: Array<{ note: string; agoMinutes: number }>;
     upcoming: Array<{ what: string; dueAt: number; inMinutes: number; due: boolean }>;
   };
-  /** v1.93 她看到的活动（只读、标题级） */
+  /** v1.93 她看到的活动（只读、标题级）；v1.94 增加"她的理解" */
   activity?: {
     enabled: boolean;
     entries: ActivityRow[];
     note?: string;
+    /** 一句话理解（界面标题行） */
+    understandingLine?: string;
+    understanding?: {
+      summary: string;
+      category: string;
+      label: string;
+      confidence: number;
+      windows: number;
+      spanMinutes: number;
+      categories: Array<{ key: string; label: string; count: number; share: number }>;
+      evidence: string[];
+      vague: boolean;
+    } | null;
   };
   now?: number;
 }
@@ -182,12 +195,33 @@ export default function HerStateApp() {
           )}
         </div>
 
-        {/* 眼前看到的（前台窗口标题 + 进程，标题级、敏感已隐藏） */}
+        {/* 眼前看到的（她的理解 + 原始窗口标题；标题级、敏感已隐藏） */}
         <div className="mt-3 border-t border-white/10 pt-2">
           <div className="flex items-center justify-between">
             <div className="text-[10px] text-slate-500">眼前看到的</div>
             <div className="text-[10px] text-slate-600">标题级 · 敏感窗口已隐藏</div>
           </div>
+
+          {/* v1.94 她的理解：规则归纳出来的一句"你在干什么" */}
+          {activity?.enabled && activity.understandingLine && (
+            <div className="mt-1 rounded-lg border border-sky-300/20 bg-sky-400/[0.07] px-2 py-1.5">
+              <div className="text-[10px] text-sky-300/80">她的理解</div>
+              <div className="mt-0.5 text-[12px] leading-snug text-slate-100">{activity.understandingLine}</div>
+              {activity.understanding && activity.understanding.categories.length > 1 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {activity.understanding.categories.map(c => (
+                    <span key={c.key} className="rounded bg-white/10 px-1.5 py-[1px] text-[10px] text-slate-300">
+                      {c.label} ×{c.count}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {activity.understanding?.vague && (
+                <div className="mt-1 text-[10px] text-slate-500">证据还不够足，所以她没把话说死。</div>
+              )}
+            </div>
+          )}
+
           {!activity || !activity.enabled ? (
             <div className="mt-1 text-[11px] text-slate-500">
               {activity?.note ?? '活动采样没开（ENABLE_ACTIVITY_WATCH），她看不到你在用什么。'}
@@ -196,8 +230,9 @@ export default function HerStateApp() {
             <div className="mt-1 text-[11px] text-slate-500">{activity.note ?? '还没有采样记录。'}</div>
           ) : (
             <div className="mt-1">
+              <div className="mb-0.5 text-[10px] text-slate-600">原始窗口（她看到的就是这些）</div>
               {activity.entries.map((a, i) => (
-                <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-300">
+                <div key={i} className="flex items-baseline justify-between gap-2 text-[11px] text-slate-400">
                   <span className="truncate">
                     {a.title}
                     {a.process ? <span className="ml-1 text-[10px] text-slate-500">· {a.process}</span> : null}
