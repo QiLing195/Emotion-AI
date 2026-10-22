@@ -110,6 +110,7 @@ import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
 import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, memoriesDir } from './services/memoryAdmin.js';
+import { PromptComposer, summarizeManifest, type PromptBlockRecord } from './services/promptComposer.js';
 import { readRecentActivity } from './services/activityWatcher.js';
 import { understandActivity, describeUnderstanding, toActivityConcern, activityPromptLine, updateCareStreak, emptyCareStreak, type ActivityUnderstanding, type CareStreak } from './services/activityUnderstanding.js';
 import { recordCare, recentCareAsks, findPendingFollowUp, buildFollowUpHint } from './services/herCareMemory.js';
@@ -493,6 +494,8 @@ export class AIGirlfriendServer {
   /** v2.01 诊断：进程启动时间与最近一轮分阶段耗时（GET /api/diagnostics 用） */
   private _startedAt: number = Date.now();
   private _lastTurnTimings: Record<string, unknown> | null = null;
+  /** v2.02 Prompt Composer：最近一轮的块清单（只含块名/类别/字数，不含正文） */
+  private _lastPromptManifest: PromptBlockRecord[] | null = null;
 
   private currentActivityUnderstanding(fresh = false): ActivityUnderstanding | null {
     const now = Date.now();
@@ -1301,6 +1304,7 @@ export class AIGirlfriendServer {
             return narrativeToPromptSnippet(cached as unknown as Parameters<typeof narrativeToPromptSnippet>[0]);
           } catch { return ''; }
         })();
+        const promptComposer = new PromptComposer();
         let enrichedSystemPrompt = [
           PERSONALITY_FOUNDATION,
           identitySnippet,
@@ -1310,18 +1314,19 @@ export class AIGirlfriendServer {
           patternInjection,
           relationshipPolicy.prompt,
         ].filter(Boolean).join('\n');
+        promptComposer.add({ id: 'base', category: 'persona', priority: 100, text: enrichedSystemPrompt, source: 'server.base' });
 
         // ponytail: 幻觉自检 — 模型在生成回复前自查编造行为
-        enrichedSystemPrompt += '\n\n【回复前自检】输出前确认：①是否编造了具体的生活细节（逛街/做饭/追剧等）？②是否说了"上次你提到…"但记忆中没有？③是否替别人的错误道歉？如有任何一项，删除重写。';
+        promptComposer.add({ id: 'selfCheck', category: 'hard', priority: 95, text: '【回复前自检】输出前确认：①是否编造了具体的生活细节（逛街/做饭/追剧等）？②是否说了"上次你提到…"但记忆中没有？③是否替别人的错误道歉？如有任何一项，删除重写。', source: 'server.selfCheck' });
 
         // v1.6 反机械化表达：压制"今天过得怎么样"这类万能问候，并禁止重复最近用过的开场
-        enrichedSystemPrompt += '\n\n【表达要求·反机械化】\n' + [
+        promptComposer.add({ id: 'antiMechanical', category: 'tone', priority: 30, text: '【表达要求·反机械化】\n' + [
           '① 禁止用万能问候开场或收尾（"今天过得怎么样""最近怎么样""在干嘛""忙不忙""有什么想聊的"等）——这类句子空洞且每轮一样。',
           '② 优先具体：记忆或上下文里有细节就直接切入那个细节（"你昨天说的面试后来有消息吗"优于泛泛问候）。',
           '③ 开场方式每轮都要变：直接回应对方 / 说出你的感受 / 提起一件具体的事 / 一句玩笑 / 安静陪伴——不要连续两轮用同一类开场。',
           '④ 连续两轮不要都以问句结尾；不要连珠炮式提问。',
           '⑤ 没有具体素材时，宁可不问，也要说一句当下真实的话，而不是用空洞寒暄填充。',
-        ].join('\n');
+        ].join('\n'), source: 'server.antiMechanical' });
         // v1.32：块本身抽到 `src/lib/antiRepetition.ts`（纯函数，可单测）。
         // 查重**不在 Prompt 里做**（实测会赔掉"短/在场/不追问"），走生成后的 `findDuplicateReply` —— 见下面 generateResponse 之后。
         {
@@ -1330,7 +1335,7 @@ export class AIGirlfriendServer {
               .filter((m: any) => m.role === 'assistant' && typeof m.content === 'string')
               .map((m: any) => m.content as string),
           );
-          if (antiRepeat) enrichedSystemPrompt += `\n\n${antiRepeat}`;
+          if (antiRepeat) promptComposer.add({ id: 'antiRepeat', category: 'tone', priority: 25, text: antiRepeat, source: 'antiRepetition' });
         }
 
         // v1.9 动机层放 Prompt 末尾（注意力最高处）：先给她"想说什么"，禁令只是兜底
@@ -1342,13 +1347,13 @@ export class AIGirlfriendServer {
             motiveSelection.deferAnchor,
             { deferring: motiveSelection.deferredToUser, deferStyle: resolveDeferStyle() },
           );
-          if (motiveSnippet) enrichedSystemPrompt += `\n\n${motiveSnippet}`;
+          if (motiveSnippet) promptComposer.add({ id: 'motive', category: 'intent', priority: 70, text: motiveSnippet, source: 'motive' });
         }
 
         // v1.95 她看到的（只在她真的看出来时注入一行；数据陈述，语气仍由她决定）
         {
           const observedLine = activityPromptLine(this.currentActivityUnderstanding());
-          if (observedLine) enrichedSystemPrompt += `\n\n${observedLine}`;
+          if (observedLine) promptComposer.add({ id: 'activityObserved', category: 'facts', priority: 50, text: observedLine, source: 'activityUnderstanding' });
         }
 
         // v1.8 内在生活：底色心情 + 反刍提示（只在确有信号时注入，避免每轮同一句话）
@@ -1356,9 +1361,9 @@ export class AIGirlfriendServer {
           const internalState = turnOutput.updatedEmotionState?.internal;
           const nowMs = Date.now();
           const moodHint = moodPromptHint(internalState?.mood, nowMs);
-          if (moodHint) enrichedSystemPrompt += `\n\n${moodHint}`;
+          if (moodHint) promptComposer.add({ id: 'moodHint', category: 'tone', priority: 20, text: moodHint, source: 'moodLayer' });
           const ruminationHint = ruminationPromptHint(internalState?.rumination, nowMs);
-          if (ruminationHint) enrichedSystemPrompt += `\n\n${ruminationHint}`;
+          if (ruminationHint) promptComposer.add({ id: 'ruminationHint', category: 'tone', priority: 20, text: ruminationHint, source: 'rumination' });
         }
 
         // ── Phase 2: 网络搜索注入 ──
@@ -1370,7 +1375,7 @@ export class AIGirlfriendServer {
               new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
             ]);
             if (searchResult && searchResult.results.length > 0) {
-              enrichedSystemPrompt += '\n\n【实时搜索】' + searchResult.llmContext;
+              promptComposer.add({ id: 'webSearch', category: 'facts', priority: 55, text: '【实时搜索】' + searchResult.llmContext, source: 'webSearch' });
               console.log(`[Search] 已注入 ${searchResult.results.length} 条搜索结果到 Prompt`);
             }
           } catch (e) {
@@ -1386,7 +1391,7 @@ export class AIGirlfriendServer {
         //   两块是同一层的决策素材，紧挨着；而"这一轮怎么把它说出口"是策略片段的事，排最后。
         // 关着开关时它是空串（判空跳过）⇒ Prompt 与旧版逐字相同 —— 有回归测试钉住。
         if (turnOutput.appraisalSnippet) {
-          enrichedSystemPrompt += `\n\n${turnOutput.appraisalSnippet}`;
+          promptComposer.add({ id: 'appraisal', category: 'tone', priority: 35, text: turnOutput.appraisalSnippet, source: 'appraisal' });
         }
 
         // ── v1.48 她**此刻的状态**（末尾，紧挨策略片段）──
@@ -1403,11 +1408,11 @@ export class AIGirlfriendServer {
         // 静息时 `activationHint` 返回空串（与心情/反刍提示同一约定：只在确有信号时注入）。
         if (activationStateBlockEnabled()) {
           const herStateHint = activationHint(turnOutput.updatedEmotionState);
-          if (herStateHint) enrichedSystemPrompt += `\n\n${herStateHint}`;
+          if (herStateHint) promptComposer.add({ id: 'herState', category: 'tone', priority: 30, text: herStateHint, source: 'emotionActivation' });
         }        // v1.63 她的小屋：只允许她引用"此刻在小屋里做什么"这一条事实
         if (herRoomEnabled()) {
           const roomLine = herRoomPromptLine(loadHerRoom());
-          if (roomLine) enrichedSystemPrompt += `\n\n${roomLine}`;
+          if (roomLine) promptComposer.add({ id: 'herRoom', category: 'tone', priority: 25, text: roomLine, source: 'herRoom' });
         }
 
         // ── v1.29 策略片段挪到**真正的末尾** ──
@@ -1418,7 +1423,13 @@ export class AIGirlfriendServer {
         //   片段挪到真末尾：字数 70.8 → 46.8（−34%）、劝解 1.50 → 0.75、追问 1.00 → 0.50。
         // 注意它**治不了**"片段里那句字面话不出现"（字面在场词仍 0）—— 那是叠加稀释，
         // 只能靠片段本身的写法（见 `accompany` 片段「先给在场感」那条）。
-        enrichedSystemPrompt += `\n\n${turnOutput.strategySnippet}`;
+        promptComposer.addStrategySnippet(turnOutput.strategySnippet, 'aiCoordinator.strategySnippet');
+        {
+          const composed = promptComposer.compose();
+          enrichedSystemPrompt = composed.text;
+          this._lastPromptManifest = composed.manifest;
+          console.log('[Prompt] ' + summarizeManifest(composed.manifest));
+        }
 
         // ── 调试用：DUMP_PROMPT=<绝对路径> 时，把**真正发出去的** system prompt 落盘 ──
         // 为什么需要它：离线复现整段 Prompt 是做不到的（大部分块是内联字面量），
@@ -2387,6 +2398,13 @@ export class AIGirlfriendServer {
             debugTimings: process.env.DEBUG_TIMINGS === 'true',
           },
           lastTurnTimings: this._lastTurnTimings,
+          prompt: {
+            blocks: this._lastPromptManifest?.length ?? 0,
+            chars: (this._lastPromptManifest ?? []).filter(b => !b.suppressed).reduce((n, b) => n + b.chars, 0),
+            expressionPermits: (this._lastPromptManifest ?? []).filter(b => b.category === 'expression_permit' && !b.suppressed).length,
+            suppressed: (this._lastPromptManifest ?? []).filter(b => b.suppressed).map(b => b.id),
+            manifest: this._lastPromptManifest,
+          },
         });
       } catch (e) {
         res.status(500).json({ ok: false, error: (e as Error).message });
