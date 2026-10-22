@@ -137,7 +137,7 @@ export default function ModelPanel({ showSettings, showOscilloscope, onSettingsC
   const emo = state.persona.emotionState;
   if (!emo) {
     return (
-      <div className="w-[360px] flex-shrink-0 glass-strong flex items-center justify-center text-moon-400 text-sm">
+    <div className="w-full min-w-0 flex-shrink-0 glass-strong flex items-center justify-center text-moon-400 text-sm">
         等待初始化...
       </div>
     );
@@ -161,7 +161,7 @@ export default function ModelPanel({ showSettings, showOscilloscope, onSettingsC
   const lastStrategyReason = storeFull.lastStrategyReason || '';
 
   return (
-    <div className="w-[360px] flex-shrink-0 glass-strong overflow-y-auto flex flex-col shadow-float z-10">
+    <div className="w-full min-w-0 flex-shrink-0 glass-strong overflow-y-auto overflow-x-hidden flex flex-col shadow-float z-10">
       {/* 标题 */}
       <div className="px-4 py-3 border-b divider-soft">
         <div className="flex items-center justify-between">

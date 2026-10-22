@@ -191,7 +191,7 @@ export default function App() {
       window: { x: 64, y: 56, w: 1010, h: 660 },
       content: (
         <div className="os-app-dark flex h-full min-h-0 bg-[#0f1120]">
-          <div className="w-[268px] shrink-0 overflow-y-auto border-r border-white/10">
+          <div className="w-[300px] shrink-0 overflow-y-auto overflow-x-hidden border-r border-white/10">
             <ModelPanel
               showSettings={false}
               showOscilloscope={showOscilloscope}
