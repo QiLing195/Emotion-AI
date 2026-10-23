@@ -18,8 +18,10 @@ export interface AISettings {
 }
 
 // Exponential backoff retry utility（v2.16：可传 GenerationBudget，预算耗尽立即停止，不再重试）
+// v2.17：每次尝试带 AbortController —— 到 deadline 会真正 abort 底层请求（SDK 支持时），
+//        而不是只让等待方返回；SDK 不支持 signal 时仍有 raceWithDeadline 兜底。
 export async function retryAsync<T>(
-  fn: () => Promise<T>,
+  fn: (signal?: AbortSignal) => Promise<T>,
   maxRetries: number = Number.isFinite(Number(process.env.AI_MAX_RETRIES)) ? Number(process.env.AI_MAX_RETRIES) : 3,
   baseDelay: number = 1000,
   budget?: GenerationBudget,
@@ -29,15 +31,27 @@ export async function retryAsync<T>(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     // 预算已耗尽：连这次调用都不发（调用方应走确定性兜底）
     const timeoutMs = budget ? budget.beginCall() : Infinity;
+    let controller: AbortController | null = null;
+    let abortTimer: ReturnType<typeof setTimeout> | null = null;
     try {
-      return budget ? await raceWithDeadline(fn(), timeoutMs, 'ai_call') : await fn();
+      controller = new AbortController();
+      if (Number.isFinite(timeoutMs)) {
+        abortTimer = setTimeout(() => controller?.abort(), timeoutMs);
+        abortTimer.unref?.();
+      }
+      const signal = controller.signal;
+      return budget
+        ? await raceWithDeadline(fn(signal), timeoutMs, 'ai_call')
+        : await fn(signal);
     } catch (error: any) {
       lastError = error;
 
-      // 本次等超时 / 整轮预算耗尽：不再重试
-      if (error instanceof GenerationBudgetExceededError) {
+      // 本次等超时（race 触发或 abort 触发）/ 整轮预算耗尽：不再重试
+      if (controller?.signal.aborted || error instanceof GenerationBudgetExceededError) {
         budget?.noteTimeout();
-        throw error;
+        throw new GenerationBudgetExceededError(
+          `ai_call aborted after ${Number.isFinite(timeoutMs) ? timeoutMs : '?'}ms (elapsed ${budget?.elapsedMs() ?? 0}ms)`,
+        );
       }
       if (budget?.expired()) throw error;
 
@@ -68,6 +82,8 @@ export async function retryAsync<T>(
       const wait = budget ? Math.min(delay, Math.max(0, budget.remainingMs() - 300)) : delay;
       console.warn(`AI API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(wait)}ms:`, error.message);
       await sleep(wait);
+    } finally {
+      if (abortTimer) clearTimeout(abortTimer);
     }
   }
 
@@ -124,10 +140,10 @@ export async function generateAIResponse(
   }
   const budget = options.budget ?? singleCallBudget();
 
-  return retryAsync(async () => {
+  return retryAsync(async (signal?: AbortSignal) => {
     if (settings.provider === 'gemini') {
       const ai = getOrCreateClient(settings) as GoogleGenAI;
-      const response = await ai.models.generateContent({
+      const response = await (ai.models.generateContent as any)({
         model: settings.model || 'gemini-3-flash-preview',
         contents: userPrompt,
         config: {
@@ -155,7 +171,7 @@ export async function generateAIResponse(
             }
           ] as any
         }
-      });
+      }, { abortSignal: signal } as any);
       return response.text || (isJson ? '{}' : '');
     } else {
       const openai = getOrCreateClient(settings) as OpenAI;
@@ -171,7 +187,7 @@ export async function generateAIResponse(
         // 0.3→0.5: LLM Judge 自然度 7.3/10, 模板开头仍是最大扣分项
         frequency_penalty: 0.5,
         presence_penalty: 0.5,
-      });
+      }, { signal } as any);
       return response.choices[0].message.content || (isJson ? '{}' : '');
     }
   }, 3, 1000, budget);
@@ -257,7 +273,7 @@ export async function generateAIChatResponse(
   }
   const budget = options.budget ?? singleCallBudget();
 
-  return retryAsync(async () => {
+  return retryAsync(async (signal?: AbortSignal) => {
     if (settings.provider === 'gemini') {
       const ai = getOrCreateClient(settings) as GoogleGenAI;
 
@@ -288,7 +304,7 @@ export async function generateAIChatResponse(
       if (settings.enableWebSearch) finalTools.push({ googleSearch: {} });
       if (tools) finalTools.push(...tools);
 
-      const response = await ai.models.generateContent({
+      const response = await (ai.models.generateContent as any)({
         model: settings.model || 'gemini-3-flash-preview',
         contents,
         config: {
@@ -316,7 +332,7 @@ export async function generateAIChatResponse(
             }
           ] as any
         }
-      });
+      }, { abortSignal: signal } as any);
       return {
         text: response.text || (isJson ? '{}' : ''),
         functionCalls: response.functionCalls
@@ -359,7 +375,7 @@ export async function generateAIChatResponse(
         response_format: isJson ? { type: "json_object" } : undefined,
         temperature,
         ...(openaiTools ? { tools: openaiTools as any, tool_choice: 'auto' as any } : {}),
-      });
+      }, { signal } as any);
       const msg = response.choices[0]?.message as any;
       const toolCalls = Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0
         ? msg.tool_calls.map((tc: any) => {

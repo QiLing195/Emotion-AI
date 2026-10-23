@@ -178,3 +178,12 @@
 - [ ] 取消底层 socket（真正的 abort，而不是只让等待方返回）
 - [ ] 查重重写失败纳入兜底；Firebase 配置路径共享整轮 budget
 - [ ] 低预算下"兜底回复"的体验评估（多次采样 + 人工判断）
+
+### v2.17 生成预算硬化（2026-10-23）
+- [x] retryAsync 每次尝试 AbortController，到 deadline 真 abort（OpenAI signal；Gemini abortSignal 运行时传）
+- [x] abort 统一转 GenerationBudgetExceededError + 计 timeouts；单测验证 signal.aborted=true
+- [x] 查重重写 try/catch：失败保留原回复，不 500
+- [x] 后台异步生成调用点全部确认已有 catch
+- [x] 单测 12、全量 1996、强制超时/查重探针无 500 无空回复
+- [ ] 网络级证明 socket 真的被取消（当前只有单测 + race 兜底）
+- [ ] 让 executeStrongConnection 在预算耗尽时重新抛错，从而真正走到 dedup catch（或明确它永远兜底）

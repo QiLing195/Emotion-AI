@@ -1631,15 +1631,20 @@ export class AIGirlfriendServer {
           const dup = findDuplicateReply(herRecent, result.text);
           if (dup) {
             console.log(`[Dedup] 与上一轮重复（相似度 ${dup.score.toFixed(2)}）→ 定向重写一次`);
-            const retry = await this.aiEngine.generateResponse(message, userId, {
-              clientSystemPrompt: `${enrichedSystemPrompt}\n\n${buildDedupRewriteInstruction(dup.matched)}`,
-              clientSettings: effectiveSettings,
-              persona,
-              emotionState: turnOutput.updatedEmotionState,
-              recentMessages,
-              generationBudget: genBudget,
-            });
-            if (typeof retry?.text === 'string' && retry.text.trim()) result = retry;
+            try {
+              const retry = await this.aiEngine.generateResponse(message, userId, {
+                clientSystemPrompt: `${enrichedSystemPrompt}\n\n${buildDedupRewriteInstruction(dup.matched)}`,
+                clientSettings: effectiveSettings,
+                persona,
+                emotionState: turnOutput.updatedEmotionState,
+                recentMessages,
+                generationBudget: genBudget,
+              });
+              if (typeof retry?.text === 'string' && retry.text.trim()) result = retry;
+            } catch (e) {
+              // v2.17：重写失败（含生成预算耗尽）不阻塞主流程，保留原回复（不 500）
+              console.warn(`[Dedup] 重写失败，保留原回复：${(e as Error).message}`);
+            }
           }
         }
 

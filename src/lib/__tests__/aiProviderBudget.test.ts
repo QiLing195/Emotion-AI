@@ -38,6 +38,16 @@ describe('v2.16 retryAsync + GenerationBudget', () => {
     expect(budget.timeouts).toBe(1);
   });
 
+  it('超时会真正 abort signal（v2.17：不是只让等待方返回）', async () => {
+    const budget = new GenerationBudget({ totalMs: 5_000, callMs: 40 });
+    let seen: AbortSignal | undefined;
+    await expect(retryAsync((signal) => {
+      seen = signal;
+      return new Promise(() => {});
+    }, 0, 1, budget)).rejects.toBeInstanceOf(GenerationBudgetExceededError);
+    expect(seen?.aborted).toBe(true);
+  });
+
   it('不可重试错误（4xx 非 429）立即抛出，不浪费预算', async () => {
     const budget = new GenerationBudget({ totalMs: 5_000, callMs: 2_000 });
     let attempts = 0;
