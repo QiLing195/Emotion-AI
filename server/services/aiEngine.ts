@@ -2,6 +2,7 @@ import { INITIAL_EMOTION_STATE } from '../../src/lib/emotionEngine.js';
 import type { EmotionState } from '../../src/lib/emotionEngine.js';
 import { generateAIResponse, generateAIChatResponse } from '../../src/lib/aiProvider.js';
 import type { AISettings } from '../../src/lib/aiProvider.js';
+import type { GenerationBudget } from '../../src/lib/generationBudget.js';
 import { firebaseService } from './firebase.js';
 import { executeStrongConnection } from '../../src/lib/moduleConnections.js';
 
@@ -16,6 +17,8 @@ export interface ClientContext {
   persona?: any;
   emotionState?: EmotionState;
   recentMessages?: { role: string; content: string; imageUrl?: string }[];
+  /** v2.16：整轮生成预算（agent/非 agent/重写共享同一个 deadline） */
+  generationBudget?: GenerationBudget;
 }
 
 export class AIRequestError extends Error {
@@ -69,6 +72,8 @@ export class DefaultAIEngine {
               messages,
               false,
               aiSettings.temperature ?? 0.7,
+              undefined,
+              clientContext.generationBudget ? { budget: clientContext.generationBudget } : {},
             ),
             () => ({ text: '嗯，我在。' }),
           );
@@ -81,6 +86,7 @@ export class DefaultAIEngine {
               userText,
               false,
               aiSettings.temperature ?? 0.7,
+              clientContext.generationBudget ? { budget: clientContext.generationBudget } : {},
             ),
             () => '嗯，我在。',
           );

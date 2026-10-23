@@ -169,3 +169,12 @@
 - [x] 生成人工复核清单 `artifacts/v2.14/ab/review-sheet.md`
 - [ ] 人工逐场景 ✅/❌ 回填 `manualVerdict`；若发现不可接受回复则回退默认值
 - [ ] 跨机器/长会话再验证（当前单机 13 场景 20 轮）
+
+### v2.16 单轮生成总预算（2026-10-23）
+- [x] `generationBudget.ts`：整轮 25s / 单次 15s，agent+n 条重写共享 deadline；超时不重试、耗尽不发起新调用
+- [x] 兜底：agent 空文本 / 非 agent 超时 → 「嗯，我在。」，不 500 不空回复
+- [x] 可观测：`[GenBudget]` 日志 + `/api/diagnostics.generationBudget`
+- [x] 单测 11、全量 1995、强制超时探针（1000/500ms）timeouts=1 且兜底
+- [ ] 取消底层 socket（真正的 abort，而不是只让等待方返回）
+- [ ] 查重重写失败纳入兜底；Firebase 配置路径共享整轮 budget
+- [ ] 低预算下"兜底回复"的体验评估（多次采样 + 人工判断）

@@ -45,6 +45,7 @@ import type { RelationshipStateV2 } from '../src/lib/relationshipProgressionV2.j
 import { buildPatternInjection, buildProactiveMemoryInjection, PERSONALITY_FOUNDATION } from '../src/lib/contentInjector.js';
 import { wrapUntrusted, wrapMemoryItems, UNTRUSTED_DATA_RULE } from '../src/lib/untrustedData.js';
 import { enforceExpressionPlan, type ExpressionEnforcementResult } from '../src/lib/expressionEnforcement.js';
+import { GenerationBudget, GenerationBudgetExceededError, type GenerationBudgetSnapshot } from '../src/lib/generationBudget.js';
 import { getDominantEmotion, describeReinforcementState } from '../src/lib/emotionEngine.js';
 import { assessEpisodeCandidate, isProactivelyRecallable } from '../src/lib/memoryGovernance.js';
 import { runConsolidation, mergeNearDuplicate } from '../src/lib/memoryEnhancer.js';
@@ -500,6 +501,8 @@ export class AIGirlfriendServer {
   private _lastPromptManifest: PromptBlockRecord[] | null = null;
   /** v2.13：最近一轮 ExpressionPlan 的输出端强制结果（可观测） */
   private _lastExpressionEnforcement: ExpressionEnforcementResult | null = null;
+  /** v2.16：最近一轮生成预算快照（总耗时/剩余/调用次数/超时次数），可观测 */
+  private _lastGenerationBudget: GenerationBudgetSnapshot | null = null;
 
   private currentActivityUnderstanding(fresh = false): ActivityUnderstanding | null {
     const now = Date.now();
@@ -1471,6 +1474,9 @@ export class AIGirlfriendServer {
 
         // v1.72 Agent 工具层：开关打开时先让她"查一下再回答"（有界 2 轮）
         let result: { text: string };
+        // v2.16：**整轮生成预算**——agent 多轮工具调用 / 收尾 / 接地重写 / 非 agent 路径共享同一 deadline，
+        // 一次卡死不会把整轮拖到几分钟（默认 TURN_GEN_BUDGET_MS=25000，单次 GEN_CALL_TIMEOUT_MS=15000）。
+        const genBudget = new GenerationBudget();
         if (agentToolsEnabled()) {
           const { generateAIChatResponse } = await import('../src/lib/aiProvider.js');
           const { separateActivation } = await import('../src/lib/emotionActivation.js');
@@ -1558,14 +1564,24 @@ export class AIGirlfriendServer {
               },
             },
             callModel: async (messages, tools) => {
-              const r = await generateAIChatResponse(
-                effectiveSettings as never,
-                enrichedSystemPrompt,
-                messages as never,
-                false,
-                0.7,
-                (tools ?? undefined) as never,
-              );
+              let r: { text?: string; functionCalls?: unknown[] };
+              try {
+                r = await generateAIChatResponse(
+                  effectiveSettings as never,
+                  enrichedSystemPrompt,
+                  messages as never,
+                  false,
+                  0.7,
+                  (tools ?? undefined) as never,
+                  { budget: genBudget } as never,
+                );
+              } catch (e) {
+                if (e instanceof GenerationBudgetExceededError) {
+                  console.warn('[GenBudget] 生成预算耗尽，agent 提前收尾');
+                  return { text: '' };
+                }
+                throw e;
+              }
               return {
                 text: String(r?.text ?? ''),
                 functionCalls: ((r?.functionCalls ?? []) as Array<{ name?: string; args?: Record<string, unknown> }>).map(c => ({
@@ -1577,14 +1593,29 @@ export class AIGirlfriendServer {
           });
           console.log(`[Agent] rounds=${agent.rounds} usedTools=${agent.usedTools} trace=${agent.toolTrace.map(t => `${t.tool}:${t.ok ? 'ok' : 'fail'}:${t.ms}ms`).join(',') || 'none'}`);
           result = { text: agent.text };
+          if (!result.text.trim()) {
+            // v2.16：预算耗尽时 agent 可能拿不到任何文本 —— 给确定性兜底，避免空回复
+            console.warn('[GenBudget] agent 无文本，使用确定性兜底');
+            result = { text: '嗯，我在。' };
+          }
         } else {
-          result = await this.aiEngine.generateResponse(message, userId, {
-            clientSystemPrompt: enrichedSystemPrompt,
-            clientSettings: effectiveSettings,
-            persona,
-            emotionState: turnOutput.updatedEmotionState,
-            recentMessages,
-          });
+          try {
+            result = await this.aiEngine.generateResponse(message, userId, {
+              clientSystemPrompt: enrichedSystemPrompt,
+              clientSettings: effectiveSettings,
+              persona,
+              emotionState: turnOutput.updatedEmotionState,
+              recentMessages,
+              generationBudget: genBudget,
+            });
+          } catch (e) {
+            if (e instanceof GenerationBudgetExceededError) {
+              console.warn('[GenBudget] 生成预算耗尽，使用确定性兜底');
+              result = { text: '嗯，我在。' };
+            } else {
+              throw e;
+            }
+          }
         }
 
         // ── v1.32 生成后查重：她又把上一轮那句话原样说了一遍 → 定向重写一次 ──
@@ -1606,6 +1637,7 @@ export class AIGirlfriendServer {
               persona,
               emotionState: turnOutput.updatedEmotionState,
               recentMessages,
+              generationBudget: genBudget,
             });
             if (typeof retry?.text === 'string' && retry.text.trim()) result = retry;
           }
@@ -1650,6 +1682,7 @@ export class AIGirlfriendServer {
                 message,
                 false,
                 0.7,
+                { budget: genBudget },
               );
               const retryText = (typeof retry === 'string' ? retry : '').trim();
               if (retryText) {
@@ -1671,6 +1704,14 @@ export class AIGirlfriendServer {
             }
           }
         }
+
+        // v2.16：记录本轮生成预算（总耗时 / 剩余 / 调用次数 / 超时次数），供诊断与真实使用观察
+        this._lastGenerationBudget = genBudget.snapshot();
+        console.log(
+          `[GenBudget] elapsed=${this._lastGenerationBudget.elapsedMs}ms remaining=${this._lastGenerationBudget.remainingMs}ms `
+          + `calls=${this._lastGenerationBudget.calls} timeouts=${this._lastGenerationBudget.timeouts}`
+          + (this._lastGenerationBudget.expired ? ' EXPIRED' : ''),
+        );
 
         const relationshipTurn = processSuccessfulRelationshipTurn(this._relationshipState, {
           userText: message,
@@ -2442,6 +2483,7 @@ export class AIGirlfriendServer {
           },
           lastTurnTimings: this._lastTurnTimings,
           expressionEnforcement: this._lastExpressionEnforcement,
+          generationBudget: this._lastGenerationBudget,
           prompt: {
             blocks: this._lastPromptManifest?.length ?? 0,
             chars: (this._lastPromptManifest ?? []).filter(b => !b.suppressed).reduce((n, b) => n + b.chars, 0),

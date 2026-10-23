@@ -1,6 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import { sleep } from './utils';
+import {
+  GenerationBudget,
+  GenerationBudgetExceededError,
+  raceWithDeadline,
+  singleCallBudget,
+} from './generationBudget';
 
 export interface AISettings {
   provider: 'gemini' | 'openai' | 'custom';
@@ -11,19 +17,29 @@ export interface AISettings {
   temperature?: number;
 }
 
-// Exponential backoff retry utility
-async function retryAsync<T>(
+// Exponential backoff retry utility（v2.16：可传 GenerationBudget，预算耗尽立即停止，不再重试）
+export async function retryAsync<T>(
   fn: () => Promise<T>,
   maxRetries: number = Number.isFinite(Number(process.env.AI_MAX_RETRIES)) ? Number(process.env.AI_MAX_RETRIES) : 3,
-  baseDelay: number = 1000
+  baseDelay: number = 1000,
+  budget?: GenerationBudget,
 ): Promise<T> {
   let lastError: any;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // 预算已耗尽：连这次调用都不发（调用方应走确定性兜底）
+    const timeoutMs = budget ? budget.beginCall() : Infinity;
     try {
-      return await fn();
+      return budget ? await raceWithDeadline(fn(), timeoutMs, 'ai_call') : await fn();
     } catch (error: any) {
       lastError = error;
+
+      // 本次等超时 / 整轮预算耗尽：不再重试
+      if (error instanceof GenerationBudgetExceededError) {
+        budget?.noteTimeout();
+        throw error;
+      }
+      if (budget?.expired()) throw error;
 
       // Determine if error is retryable
       const status = error?.status || error?.code;
@@ -44,15 +60,20 @@ async function retryAsync<T>(
         throw error;
       }
 
-      // Calculate exponential backoff with jitter
+      // 剩余预算不够再试一次：直接放弃（把时间留给兜底）
+      if (budget && budget.remainingMs() <= 700) throw error;
+
+      // Calculate exponential backoff with jitter；退避时间不得超过剩余预算
       const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
-      console.warn(`AI API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(delay)}ms:`, error.message);
-      await sleep(delay);
+      const wait = budget ? Math.min(delay, Math.max(0, budget.remainingMs() - 300)) : delay;
+      console.warn(`AI API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(wait)}ms:`, error.message);
+      await sleep(wait);
     }
   }
 
   throw lastError;
 }
+
 
 // ════════════════════════════════════════════════════════════
 // Client 缓存 — 避免每次 API 调用都新建连接
@@ -85,16 +106,23 @@ export function clearClientCache(): void {
   clientCache.clear();
 }
 
+export interface GenerationCallOptions {
+  /** v2.16：整轮共享预算；不传则按单次调用预算自我约束（后台旁路调用） */
+  budget?: GenerationBudget;
+}
+
 export async function generateAIResponse(
   settings: AISettings,
   systemPrompt: string,
   userPrompt: string,
   isJson: boolean = false,
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  options: GenerationCallOptions = {},
 ): Promise<string> {
   if (!settings || !settings.apiKey) {
     throw new Error('API Key not configured');
   }
+  const budget = options.budget ?? singleCallBudget();
 
   return retryAsync(async () => {
     if (settings.provider === 'gemini') {
@@ -146,7 +174,7 @@ export async function generateAIResponse(
       });
       return response.choices[0].message.content || (isJson ? '{}' : '');
     }
-  }, 3, 1000);
+  }, 3, 1000, budget);
 }
 
 export async function generateEmbeddings(
@@ -221,11 +249,13 @@ export async function generateAIChatResponse(
   messages: { role: 'user' | 'assistant', content: string, imageUrl?: string }[],
   isJson: boolean = false,
   temperature: number = 0.7,
-  tools?: any[]
+  tools?: any[],
+  options: GenerationCallOptions = {},
 ): Promise<{ text: string, functionCalls?: any[] }> {
   if (!settings || !settings.apiKey) {
     throw new Error('API Key not configured');
   }
+  const budget = options.budget ?? singleCallBudget();
 
   return retryAsync(async () => {
     if (settings.provider === 'gemini') {
@@ -343,5 +373,5 @@ export async function generateAIChatResponse(
         ...(toolCalls ? { functionCalls: toolCalls } : {}),
       };
     }
-  }, 3, 1000);
+  }, 3, 1000, budget);
 }
