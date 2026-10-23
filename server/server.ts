@@ -113,7 +113,7 @@ import { agentToolsEnabled, runAgentLoop } from './services/agentLoop.js';
 import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/herNotes.js';
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
-import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, memoriesDir } from './services/memoryAdmin.js';
+import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, memoriesDir, parsePurgeBackups } from './services/memoryAdmin.js';
 import { PromptComposer, summarizeManifest, type PromptBlockRecord } from './services/promptComposer.js';
 import { readRecentActivity } from './services/activityWatcher.js';
 import { understandActivity, describeUnderstanding, toActivityConcern, activityPromptLine, updateCareStreak, emptyCareStreak, type ActivityUnderstanding, type CareStreak } from './services/activityUnderstanding.js';
@@ -2329,7 +2329,8 @@ export class AIGirlfriendServer {
     this.app.delete('/api/memories/:id', (req, res) => {
       const id = String(req.params.id || '');
       if (!id || id.length > 200) return res.status(400).json({ ok: false, error: 'invalid id' });
-      const purge = req.query.purgeBackups === '1' || req.query.purgeBackups === 'true';
+      // v2.25：默认连带清理 .bak（删除要传播）；显式 ?purgeBackups=0/false 才保留备份
+      const purge = parsePurgeBackups(req.query.purgeBackups);
       const result = deleteEpisode(episodicStore, memoryGraph, id, {
         backupDir: memoriesDir(),
         purgeBackups: purge,

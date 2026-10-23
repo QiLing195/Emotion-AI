@@ -242,3 +242,10 @@
 - [x] 单测 23 通过（新增 2）、tsc 0、服务健康
 - [ ] 备份文件 `.pre-redact-*` 若保留仍含原话：是否加 `--purge-backup` 或加密备份
 - [ ] 其它数据面（activity_log / 截图 / episodic 叙事）是否也要同样的历史清理工具
+
+### v2.25 删除 `.bak` 传播（2026-10-23）
+- [x] `DELETE /api/memories/:id` 默认 `purgeBackups=true`（`parsePurgeBackups`），显式 `0/false` 才保留
+- [x] 导出不包含 `.bak`（补测试断言）
+- [x] 单测 8 通过、隔离 E2E 验证 `scrubbedBackups=1` 且删除后 `.bak` 不含目标、tsc 0
+- [ ] `memory_graph.json.bak` 等非 episodic 备份的按 id 清理
+- [ ] 旧的 `.bak` 批量清理脚本/端点（`privacy:purge-backups`）

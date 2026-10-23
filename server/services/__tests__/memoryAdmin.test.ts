@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MemoryGraph } from '../../../src/lib/memoryGraph.js';
 import type { EpisodicMemory, EpisodicMemoryStore } from '../../../src/lib/episodicMemory.js';
-import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, scrubBackups } from '../memoryAdmin.js';
+import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, scrubBackups, parsePurgeBackups } from '../memoryAdmin.js';
 
 let dir = '';
 
@@ -116,10 +116,33 @@ describe('记忆闭环（v2.00）：删除 / 纠错 / 导出', () => {
     writeFileSync(join(dir, 'emotion_state.json'), '{"a":1}', 'utf8');
     writeFileSync(join(dir, 'activity_log.jsonl'), '{"t":1}\n', 'utf8');
     writeFileSync(join(dir, 'screen-1.jpg'), 'binary', 'utf8');
+    writeFileSync(join(dir, 'episodic_memory.json.bak'), '{"episodes":[]}', 'utf8');
     const data = exportMemories(dir);
     expect(data.files.map(f => f.name).sort()).toEqual(['activity_log.jsonl', 'emotion_state.json']);
     expect(data.skipped.some(s => s.name === 'screen-1.jpg')).toBe(true);
+    // v2.25：.bak 备份不导出（否则"删除"会从导出文件里复活）
+    expect(data.skipped.some(s => s.name === 'episodic_memory.json.bak')).toBe(true);
     expect(existsSync(join(dir, 'emotion_state.json'))).toBe(true);
+  });
+
+  it('v2.25：删除默认清理 .bak；显式 false/0 才保留（parsePurgeBackups）', () => {
+    expect(parsePurgeBackups(undefined)).toBe(true);
+    expect(parsePurgeBackups('')).toBe(true);
+    expect(parsePurgeBackups('1')).toBe(true);
+    expect(parsePurgeBackups('true')).toBe(true);
+    expect(parsePurgeBackups('0')).toBe(false);
+    expect(parsePurgeBackups('false')).toBe(false);
+    expect(parsePurgeBackups('FALSE')).toBe(false);
+    expect(parsePurgeBackups(false)).toBe(false);
+    expect(parsePurgeBackups(0)).toBe(false);
+
+    // 行为衔接：purge=true 会把 .bak 里的同 id 清掉（deleteEpisode 已有能力）
+    const store = storeOf(ep('e1'));
+    const bakPath = join(dir, 'episodic_memory.json.bak');
+    writeFileSync(bakPath, JSON.stringify({ episodes: [ep('e1'), ep('e2', '另一条')] }, null, 2), 'utf8');
+    const r = deleteEpisode(store, new MemoryGraph(), 'e1', { backupDir: dir, purgeBackups: parsePurgeBackups(undefined), dir });
+    expect(r.ok).toBe(true);
+    expect(r.scrubbedBackups).toBe(1);
   });
 
   it('查看单条：去掉 embedding 大字段', () => {

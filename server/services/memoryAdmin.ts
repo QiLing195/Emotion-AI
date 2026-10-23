@@ -193,6 +193,19 @@ export function exportMemories(dir = memoriesDir()): MemoryExport {
   return { exportedAt: Date.now(), dir, files, skipped };
 }
 
+/**
+ * v2.25：删除时是否连带清理 `.bak` 副本。
+ *
+ * 默认 **true** —— "删除"应当把这条记忆从备份里也撤掉（v2.00 审查的 P1：
+ * `.bak` 会留旧副本，等于删了还能从备份复活）。显式 `?purgeBackups=0/false` 才保留旧行为。
+ */
+export function parsePurgeBackups(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return true;
+  if (value === false || value === 0) return false;
+  const s = String(value).toLowerCase();
+  return !(s === '0' || s === 'false');
+}
+
 /** 查看单条（界面/接口用；不含 embedding 这种大字段） */
 export function viewEpisode(store: EpisodicMemoryStore, id: string): Record<string, unknown> | null {
   const ep = store.episodes.find(e => e.id === id);
