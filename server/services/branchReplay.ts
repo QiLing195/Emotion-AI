@@ -15,6 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import {
   buildCauseChain,
   classifyOutcome,
+  hydrateTimelineNodes,
   TIMELINE_DEFAULT_PATH,
   type TimelineRecord,
 } from './emotionTimeline.js';
@@ -82,7 +83,9 @@ export interface ReplayResult {
 function loadNodes(path: string): TimelineRecord[] {
   try {
     if (!existsSync(path)) return [];
-    return readFileSync(path, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as TimelineRecord);
+    const nodes = readFileSync(path, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as TimelineRecord);
+    // v2.23：落盘默认只存引文 hash；同进程内用内存缓存还原（跨重启拿不到 ⇒ 原因链自然降级）
+    return hydrateTimelineNodes(nodes);
   } catch {
     return [];
   }

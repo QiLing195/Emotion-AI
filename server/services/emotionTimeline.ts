@@ -9,7 +9,9 @@
  *
  * 设计约束（对齐"状态外置、转移确定性、可审计"的原则）：
  *   ① **只 append**：一行一个节点，不改任何状态、不参与决策（Stage 1 的读路径为空）。
- *   ② **事实层，不经 LLM 改写**：数字直接从 EmotionState 取，引文只取他的原话（≤12 字）。
+ *   ② **事实层，不经 LLM 改写**：数字直接从 EmotionState 取；引文只取他的原话（≤12 字），
+ *      且 **默认不落盘原文**（v2.23：落盘只有 sha256 前 16 位 + 字符数，原文只在同进程内存缓存里；
+ *      `TIMELINE_STORE_QUOTE=true` 才恢复"把原话写进文件"的旧行为）。
  *   ③ 滚动与上限：单文件超过 MAX_BYTES 就滚动为 `.rot-<ts>`，只保留最近 KEEP_ROTATIONS 份。
  *   ④ 默认关：`ENABLE_EMOTION_TIMELINE=true` 才写；关着时连目录都不碰。
  *   ⑤ 写失败静默：日志问题绝不影响对话。
@@ -20,6 +22,7 @@
  *   · 不做学习（Stage 4）
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 import type { EmotionState } from '../../src/lib/emotionTypes.js';
 import { separateActivation } from '../../src/lib/emotionActivation.js';
@@ -32,6 +35,94 @@ export const TIMELINE_KEEP_ROTATIONS = 14;          // 保留最近 14 份滚动
 
 export function timelineEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.ENABLE_EMOTION_TIMELINE === 'true';
+}
+
+/**
+ * v2.23：是否把「他的原话」**写到文件里**。默认 false（只存 hash/长度）。
+ * 原因：`memories/emotion_timeline.jsonl` 也是隐私面；但原因链（她说"因为你说…"）需要原文。
+ * 折中：原文进**同进程内存缓存**（bounded），读回时按 hash 还原；进程重启后原文丢失，
+ * 原因链自然降级成"只说状态、不引原话"。要旧行为（原话落盘）就 `TIMELINE_STORE_QUOTE=true`。
+ */
+export function timelineStoreQuote(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.TIMELINE_STORE_QUOTE === 'true';
+}
+
+const QUOTE_CACHE_MAX = 64;
+const quoteCache = new Map<string, string>();
+
+/** 引用摘要（不可逆，短；用于同进程读回/去重） */
+export function quoteDigest(raw: string): string {
+  return createHash('sha256').update(String(raw)).digest('hex').slice(0, 16);
+}
+
+function rememberQuote(raw: string | null): string | null {
+  if (!raw) return null;
+  const hash = quoteDigest(raw);
+  if (!quoteCache.has(hash)) {
+    quoteCache.set(hash, raw);
+    while (quoteCache.size > QUOTE_CACHE_MAX) {
+      const oldest = quoteCache.keys().next().value;
+      if (!oldest) break;
+      quoteCache.delete(oldest);
+    }
+  }
+  return hash;
+}
+
+/** 同进程内按摘要取回原文（跨重启/跨进程取不到） */
+export function resolveQuoteFromCache(hash: string | null | undefined): string | null {
+  if (!hash) return null;
+  return quoteCache.get(String(hash)) ?? null;
+}
+
+/** 测试用：模拟进程重启（清空内存缓存） */
+export function clearTimelineQuoteCache(): void {
+  quoteCache.clear();
+}
+
+function maskQuote(raw: string | null): { quoted: string | null; quotedHash: string | null; quotedLength: number | null } {
+  if (!raw) return { quoted: null, quotedHash: null, quotedLength: null };
+  if (timelineStoreQuote()) return { quoted: raw, quotedHash: null, quotedLength: null };
+  const hash = rememberQuote(raw);
+  return { quoted: null, quotedHash: hash, quotedLength: Array.from(raw).length };
+}
+
+/** 写盘前脱敏：默认不写原文，只写 hash/长度；原文进内存缓存 */
+function sanitizeForStorage(node: TimelineRecord): TimelineRecord {
+  if (timelineStoreQuote()) return node;
+  if (node.kind === 'state_change' && node.trigger?.quoted) {
+    return { ...node, trigger: { ...node.trigger, ...maskQuote(node.trigger.quoted) } };
+  }
+  if (node.kind === 'branch' && node.branch?.causeQuoted) {
+    const masked = maskQuote(node.branch.causeQuoted);
+    return {
+      ...node,
+      branch: {
+        ...node.branch,
+        causeQuoted: masked.quoted,
+        causeQuotedHash: masked.quotedHash,
+        causeQuotedLength: masked.quotedLength,
+      },
+    };
+  }
+  return node;
+}
+
+/** 读回时补原文（仅同进程缓存命中；命中不了就保持 null，原因链自动降级） */
+export function hydrateTimelineNodes(nodes: TimelineRecord[]): TimelineRecord[] {
+  return nodes.map(hydrateFromCache);
+}
+
+function hydrateFromCache(node: TimelineRecord): TimelineRecord {
+  if (node.kind === 'state_change' && !node.trigger?.quoted && node.trigger?.quotedHash) {
+    const raw = resolveQuoteFromCache(node.trigger.quotedHash);
+    if (raw) return { ...node, trigger: { ...node.trigger, quoted: raw } };
+  }
+  if (node.kind === 'branch' && !node.branch?.causeQuoted && node.branch?.causeQuotedHash) {
+    const raw = resolveQuoteFromCache(node.branch.causeQuotedHash);
+    if (raw) return { ...node, branch: { ...node.branch, causeQuoted: raw } };
+  }
+  return node;
 }
 
 /** 触发来源（事实层：只记录"是什么推动了她"，不解释） */
@@ -64,7 +155,15 @@ export interface EmotionTimelineNode {
   round: number;
   turnId: string;
   kind: 'state_change';
-  trigger: { source: TimelineTriggerSource; hisEmotion: string | null; hisIntensity: number | null; quoted: string | null };
+  trigger: {
+    source: TimelineTriggerSource;
+    hisEmotion: string | null;
+    hisIntensity: number | null;
+    quoted: string | null;
+    /** v2.23：原文不落盘时的引用摘要（sha256 前 16 位） */
+    quotedHash?: string | null;
+    quotedLength?: number | null;
+  };
   before: TimelineFrame;
   after: TimelineFrame;
   delta: { valence: number; top: Array<[string, number]> };
@@ -197,7 +296,7 @@ export function appendTimelineNode(node: TimelineRecord, path = TIMELINE_DEFAULT
     const dir = dirname(path);
     if (dir && dir !== '.' && !existsSync(dir)) mkdirSync(dir, { recursive: true });
     rotateIfNeeded(path);
-    appendFileSync(path, `${JSON.stringify(node)}\n`, 'utf8');
+    appendFileSync(path, `${JSON.stringify(sanitizeForStorage(node))}\n`, 'utf8');
     return true;
   } catch {
     return false;
@@ -209,7 +308,7 @@ export function readRecentNodes(k: number, path = TIMELINE_DEFAULT_PATH): Timeli
   try {
     if (!existsSync(path)) return [];
     const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean);
-    return lines.slice(-Math.max(0, k)).map(l => JSON.parse(l) as TimelineRecord);
+    return lines.slice(-Math.max(0, k)).map(l => hydrateFromCache(JSON.parse(l) as TimelineRecord));
   } catch {
     return [];
   }
@@ -322,6 +421,9 @@ export interface TimelineBranchNode {
     authority: 'rules' | 'jev';
     usedVoiceSnippet: boolean;
     causeQuoted: string | null;
+    /** v2.23：原文不落盘时的引用摘要 */
+    causeQuotedHash?: string | null;
+    causeQuotedLength?: number | null;
     /** 她这一轮说的原话前 80 字（outcome 要用它判断"他接住了吗"） */
     replyExcerpt: string;
   };

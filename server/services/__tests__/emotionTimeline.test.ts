@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, statSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -13,6 +13,7 @@ import {
   segmentOf,
   buildBranchNode,
   buildOutcomeNode,
+  clearTimelineQuoteCache,
   TIMELINE_MAX_BYTES,
   type EmotionTimelineNode,
 } from '../emotionTimeline.js';
@@ -262,5 +263,106 @@ describe('Stage 3：分支枚举 + 结果 + 路径隔离', () => {
       expect(back[1].refRound).toBe(5);
       expect(back[1].outcome.hisReaction).toBe('landed');
     }
+  });
+});
+
+/**
+ * v2.23：时间线落盘脱敏 —— 用户原话默认只存 hash/长度，原文仅在**同进程内存缓存**里；
+ * 进程重启后读回拿不到原文 ⇒ 原因链自动降级（只说状态、不引原话）。
+ * TIMELINE_STORE_QUOTE=true 才恢复"原话落盘"的旧行为。
+ */
+describe('v2.23 落盘脱敏（默认不把他的话写进文件）', () => {
+  it('默认：文件里没有原话，只有 quotedHash/quotedLength；同进程读回能还原', () => {
+    clearTimelineQuoteCache();
+    const dir = mkdtempSync(join(tmpdir(), 'tl-mask-'));
+    const path = join(dir, 'emotion_timeline.jsonl');
+    const node = buildStateChangeNode({
+      ts: 1, round: 1, turnId: 'u-mask-1', userText: '我今天被领导当众骂了一顿', hisEmotion: 'sad',
+      before: freshState(), after: stateWithSad(0.3),
+    });
+    expect(appendTimelineNode(node, path)).toBe(true);
+
+    const raw = readFileSync(path, 'utf8');
+    expect(raw).not.toContain('我今天被领导当众骂了一顿');
+    const stored = JSON.parse(raw.trim().split('\n')[0]);
+    expect(stored.trigger.quoted).toBeNull();
+    expect(stored.trigger.quotedHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(stored.trigger.quotedLength).toBeGreaterThan(0);
+
+    // 同进程：按 hash 从内存缓存还原，原因链行为不变
+    const back = readRecentNodes(1, path);
+    const first = back[0];
+    if (first.kind !== 'state_change') throw new Error('unexpected kind');
+    expect(first.trigger.quoted).toBe('我今天被领导当众骂了一顿');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('清缓存（模拟重启）：读回没有原话，只有 hash/长度（原因链降级，不编）', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tl-mask2-'));
+    const path = join(dir, 'emotion_timeline.jsonl');
+    const node = buildStateChangeNode({
+      ts: 2, round: 2, turnId: 'u-mask-2', userText: '我今天被领导当众骂了一顿', hisEmotion: 'sad',
+      before: freshState(), after: stateWithSad(0.3),
+    });
+    appendTimelineNode(node, path);
+    clearTimelineQuoteCache();
+
+    const back = readRecentNodes(1, path);
+    const first = back[0];
+    if (first.kind !== 'state_change') throw new Error('unexpected kind');
+    expect(first.trigger.quoted).toBeNull();
+    expect(first.trigger.quotedHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(first.trigger.quotedLength).toBeGreaterThan(0);
+
+    // 没有原文就不出 "because you said" 的原因链
+    const cause = buildCauseChain(back);
+    expect(cause.quoted).toBeNull();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('TIMELINE_STORE_QUOTE=true 才把原话写进文件（旧行为可回退）', () => {
+    const prev = process.env.TIMELINE_STORE_QUOTE;
+    process.env.TIMELINE_STORE_QUOTE = 'true';
+    const dir = mkdtempSync(join(tmpdir(), 'tl-mask3-'));
+    const path = join(dir, 'emotion_timeline.jsonl');
+    try {
+      const node = buildStateChangeNode({
+        ts: 3, round: 3, turnId: 'u-mask-3', userText: '我今天被领导当众骂了一顿', hisEmotion: 'sad',
+        before: freshState(), after: stateWithSad(0.3),
+      });
+      appendTimelineNode(node, path);
+      const raw = readFileSync(path, 'utf8');
+      expect(raw).toContain('我今天被领导当众骂了一顿');
+      const stored = JSON.parse(raw.trim().split('\n')[0]);
+      expect(stored.trigger.quoted).toBe('我今天被领导当众骂了一顿');
+      expect(stored.trigger.quotedHash ?? null).toBeNull();
+    } finally {
+      if (prev === undefined) delete process.env.TIMELINE_STORE_QUOTE;
+      else process.env.TIMELINE_STORE_QUOTE = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('分支节点 branch.causeQuoted 同样脱敏；同进程读回可还原', () => {
+    clearTimelineQuoteCache();
+    const dir = mkdtempSync(join(tmpdir(), 'tl-branch-mask-'));
+    const path = join(dir, 'emotion_timeline.jsonl');
+    const node = buildBranchNode({
+      ts: 4, round: 4, turnId: 'u-br-1', lowActive: true, lowSince: 10, lowTurns: 2,
+      hisEmotion: 'joy', usedVoiceSnippet: true,
+      causeQuoted: '我今天被领导当众骂了一顿',
+      reply: '我这两天有点沉，今天还被领导当众骂了一顿，所以笑不太出来。',
+    });
+    appendTimelineNode(node, path);
+    const raw = readFileSync(path, 'utf8');
+    expect(raw).not.toContain('我今天被领导当众骂了一顿');
+    const stored = JSON.parse(raw.trim().split('\n')[0]);
+    expect(stored.branch.causeQuoted).toBeNull();
+    expect(stored.branch.causeQuotedHash).toMatch(/^[a-f0-9]{16}$/);
+
+    const back = readRecentNodes(1, path)[0];
+    if (back.kind !== 'branch') throw new Error('unexpected kind');
+    expect(back.branch.causeQuoted).toBe('我今天被领导当众骂了一顿');
+    rmSync(dir, { recursive: true, force: true });
   });
 });

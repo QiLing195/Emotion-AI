@@ -227,3 +227,11 @@
 - [x] 修掉 flake 真根因：singleCallBudget 测试用真实时钟断言精确 3000 → 改为范围断言
 - [ ] causeQuote 在 timeline `causeQuoted` 里的落盘是否也要结构化/遮蔽（本地文件，非 trace）
 - [ ] 场景结果 JSON 是否脱敏（当前记录完整 plan；夹具输入是预设句）
+
+### v2.23 时间线落盘脱敏（2026-10-23）
+- [x] 时间线默认只存 `quotedHash`/`quotedLength`，原文进 bounded 同进程缓存；同进程原因链不变，跨重启降级为不引原话
+- [x] `TIMELINE_STORE_QUOTE=true` 可恢复原话落盘；`clearTimelineQuoteCache()` 模拟重启
+- [x] 单测 21 通过（新增 4 条）、隔离实例真实一轮脱敏、tsc 0
+- [ ] 旧 `emotion_timeline.jsonl` 历史原话是否迁移/清理（当前不自动改）
+- [ ] `replyExcerpt`（她的话）与 replay 输出是否也要脱敏
+- [ ] 多实例/多进程下的原因链一致性（缓存不共享）
