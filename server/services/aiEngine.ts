@@ -3,6 +3,7 @@ import type { EmotionState } from '../../src/lib/emotionEngine.js';
 import { generateAIResponse, generateAIChatResponse } from '../../src/lib/aiProvider.js';
 import type { AISettings } from '../../src/lib/aiProvider.js';
 import type { GenerationBudget } from '../../src/lib/generationBudget.js';
+import { GenerationBudgetExceededError } from '../../src/lib/generationBudget.js';
 import { firebaseService } from './firebase.js';
 import { executeStrongConnection } from '../../src/lib/moduleConnections.js';
 
@@ -96,6 +97,11 @@ export class DefaultAIEngine {
         return { text, emotionState: authoritativeState };
       } catch (error: any) {
         console.error('[AIEngine] Error:', error);
+        // v2.18：预算耗尽要原样上抛（调用方据此走确定性兜底），不能被包成 AIRequestError
+        if (error instanceof GenerationBudgetExceededError
+            || error?.name === 'GenerationBudgetExceededError') {
+          throw error;
+        }
         if (error instanceof AIRequestError) throw error;
         throw new AIRequestError(error?.message || 'AI request failed', { cause: error });
       }
@@ -134,6 +140,10 @@ export class DefaultAIEngine {
       return { text, emotionState: currentEmotionState };
     } catch (error: any) {
       console.error('[AIEngine] Error:', error);
+      if (error instanceof GenerationBudgetExceededError
+          || error?.name === 'GenerationBudgetExceededError') {
+        throw error;
+      }
       if (error instanceof AIRequestError) throw error;
       throw new AIRequestError(error?.message || 'AI request failed', { cause: error });
     }

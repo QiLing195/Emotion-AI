@@ -8,6 +8,7 @@
 //   PENDING — 设计中有但尚未实现的连接
 
 import { bus } from '../eventBus';
+import { GenerationBudgetExceededError } from './generationBudget';
 
 // ════════════════════════════════════════════════════════════
 // 1. 连接定义
@@ -378,6 +379,13 @@ export async function executeStrongConnection<T>(
     }
     return result;
   } catch (error) {
+    // v2.18：生成预算耗尽不是"连接故障" —— 不 fallback、不熔断，交给上层做确定性兜底
+    // （否则这里会抢先吞掉预算错误，dedup/非 agent 的兜底永远走不到）
+    if (error instanceof GenerationBudgetExceededError
+        || (error as { name?: string })?.name === 'GenerationBudgetExceededError') {
+      throw error;
+    }
+
     conn.consecutiveFailures++;
     conn.lastFailureTime = Date.now();
 

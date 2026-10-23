@@ -187,3 +187,11 @@
 - [x] 单测 12、全量 1996、强制超时/查重探针无 500 无空回复
 - [ ] 网络级证明 socket 真的被取消（当前只有单测 + race 兜底）
 - [ ] 让 executeStrongConnection 在预算耗尽时重新抛错，从而真正走到 dedup catch（或明确它永远兜底）
+
+### v2.18 预算错误路由（2026-10-23）
+- [x] executeStrongConnection：预算错误原样上抛、不计失败/不熔断（按 name 兼容副本）
+- [x] aiEngine 两处 catch：预算错误不再包成 AIRequestError
+- [x] 非 agent / 查重兜底真正接上（探针 stderr 可见对应日志）
+- [x] 新增 moduleConnections 单测 3 条；全量 1999 通过、tsc 0
+- [ ] 熔断 broken 状态 × 预算错误的组合测试
+- [ ] 兜底回复体验评估（低预算多次采样 + 人工）
