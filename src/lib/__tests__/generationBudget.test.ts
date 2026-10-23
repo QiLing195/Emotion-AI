@@ -60,7 +60,7 @@ describe('v2.16 单轮生成预算', () => {
   it('raceWithDeadline：快任务正常返回，慢任务按 deadline 抛 GenerationBudgetExceededError', async () => {
     await expect(raceWithDeadline(Promise.resolve('ok'), 100)).resolves.toBe('ok');
     await expect(raceWithDeadline(new Promise(res => setTimeout(res, 50)), 500)).resolves.toBeUndefined();
-    await expect(raceWithDeadline(new Promise(() => {}), 20, 'slow')).rejects.toBeInstanceOf(GenerationBudgetExceededError);
+    await expect(raceWithDeadline(new Promise(() => {}), 120, 'slow')).rejects.toBeInstanceOf(GenerationBudgetExceededError);
   });
 
   it('snapshot 记录调用次数/超时次数/剩余时间', () => {
