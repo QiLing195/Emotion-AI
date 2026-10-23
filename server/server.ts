@@ -44,6 +44,7 @@ import {
 import type { RelationshipStateV2 } from '../src/lib/relationshipProgressionV2.js';
 import { buildPatternInjection, buildProactiveMemoryInjection, PERSONALITY_FOUNDATION } from '../src/lib/contentInjector.js';
 import { wrapUntrusted, wrapMemoryItems, UNTRUSTED_DATA_RULE } from '../src/lib/untrustedData.js';
+import { enforceExpressionPlan, type ExpressionEnforcementResult } from '../src/lib/expressionEnforcement.js';
 import { getDominantEmotion, describeReinforcementState } from '../src/lib/emotionEngine.js';
 import { assessEpisodeCandidate, isProactivelyRecallable } from '../src/lib/memoryGovernance.js';
 import { runConsolidation, mergeNearDuplicate } from '../src/lib/memoryEnhancer.js';
@@ -497,6 +498,8 @@ export class AIGirlfriendServer {
   private _lastTurnTimings: Record<string, unknown> | null = null;
   /** v2.02 Prompt Composer：最近一轮的块清单（只含块名/类别/字数，不含正文） */
   private _lastPromptManifest: PromptBlockRecord[] | null = null;
+  /** v2.13：最近一轮 ExpressionPlan 的输出端强制结果（可观测） */
+  private _lastExpressionEnforcement: ExpressionEnforcementResult | null = null;
 
   private currentActivityUnderstanding(fresh = false): ActivityUnderstanding | null {
     const now = Date.now();
@@ -2007,6 +2010,21 @@ export class AIGirlfriendServer {
           strategyReason: turnOutput.strategyDecision.reason,
         };
 
+        // ── v2.13：ExpressionPlan 运行时强制（输出端）──
+        // 计划器给的是结构化约束；这里对**可判定**的违规做最小改写：
+        // ① transient/unknown 不得声称“这两天/一直”；② 问句不超过计划上限。
+        // 不确定的（主意图/语气/事实）不猜——留给 Prompt 与人工复核。
+        try {
+          const enforcement = enforceExpressionPlan(aiText, aiCoordinator.getLastExpressionPlan(), {
+            enabled: process.env.DISABLE_EXPRESSION_ENFORCEMENT !== 'true',
+          });
+          this._lastExpressionEnforcement = enforcement;
+          if (enforcement.changed) {
+            console.log(`[ExpressionGuard] ${enforcement.changes.join(' / ')}`);
+            aiText = enforcement.text;
+          }
+        } catch { /* 强制层永不打断主流程 */ }
+
         // ── v1.60-p0 / P0-2：**来源归属安全闸**（Guard 只判定，不改写原表达）──
         // 位置就在最终响应之前 ⇒ **任何**发出去的 aiText 都必须经过它。
         // FAIL ⇒ 换成只从**已确认 provenance** 造句的安全回退；PASS/AMBIGUOUS/NOT_APPLICABLE ⇒ 逐字采用原表达。
@@ -2423,6 +2441,7 @@ export class AIGirlfriendServer {
             debugTimings: process.env.DEBUG_TIMINGS === 'true',
           },
           lastTurnTimings: this._lastTurnTimings,
+          expressionEnforcement: this._lastExpressionEnforcement,
           prompt: {
             blocks: this._lastPromptManifest?.length ?? 0,
             chars: (this._lastPromptManifest ?? []).filter(b => !b.suppressed).reduce((n, b) => n + b.chars, 0),

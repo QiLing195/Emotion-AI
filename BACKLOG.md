@@ -144,3 +144,11 @@
 - [x] `package.json` 增加 `security:injection` / `security:injection-e2e` / `test:security`
 - [ ] 概率结论：同一攻击重复 N 次，统计照做率（当前单次采样）
 - [ ] 语义记忆 / 好奇心 / 模式三路的端到端攻击
+
+### v2.13 ExpressionPlan 运行时强制（2026-10-23）
+- [x] `expressionEnforcement.ts`：transient 去“这两天/一直”声称 + 问句上限（输出端）
+- [x] 接入 server（生成后、来源闸前）；`[ExpressionGuard]` 日志 + `/api/diagnostics.expressionEnforcement`；`DISABLE_EXPRESSION_ENFORCEMENT` 可关
+- [x] 实测修正：silent 的 maxQuestions=0 会把正常关心改成陈述句 ⇒ silent 至少保留 1 问
+- [x] 单测 9 条、全量 1984 通过、场景集 10/10、真实触发 `questions_capped:2->1`
+- [ ] 主意图/语气/“最多一句自述”的运行时强制（无可靠判据，需要先做检测器）
+- [ ] 强制开/关 A/B（看质量与“呆板感”）
