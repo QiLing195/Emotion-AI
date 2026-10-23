@@ -1,0 +1,48 @@
+{
+  "ranAt": "2026-10-23T05:43:11.420Z",
+  "n": 3,
+  "runs": [
+    {
+      "arm": "on",
+      "n": 1,
+      "green": 13,
+      "total": 13,
+      "outPath": "E:\\deepseek\\ai_friend-3\\artifacts\\v2.14\\ab\\on-1.json"
+    },
+    {
+      "arm": "off",
+      "n": 1,
+      "green": 12,
+      "total": 13,
+      "outPath": "E:\\deepseek\\ai_friend-3\\artifacts\\v2.14\\ab\\off-1.json"
+    },
+    {
+      "arm": "on",
+      "n": 2,
+      "green": 13,
+      "total": 13,
+      "outPath": "E:\\deepseek\\ai_friend-3\\artifacts\\v2.14\\ab\\on-2.json"
+    },
+    {
+      "arm": "off",
+      "n": 2,
+      "green": 13,
+      "total": 13,
+      "outPath": "E:\\deepseek\\ai_friend-3\\artifacts\\v2.14\\ab\\off-2.json"
+    },
+    {
+      "arm": "on",
+      "n": 3,
+      "green": 13,
+      "total": 13,
+      "outPath": "E:\\deepseek\\ai_friend-3\\artifacts\\v2.14\\ab\\on-3.json"
+    },
+    {
+      "arm": "off",
+      "n": 3,
+      "green": 13,
+      "total": 13,
+      "outPath": "E:\\deepseek\\ai_friend-3\\artifacts\\v2.14\\ab\\off-3.json"
+    }
+  ]
+}

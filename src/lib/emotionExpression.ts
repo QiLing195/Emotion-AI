@@ -19,7 +19,10 @@ export const EXPRESSION_BUDGET_TURNS = 3;
 
 /** 统一表达接口（v1.65）：一个机构负责所有情绪表达 —— 取代 v1.60 的独立片段 + v1.64 的叠加 */
 export function unifiedExpressionEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.ENABLE_UNIFIED_EXPRESSION === 'true';
+  // v2.15：N=3 重复 A/B（每次全新 memories 快照）后改为**默认开**：
+  // 两臂各 3 次都 13/13；ON 自我披露 7.7 vs 16、"这两天/一直" 1 vs 3.7、平均字数 55.7 vs 67。
+  // 需要回退时显式设 ENABLE_UNIFIED_EXPRESSION=false。
+  return env.ENABLE_UNIFIED_EXPRESSION !== 'false';
 }
 
 /**

@@ -108,9 +108,10 @@ describe('变体轮换（按预算桶，确定性 + 相邻不重复）', () => {
   });
 });
 describe('v1.65 统一接口（一个机构 + 允许多句）', () => {
-  it('开关独立：ENABLE_UNIFIED_EXPRESSION', () => {
-    expect(unifiedExpressionEnabled({} as NodeJS.ProcessEnv)).toBe(false);
+  it('开关独立：ENABLE_UNIFIED_EXPRESSION（v2.15 默认开，false 回退）', () => {
+    expect(unifiedExpressionEnabled({} as NodeJS.ProcessEnv)).toBe(true);
     expect(unifiedExpressionEnabled({ ENABLE_UNIFIED_EXPRESSION: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+    expect(unifiedExpressionEnabled({ ENABLE_UNIFIED_EXPRESSION: 'false' } as NodeJS.ProcessEnv)).toBe(false);
   });
 
   it('短许可：只给"可以说"+示例+最多一句（≤30 字），**不给格式骨架**', () => {

@@ -19,7 +19,7 @@ const allScenarios = JSON.parse(fs.readFileSync('test_data/emotion_scenarios.jso
 const scenarios = ONLY.length ? allScenarios.filter(s => ONLY.includes(s.id)) : allScenarios;
 const USER_ID = process.env.SCENARIO_USER || 'emotion-scenarios';
 
-const SELF_DISCLOSURE = /(我(也|这两天|最近|今天|现在|心里|有点|觉得)|我有点|我这儿|我这边|本子上|笔搁|不想动|划掉|写了两句|^闷|闷[，。,.]|说不上来|有点沉)/g;
+const SELF_DISCLOSURE = /(我(也|这两天|最近|今天|现在|心里|有点|觉得)|我有点|我这儿|我这边|本子上|笔搁|不想动|划掉|写了两句|^闷|闷[，。,.]|说不上来|有点沉|(?<!你)(?:这两天|这几天|最近几天|这些天|这段时间)|提不起劲|心里闷着?|^不太好)/g;
 const AI_WORDS = ['AI', '人工智能', '模型', '程序', '不是真人', '虚拟'];
 const CATCH_WORDS = ['难过', '累', '辛苦', '难受', '听起来', '嗯', '不容易', '怎么了', '抱抱', '我在', '坐一会儿', '什么都不用做', '在呢'];
 

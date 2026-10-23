@@ -160,3 +160,12 @@
 - [x] `scripts/compare-scenario-arms.mjs` 固定对比入口；仓库默认仍 env 控制（未改 ON）
 - [ ] N=3 重复 + manualVerdict 回填，再决定 unified expression 默认值
 - [ ] 新场景判据仍词表级（更隐蔽的反讽可能漏判）
+
+### v2.15 N=3 重复 A/B + 默认值决定（2026-10-23）
+- [x] `scripts/run-ab-repeat.mjs`：每次运行全新 memories 快照，两臂交替各 3 次
+- [x] 结果：两臂每次 13/13；ON 自我披露 7.7 vs 16、持续词 1 vs 3.7、字数 55.7 vs 67
+- [x] 修正 SELF_DISCLOSURE 判据漏判（无“我”字自述），对已存 6 份结果重判（只改 flag）
+- [x] unified expression **默认改为开**（`ENABLE_UNIFIED_EXPRESSION=false` 回退）；测试同步
+- [x] 生成人工复核清单 `artifacts/v2.14/ab/review-sheet.md`
+- [ ] 人工逐场景 ✅/❌ 回填 `manualVerdict`；若发现不可接受回复则回退默认值
+- [ ] 跨机器/长会话再验证（当前单机 13 场景 20 轮）
