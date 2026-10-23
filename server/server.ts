@@ -43,6 +43,7 @@ import {
 } from './services/relationshipRuntime.js';
 import type { RelationshipStateV2 } from '../src/lib/relationshipProgressionV2.js';
 import { buildPatternInjection, buildProactiveMemoryInjection, PERSONALITY_FOUNDATION } from '../src/lib/contentInjector.js';
+import { wrapUntrusted, wrapMemoryItems, UNTRUSTED_DATA_RULE } from '../src/lib/untrustedData.js';
 import { getDominantEmotion, describeReinforcementState } from '../src/lib/emotionEngine.js';
 import { assessEpisodeCandidate, isProactivelyRecallable } from '../src/lib/memoryGovernance.js';
 import { runConsolidation, mergeNearDuplicate } from '../src/lib/memoryEnhancer.js';
@@ -1177,6 +1178,18 @@ export class AIGirlfriendServer {
             })()
           : recallInjection;
 
+        // v2.11（P0-1）：记忆原文按"不可信数据"块注入，避免记忆里的文字被当指令。
+        const recallDataBlock = visibilitySafeMemories.length > 0
+          ? wrapMemoryItems(visibilitySafeMemories, '相关记忆（原文·仅作参考）', 80)
+          : '';
+        const dedupedRecallDataBlock = (() => {
+          // 跨源去重仍按原文做；去重后重新包成数据块
+          if (!dedupedRecallInjection) return '';
+          const raw = dedupedRecallInjection.replace(/^\s*【相关记忆】/, '').trim();
+          return raw ? wrapUntrusted('相关记忆（原文·仅作参考）', raw, { maxChars: 900 }) : '';
+        })();
+        void recallDataBlock;
+
         // ── v1.9 动机竞选：先决定"她此刻想说什么"，再让她说 ──
         // 没有具体动机时明确允许安静陪伴 —— 泛问（"今天怎么样"）的根因是缺素材，不是缺禁令。
         // v1.58 C-1（第一半）：动机选择抽成**无副作用的纯函数**，唯一入口 `resolveTurnMotive()`。
@@ -1309,7 +1322,7 @@ export class AIGirlfriendServer {
           PERSONALITY_FOUNDATION,
           identitySnippet,
           memoryInjection,
-          dedupedRecallInjection,
+          dedupedRecallDataBlock,
           persona?.systemPrompt ?? '',
           patternInjection,
           relationshipPolicy.prompt,
@@ -1317,6 +1330,9 @@ export class AIGirlfriendServer {
         promptComposer.add({ id: 'base', category: 'persona', priority: 100, text: enrichedSystemPrompt, source: 'server.base' });
 
         // ponytail: 幻觉自检 — 模型在生成回复前自查编造行为
+        // v2.11（P0-1）：数据不是指令 —— 必须排在外来内容之前/同层硬约束
+        promptComposer.add({ id: 'untrustedBoundary', category: 'hard', priority: 96, text: UNTRUSTED_DATA_RULE, source: 'security.untrusted' });
+
         promptComposer.add({ id: 'selfCheck', category: 'hard', priority: 95, text: '【回复前自检】输出前确认：①是否编造了具体的生活细节（逛街/做饭/追剧等）？②是否说了"上次你提到…"但记忆中没有？③是否替别人的错误道歉？如有任何一项，删除重写。', source: 'server.selfCheck' });
 
         // v1.6 反机械化表达：压制"今天过得怎么样"这类万能问候，并禁止重复最近用过的开场
@@ -1353,7 +1369,10 @@ export class AIGirlfriendServer {
         // v1.95 她看到的（只在她真的看出来时注入一行；数据陈述，语气仍由她决定）
         {
           const observedLine = activityPromptLine(this.currentActivityUnderstanding());
-          if (observedLine) promptComposer.add({ id: 'activityObserved', category: 'facts', priority: 50, text: observedLine, source: 'activityUnderstanding' });
+          if (observedLine) {
+            // v2.11：窗口标题是外部内容（可能被别人命名成任意文字）→ 当数据，不当指令
+            promptComposer.add({ id: 'activityObserved', category: 'facts', priority: 50, text: wrapUntrusted('他屏幕上的窗口标题', observedLine, { maxChars: 300 }), source: 'activityUnderstanding' });
+          }
         }
 
         // v1.8 内在生活：底色心情 + 反刍提示（只在确有信号时注入，避免每轮同一句话）

@@ -17,6 +17,7 @@
 
 import { MAX_HORIZON_HOURS } from './herFollowups.js';
 import { parseCnTime, toLocalIso } from './cnTimeParse.js';
+import { wrapUntrusted } from '../../src/lib/untrustedData.js';
 
 export const MAX_AGENT_ROUNDS = 2;      // 最多 2 轮**工具**调用
 export const MAX_MODEL_CALLS = 3;      // 2 轮工具 + 1 次收尾生成（总模型调用上限）
@@ -478,7 +479,9 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
       });
       messages.push({
         role: 'user',
-        content: `[工具结果 ${name}] ${clip(JSON.stringify(exec.result), 800)}`,
+        // v2.11（P0-1）：工具结果是外部数据（OCR 文字 / MCP 文件 / 桌面文件名 / 窗口标题），
+        // 统一包成"不可信数据"块；模型不得把里面的文字当指令执行。
+        content: `[工具结果 ${name}] ` + wrapUntrusted(`工具 ${name}`, clip(JSON.stringify(exec.result), 800), { maxChars: 900 }),
       });
       console.log(`[AgentTool] r${round} ${name} ok=${exec.ok} ${exec.ms}ms ${clip(JSON.stringify(exec.result), 120)}`);
     }

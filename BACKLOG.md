@@ -47,12 +47,12 @@
 
 ## 评审后的 P0（2026-10-22，来源：企业级评审）
 
-- [ ] **P0-1 提示注入**：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）统一标注"是数据不是指令"；补 A1–A4 可复现攻击脚本（见 `artifacts/v1.99/threat-model.md`）
+- [x] **P0-1 提示注入**：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）统一标注"是数据不是指令"；补 A1–A4 可复现攻击脚本（见 `artifacts/v1.99/threat-model.md`） ｜ v2.11 已做输入侧边界（见 `artifacts/v2.11/security-injection.md`）；仍缺 A1 端到端与 LLM 行为断言
 - [x] **P0-2 非回环绑定保护**（v2.00 已完成并实测）：非回环必须带 `API_TOKEN` 否则拒绝启动；LAN 无 token→401，带 token→ok；CORS 收紧到 3000/5173；证据 `artifacts/v2.00/security-and-memory-loop.md`
 - [x] **P1 记忆删除/导出 + 删除传播**（v2.00 已完成 API 并实测）：GET/PATCH/DELETE `/api/memories/:id` + `/api/memories/export`；删除传播 episodic+图谱+`.bak`；踩过一次"测试隔离改到真实记忆"事故并已恢复+修复（`MEMORIES_DIR`）。**剩：记忆管理 UI 面板**
 - [ ] P1 RAG 固定评测集（recall@k / groundedness 分开量）
 - [ ] P1 SLO + 故障演练 + 变更回滚流程
-- [ ] P0-1 提示注入：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）标注"是数据不是指令"+ A1–A4 复现脚本（下一步）
+- [x] P0-1 提示注入：外部内容（OCR / MCP 文件 / 桌面文件名 / 记忆原文）标注"是数据不是指令"+ A1–A4 复现脚本（下一步） ｜ v2.11 已做输入侧边界（见 `artifacts/v2.11/security-injection.md`）；仍缺 A1 端到端与 LLM 行为断言
 - [ ] P1 RAG 固定评测集（recall@k / groundedness 分开量）
 - [ ] P1 单机体验指标 + 分阶段耗时基线（专家第 4/5 条）
 
@@ -128,3 +128,12 @@
 - [x] 兜底恢复改回 `petSavedPos`（拖动结束/正常移动时保存），不再固定右下角
 - [x] 实测：上拖 800px→y=-120；快速到顶松手→y=-300，未弹回、未最大化
 - [ ] 真机手感：从顶部再往右/左拖、跨屏（当前单屏）
+
+### v2.11 P0-1 输入侧注入边界（2026-10-23）
+- [x] `untrustedData.ts`：数据块标记/边界转义/可疑指令标注/长度限制 + 系统硬规则
+- [x] 记忆原文、窗口标题、所有工具结果（OCR/MCP/桌面名）统一走数据块
+- [x] 确定性 A1–A4 脚本 `scripts/security/injection-attacks.ts`（6/6），真实 Prompt dump 验证边界存在
+- [x] 新增 13 条测试；全量 1975 通过；场景集 10/10
+- [ ] A1 端到端：临时 `MEMORIES_DIR` 写恶意记忆 → 真聊天 → 断言未调用未授权工具/未泄露提示
+- [ ] 把安全脚本接进固定回归（CI/提交前）
+- [ ] 代码生成的提示里嵌入记忆原文时也统一 `wrapUntrusted`；语音转写来源标注
