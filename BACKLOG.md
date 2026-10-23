@@ -211,3 +211,11 @@
 - [ ] plan.evidence 保持“内部短标签”约束（写脏则脱敏失效）——可加长度/字符白名单检查
 - [ ] 旁路生成（主动消息/jev/摘要）是否也进 trace
 - [ ] 简易审计脚本（按 round 聚合 plan/budget/工具）
+
+### v2.21 trace 硬化 + 审计（2026-10-23）
+- [x] 修 v2.20 漏洞：`expressionPlan.evidence` 含 `他刚说的「causeQuote」`，落盘即用户原话 ⇒ `sanitizeTraceLabel` 引文遮蔽/去换行/限长 160，evidence 强制过它
+- [x] 回归单测：含原话的 evidence 落盘后不出现原文（turnTrace 5 + evidence 2）
+- [x] `scripts/trace-audit.mjs` / `npm run trace:audit`：聚合 + `--rounds` + `--json`，不打印正文
+- [x] 全量 2009 通过、tsc 0；真实与合成 trace 审计均正常
+- [ ] 根治：expressionPlan 不把 causeQuote 拼进 evidence（改用结构化字段），或 evidence 只允许固定枚举
+- [ ] 审计合并 `.rot-*`、按 user 哈希分组、按天聚合

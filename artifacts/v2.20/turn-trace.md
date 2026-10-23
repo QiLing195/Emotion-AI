@@ -46,6 +46,13 @@ budget: {"elapsedMs":1699,"remainingMs":23301,"calls":2,"timeouts":0,"expired":f
 reply: {"chars":77,"questionMarks":1}
 ```
 
+## v2.21 修正（重要）
+
+上文"不存用户原话"的说法在 `plan.evidence` 这条路径上**不成立**：`expressionPlan` 会把
+`他刚说的「${causeQuote}」` 拼进 evidence，trace 原样写盘就等于记录了用户原话。
+v2.21 已加 `sanitizeTraceLabel()`（引文遮蔽 + 去换行 + 限长 160），并补了回归单测。
+详见 `artifacts/v2.21/trace-hardening-audit.md`。
+
 ## 诚实局限
 
 - `plan.evidence` 是内部短标签（低谷/心情/反刍/内在活动类型），**不含用户原话**；但它是自由字符串，未来若有人往里面塞内容，脱敏会失效——白名单只能防"多传字段"，不能防"字段本身被写脏"。

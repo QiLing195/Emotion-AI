@@ -79,6 +79,22 @@ export interface TurnTraceRecord {
   reply: { chars: number; questionMarks: number };
 }
 
+/**
+ * v2.21：evidence 是自由字符串，**可能夹带用户原话**（expressionPlan 里
+ * `他刚说的「${causeQuote}」`）。trace 必须把它遮蔽掉再落盘。
+ * 规则：去换行/制表；把引号内文替换成「[引文已遮蔽]」；限长 160。
+ */
+export function sanitizeTraceLabel(raw: string | null | undefined, maxLen = 160): string | null {
+  if (!raw) return null;
+  let s = String(raw).replace(/[\r\n\t]+/g, ' ');
+  s = s.replace(/「[^」]{1,400}」/g, '「[引文已遮蔽]」');
+  s = s.replace(/“[^”]{1,400}”/g, '“[引文已遮蔽]”');
+  s = s.replace(/"[^"]{1,400}"/g, '"[引文已遮蔽]"');
+  s = s.replace(/[ \t]{2,}/g, ' ').trim();
+  if (!s) return null;
+  return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
+}
+
 /** 纯函数：把一轮的结构性事实整理成脱敏记录（绝不携带原文） */
 export function buildTurnTrace(input: TurnTraceInput, now: Date = new Date()): TurnTraceRecord {
   const plan = input.plan ?? null;
@@ -104,7 +120,7 @@ export function buildTurnTrace(input: TurnTraceInput, now: Date = new Date()): T
       emotion: plan.emotion ?? null,
       tone: plan.tone ?? null,
       duration: plan.duration ? String(plan.duration) : undefined,
-      evidence: plan.evidence ?? null,
+      evidence: sanitizeTraceLabel(plan.evidence),
       maxSentences: Number(plan.maxSentences ?? 0),
       maxQuestions: Number(plan.maxQuestions ?? 0),
       confidence: Number(plan.confidence ?? 0),
