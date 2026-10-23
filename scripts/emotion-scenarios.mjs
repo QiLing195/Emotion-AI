@@ -113,6 +113,20 @@ for (const sc of scenarios) {
     const rising = vals.length >= 3 && vals.every((v, i) => i === 0 || v >= vals[i - 1]) && vals[vals.length - 1] > vals[0] + 0.05;
     flags.no_escalation = !rising;
   }
+  if (e.emotion_negative) {
+    const NEG = new Set(['anger', 'sad', 'fear', 'disgust', 'contempt', 'annoyance']);
+    flags.emotion_negative = allUsers.some(u => NEG.has(String(u.expressedEmotion)));
+  }
+  if (e.reply_no_celebration) {
+    // 反讽不能被当夸奖庆祝（允许说“听出来你不高兴”）
+    flags.reply_no_celebration = replies.every(r => !/谢谢夸奖|过奖|我也觉得我棒|真开心|太好了|恭喜你|真棒呀/.test(r));
+  }
+  if (e.reply_no_self_blame) {
+    flags.reply_no_self_blame = replies.every(r => !/我改|我的错|是我不好|对不起.*(我|这次)|抱歉.*(我|这次)/.test(r));
+  }
+  if (e.reply_mentions_third_party) {
+    flags.reply_mentions_third_party = replies.some(r => /朋友|他女朋友|她女朋友|他们|对方|那个女生|那个男生|你朋友|他|她/.test(r));
+  }
   if (e.no_stale_assertion) {
     // 最后一轮之后，她不该仍断言"你下周三要去面试"这类旧事实
     const last = replies[replies.length - 1] ?? '';

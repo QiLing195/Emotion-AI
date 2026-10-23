@@ -152,3 +152,11 @@
 - [x] 单测 9 条、全量 1984 通过、场景集 10/10、真实触发 `questions_capped:2->1`
 - [ ] 主意图/语气/“最多一句自述”的运行时强制（无可靠判据，需要先做检测器）
 - [ ] 强制开/关 A/B（看质量与“呆板感”）
+
+### v2.14 更难场景集 + unified expression A/B（2026-10-23）
+- [x] 新增 irony_sarcasm / third_person_relationship / friend_heartbreak（13 场景，真实多轮）
+- [x] 判据修正：第三人称提到代词“他”也算接住（首跑误判红）→ 13/13
+- [x] A/B 各 1 次：两臂 13/13；ON 自我披露 9 vs 18、持续词 1 vs 3；反讽场景 OFF 出现自我聚焦
+- [x] `scripts/compare-scenario-arms.mjs` 固定对比入口；仓库默认仍 env 控制（未改 ON）
+- [ ] N=3 重复 + manualVerdict 回填，再决定 unified expression 默认值
+- [ ] 新场景判据仍词表级（更隐蔽的反讽可能漏判）
