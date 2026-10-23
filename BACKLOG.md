@@ -249,3 +249,11 @@
 - [x] 单测 8 通过、隔离 E2E 验证 `scrubbedBackups=1` 且删除后 `.bak` 不含目标、tsc 0
 - [ ] `memory_graph.json.bak` 等非 episodic 备份的按 id 清理
 - [ ] 旧的 `.bak` 批量清理脚本/端点（`privacy:purge-backups`）
+
+### v2.26 批量备份清理（2026-10-23）
+- [x] `privacy:purge-backups`（dry-run/--apply/--older-than/--include-rotations）；匹配 `.bak*`/`.pre-redact-*`，默认不碰 `.rot-*`
+- [x] 真实清理 5 个旧备份 649.5KB，先 `%TEMP%` 安全备份再 apply，删后 0 残留
+- [x] 单测 6 通过、tsc 0
+- [ ] 清理动作写审计日志（与 memory_admin_audit 对齐）
+- [ ] `--keep-latest=N` 保留策略（避免一刀切删光）
+- [ ] 扫描子目录/其它数据目录

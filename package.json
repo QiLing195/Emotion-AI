@@ -22,7 +22,8 @@
     "desktop:pet": "node scripts/run-pet.cjs",
     "voice:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/voice-wake.ps1 -OutFile memories/voice_events.jsonl",
     "trace:audit": "node scripts/trace-audit.mjs",
-    "timeline:redact": "tsx scripts/redact-timeline-history.ts"
+    "timeline:redact": "tsx scripts/redact-timeline-history.ts",
+    "privacy:purge-backups": "tsx scripts/purge-backups.ts"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
