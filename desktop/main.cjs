@@ -24,11 +24,26 @@ async function apiJson(url, init) {
   try { return JSON.parse(text); } catch { return { raw: text }; }
 }
 
+// v2.10：她本人的可见矩形（窗口内坐标）——拖动边界和恢复位置都按这个算，
+// 否则窗口只能向上 20px，她永远到不了屏幕最上方。
+const PET_VISIBLE = { w: 170, h: 212 };
+const PET_EDGE_MARGIN = 40; // 拖到屏幕外时至少保留这么多可见
+
+// 最近一次正常位置（拖动结束/正常移动时更新）；用于系统手势后的兜底恢复
+let petSavedPos = null;
+
+function savePetPos() {
+  if (!petWin || petWin.isDestroyed()) return;
+  const [x, y] = petWin.getPosition();
+  petSavedPos = { x, y };
+}
+
 function positionPet(win) {
   const display = screen.getPrimaryDisplay();
   const { width, height } = display.workAreaSize;
   const [w, h] = win.getSize();
   win.setPosition(Math.max(0, width - w - 24), Math.max(0, height - h - 24));
+  savePetPos();
 }
 
 async function captureOnce() {
@@ -137,15 +152,21 @@ function createPetWindow() {
       try {
         if (petWin.isFullScreen()) petWin.setFullScreen(false);
         if (petWin.isMaximized()) petWin.unmaximize();
+        // v2.10：拖动过程中被 Windows Aero Snap 当成最大化时，只取消最大化，
+        // **不要挪窗口**（旧写法会 setBounds 到右下角，表现就是"一拖到上面就弹回右下角"）。
+        if (petDrag) {
+          petAllowResize = false;
+          petRestoring = false;
+          return;
+        }
         const display = screen.getPrimaryDisplay();
         const wa = display.workArea;
         petAllowResize = true;
-        petWin.setBounds({
+        const target = petSavedPos || {
           x: Math.max(wa.x, wa.x + wa.width - 300 - 24),
           y: Math.max(wa.y, wa.y + wa.height - 400 - 24),
-          width: 300,
-          height: 400,
-        }, false);
+        };
+        petWin.setBounds({ x: target.x, y: target.y, width: 300, height: 400 }, false);
         petWin.setMaximumSize(300, 400);
         petWin.setMinimumSize(300, 400);
         petWin.setMaximizable(false);
@@ -187,11 +208,23 @@ function movePetBy(dx, dy) {
   if (!petWin || petWin.isDestroyed()) return;
   const [x, y] = petWin.getPosition();
   const [w, h] = petWin.getSize();
-  const display = screen.getDisplayNearestPoint({ x: x + Math.round(w / 2), y: y + Math.round(h / 2) });
+  const display = screen.getDisplayNearestPoint({
+    x: x + Math.round(w / 2),
+    y: Math.max(0, Math.min(y + Math.round(h / 2), screen.getPrimaryDisplay().workArea.height - 1)),
+  });
   const wa = display.workArea;
-  const nx = Math.min(Math.max(x + Math.round(dx), wa.x - 40), wa.x + wa.width - w + 40);
-  const ny = Math.min(Math.max(y + Math.round(dy), wa.y - 20), wa.y + wa.height - h + 40);
+  // 她本人矩形在窗口内的位置（底部居中）
+  const px = Math.round((w - PET_VISIBLE.w) / 2);
+  const py = h - PET_VISIBLE.h;
+  // 允许她贴到屏幕边缘：她的可见矩形至少留 PET_EDGE_MARGIN 在屏内
+  const minX = wa.x + PET_EDGE_MARGIN - (px + PET_VISIBLE.w);
+  const maxX = wa.x + wa.width - PET_EDGE_MARGIN - px;
+  const minY = wa.y + PET_EDGE_MARGIN - (py + PET_VISIBLE.h);
+  const maxY = wa.y + wa.height - PET_EDGE_MARGIN - py;
+  const nx = Math.min(Math.max(x + Math.round(dx), minX), maxX);
+  const ny = Math.min(Math.max(y + Math.round(dy), minY), maxY);
   petWin.setPosition(nx, ny);
+  savePetPos();
 }
 
 let petDrag = null;
@@ -213,11 +246,12 @@ function petDragMove() {
     petDrag.last = now;
   }
 }
-function petDragEnd() { petDrag = null; }
+function petDragEnd() { petDrag = null; savePetPos(); }
 /** v2.09：统一收尾 —— 失焦/渲染进程退出/取消 都走这里，避免主进程残留拖动状态 */
 function resetPetDrag(reason) {
   if (petDrag) console.log('[Pet] 拖动状态清理:', reason);
   petDrag = null;
+  savePetPos();
 }
 
 function registerPetIpc() {
