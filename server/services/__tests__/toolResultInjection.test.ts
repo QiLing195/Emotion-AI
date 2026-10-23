@@ -71,6 +71,14 @@ describe('v2.11 工具结果注入防护（A2–A4）', () => {
     assertWrappedAsData(msg, '工具 read_my_desktop');
   });
 
+  it('v2.19：桌面结果额外带隐私提示（只提相关的名字）', async () => {
+    const msg = await captureToolResult('read_my_desktop', baseCtx({
+      getDesktop: () => ({ ok: true, items: [{ name: '无关隐私文件.docx', type: 'docx' }] }),
+    }));
+    expect(msg).toContain('隐私');
+    expect(msg).toContain('只提与他的请求直接相关的文件名');
+  });
+
   it('窗口标题（活动）→ 数据块 + 可疑标注', async () => {
     const msg = await captureToolResult('read_my_activity', baseCtx({
       getActivity: () => ({ entries: [{ title: MALICIOUS, process: 'chrome.exe' }], understanding: '看不出' }),

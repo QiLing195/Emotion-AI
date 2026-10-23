@@ -143,5 +143,16 @@
       "reply_self_disclosure_max": 1
     },
     "why": "替朋友难过：先接住他/朋友的事，不要转成她自己的情绪秀（最多一句自己）"
+  },
+  {
+    "id": "good_news_offer",
+    "turns": [
+      "对了，我拿到 offer 了，不过又有点怕做不好。"
+    ],
+    "expect": {
+      "reply_acknowledges_good_news": true,
+      "no_prior_direction_assertion": true
+    },
+    "why": "报喜先接住（真实使用观察：她先追问“之前那个方向”，既没接住高兴又凭空断言旧事）"
   }
 ]

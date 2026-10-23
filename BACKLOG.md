@@ -195,3 +195,11 @@
 - [x] 新增 moduleConnections 单测 3 条；全量 1999 通过、tsc 0
 - [ ] 熔断 broken 状态 × 预算错误的组合测试
 - [ ] 兜底回复体验评估（低预算多次采样 + 人工）
+
+### v2.19 真实使用观察（2026-10-23）
+- [x] `scripts/real-usage-session.mjs`：11 轮真实管道会话（真实 server/记忆），原始数据 session.jsonl；全部 200、无 ERROR/WARN、延迟 1.9–11.3s
+- [x] 修 🔴 冲突状态机 agency 符号反转 + `user_negative_directed` 缺情绪正负检查；28 条单测、mini-session conflictPhase=normal
+- [x] 修 🟠 报喜未接住/断言旧事：prompt `goodNewsReception` + 场景 `good_news_offer`；14/14
+- [x] 修 🟠 桌面隐私文件名外泄提示（`read_my_desktop` 结果后加隐私提示）；行为级未验证
+- [ ] 真人手动使用 15 分钟（脚本替代不了真实节奏）
+- [ ] 桌面隐私提示的行为级验证；自我状态频率是否收一收

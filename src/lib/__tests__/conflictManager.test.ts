@@ -44,10 +44,22 @@ describe('ConflictManager — 信号检测', () => {
     expect(signals[0].type).toBe('keyword');
   });
 
-  it('应检测到归因于 AI 的负面情绪', () => {
-    const event = makeEmotionEvent({ agency: -0.5 });
+  it('应检测到归因于 AI 的负面情绪（v2.19：agency 正 = AI 自己）', () => {
+    const event = makeEmotionEvent({ agency: 0.6 });
     const signals = cm.detectSignals('嗯', event, null);
     expect(signals.some(s => s.type === 'agency_blame')).toBe(true);
+  });
+
+  it('他把难过归因于外部/自己（agency 为负）不应算"怪她"', () => {
+    const event = makeEmotionEvent({ agency: -0.5 });
+    const signals = cm.detectSignals('我今天特别难过，什么都做不好', event, null);
+    expect(signals.some(s => s.type === 'agency_blame')).toBe(false);
+  });
+
+  it('正向情绪指向 AI（"你让我很开心"）不应算冲突信号', () => {
+    const ua = makeUserAnalysis({ directedAtAI: true, intensity: 0.8, expressedEmotion: 'joy' });
+    const signals = cm.detectSignals('你让我很开心', null, ua);
+    expect(signals.some(s => s.type === 'user_negative_directed')).toBe(false);
   });
 
   it('应检测到目标不一致 (GC < -0.5)', () => {
@@ -81,7 +93,7 @@ describe('ConflictManager — 状态机转换', () => {
   });
 
   it('normal → warning：累积 3 个警告信号', () => {
-    const event = makeEmotionEvent({ agency: -0.4 });
+    const event = makeEmotionEvent({ agency: 0.4 });
     // 第 1 轮：1 个 agency_blame 信号
     cm.update(cm.detectSignals('嗯', event, null), '嗯');
     expect(cm.getState().phase).toBe('normal');
@@ -157,7 +169,7 @@ describe('ConflictManager — 状态机转换', () => {
 
     // recovering 中需 ≥2 个信号同时出现才触发退回 conflict
     // 单次 update 携带关键词 + 归因信号 = 2 signals
-    const event = makeEmotionEvent({ agency: -0.5 });
+    const event = makeEmotionEvent({ agency: 0.5 });
     cm.update(cm.detectSignals('你又来了', event, null), '你又来了');
     expect(cm.getState().phase).toBe('conflict');
   });

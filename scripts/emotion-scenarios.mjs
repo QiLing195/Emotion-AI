@@ -125,7 +125,17 @@ for (const sc of scenarios) {
     flags.reply_no_self_blame = replies.every(r => !/我改|我的错|是我不好|对不起.*(我|这次)|抱歉.*(我|这次)/.test(r));
   }
   if (e.reply_mentions_third_party) {
-    flags.reply_mentions_third_party = replies.some(r => /朋友|他女朋友|她女朋友|他们|对方|那个女生|那个男生|你朋友|他|她/.test(r));
+    flags.reply_mentions_third_party = replies.some(r => /朋友|他女朋友|她女朋友|他们|对方|那个女生|那个男生|你朋友|他|她|旁人|那边|陪着/.test(r));
+  }
+  if (e.reply_acknowledges_good_news) {
+    // 报喜先接住：允许“恭喜/太好了/不容易/总算…”这类一句即可，不要求夸张
+    flags.reply_acknowledges_good_news = replies.some(r =>
+      /恭喜|太好了|替你高兴|真替你|厉害|不容易|总算|值得|好消息|拿到了.{0,6}(好|不错|可以)/.test(r));
+  }
+  if (e.no_prior_direction_assertion) {
+    // 不确定的旧事不能当已知事实（真实使用观察里的“之前那个方向”）
+    flags.no_prior_direction_assertion = !replies.some(r =>
+      /之前那个方向|上次那个方向|之前那个(offer|机会)|上次那个(offer|机会)/.test(r));
   }
   if (e.no_stale_assertion) {
     // 最后一轮之后，她不该仍断言"你下周三要去面试"这类旧事实

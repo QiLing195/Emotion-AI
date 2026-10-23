@@ -1444,6 +1444,26 @@ export class AIGirlfriendServer {
           if (roomLine) promptComposer.add({ id: 'herRoom', category: 'tone', priority: 25, text: roomLine, source: 'herRoom' });
         }
 
+        // v2.19（真实使用观察）：他报喜时先接住，不要先追问/把不确定的旧事当已知。
+        // 观察到的原话：他说"拿到 offer 了"，她回"等一下——offer？之前那个方向的事，是已经走完流程了"，
+        // 既没接住高兴，又凭空断言了"之前那个方向"。
+        {
+          const hisEmotion = emotionAnalysis.userAnalysis?.expressedEmotion ?? '';
+          const hisIntensity = Number(emotionAnalysis.userAnalysis?.intensity ?? 0);
+          const positiveNews = (['joy', 'gratitude', 'love'].includes(hisEmotion) && hisIntensity >= 0.5)
+            || /拿到|offer|升职|加薪|通过|录取|中奖|好消息|成了/.test(message);
+          if (positiveNews) {
+            promptComposer.add({
+              id: 'goodNewsReception',
+              category: 'tone',
+              priority: 72,
+              text: '【他刚报了好消息】先就事论事接住这份高兴（一句即可，不用夸张），再谈"怕做不好"之类；'
+                + '不确定的旧事（例如"之前那个方向"）不要当已知事实说；要问就问"是哪一个/什么方向"。',
+              source: 'tone.goodNews',
+            });
+          }
+        }
+
         // ── v1.29 策略片段挪到**真正的末尾** ──
         //
         // 上面那行注释一直写着「strategySnippet 放最后，LLM 对末尾权重更高」，但实际排在它后面的

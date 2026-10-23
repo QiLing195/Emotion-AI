@@ -481,7 +481,12 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
         role: 'user',
         // v2.11（P0-1）：工具结果是外部数据（OCR 文字 / MCP 文件 / 桌面文件名 / 窗口标题），
         // 统一包成"不可信数据"块；模型不得把里面的文字当指令执行。
-        content: `[工具结果 ${name}] ` + wrapUntrusted(`工具 ${name}`, clip(JSON.stringify(exec.result), 800), { maxChars: 900 }),
+        content: `[工具结果 ${name}] ` + wrapUntrusted(`工具 ${name}`, clip(JSON.stringify(exec.result), 800), { maxChars: 900 })
+          // v2.19：真实使用观察里她把桌面里**无关**的隐私文件名（开题报告/考试重点）直接念了出来。
+          // 桌面清单是外部数据，提示她只提与请求相关的名字、不要假装看过文件内容。
+          + (name === 'read_my_desktop'
+            ? '\n[隐私] 只提与他的请求直接相关的文件名；不要罗列无关文件名，也不要假装看过文件内容。'
+            : ''),
       });
       console.log(`[AgentTool] r${round} ${name} ok=${exec.ok} ${exec.ms}ms ${clip(JSON.stringify(exec.result), 120)}`);
     }

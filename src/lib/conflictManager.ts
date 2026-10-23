@@ -112,6 +112,9 @@ const RECOVERY_KEYWORDS: { pattern: RegExp; strength: number }[] = [
 // 3. 常量
 // ════════════════════════════════════════════════════════════
 
+/** v2.19：只有负面情绪指向 AI 才算冲突信号（正向"你让我开心"不算） */
+const NEGATIVE_FOR_CONFLICT = new Set(['anger', 'sad', 'fear', 'disgust', 'contempt', 'annoyance', 'frustration', 'hurt']);
+
 const WARNING_THRESHOLD = 3;          // 累积 3 个信号进入预警
 const CONFLICT_THRESHOLD = 5;         // 累积 5 个信号确认冲突
 const SIGNAL_DECAY_MS = 30 * 60_000;  // 30分钟后信号衰减
@@ -204,7 +207,10 @@ export class ConflictManager {
     }
 
     // 2) 归因检测：用户将负面归因于 AI
-    if (emotionEvent && emotionEvent.agency !== undefined && emotionEvent.agency < -0.3) {
+    // v2.19 修正符号：agency 约定是 **正 = AI 自己 / 负 = 用户（他）**（见 emotionAttribution.ts
+    // 与 emotionAnalyzer 预设：joy/love/gratitude 都是负 agency）。此前写成 agency < -0.3，
+    // 等于"他把难过归因于外部/自己"也算成"怪她" ⇒ 真实使用中连续几轮后误报 warning→repair。
+    if (emotionEvent && emotionEvent.agency !== undefined && emotionEvent.agency > 0.3) {
       signals.push({
         type: 'agency_blame',
         strength: Math.abs(emotionEvent.agency),
@@ -223,8 +229,10 @@ export class ConflictManager {
       });
     }
 
-    // 4) 用户负面情绪直接指向 AI
-    if (userAnalysis && userAnalysis.directedAtAI && userAnalysis.intensity > 0.5) {
+    // 4) 用户**负面**情绪直接指向 AI（v2.19：此前没检查情绪正负，
+    //    "你让我很开心"这类高强度的正向表达也会被当成冲突信号）
+    if (userAnalysis && userAnalysis.directedAtAI && userAnalysis.intensity > 0.5
+        && NEGATIVE_FOR_CONFLICT.has(String(userAnalysis.expressedEmotion))) {
       signals.push({
         type: 'user_negative_directed',
         strength: userAnalysis.intensity,
