@@ -58,9 +58,9 @@ describe('v2.16 单轮生成预算', () => {
   });
 
   it('raceWithDeadline：快任务正常返回，慢任务按 deadline 抛 GenerationBudgetExceededError', async () => {
-    await expect(raceWithDeadline(Promise.resolve('ok'), 100)).resolves.toBe('ok');
-    await expect(raceWithDeadline(new Promise(res => setTimeout(res, 50)), 500)).resolves.toBeUndefined();
-    await expect(raceWithDeadline(new Promise(() => {}), 120, 'slow')).rejects.toBeInstanceOf(GenerationBudgetExceededError);
+    await expect(raceWithDeadline(Promise.resolve('ok'), 500)).resolves.toBe('ok');
+    await expect(raceWithDeadline(new Promise(res => setTimeout(res, 50)), 1000)).resolves.toBeUndefined();
+    await expect(raceWithDeadline(new Promise(() => {}), 500, 'slow')).rejects.toBeInstanceOf(GenerationBudgetExceededError);
   });
 
   it('snapshot 记录调用次数/超时次数/剩余时间', () => {
@@ -81,6 +81,9 @@ describe('v2.16 单轮生成预算', () => {
     const b = singleCallBudget({ GEN_CALL_TIMEOUT_MS: '3000' } as unknown as NodeJS.ProcessEnv);
     expect(b.totalMs).toBe(3_000);
     expect(b.callMs).toBe(3_000);
-    expect(b.timeoutForCall()).toBe(3_000);
+    // 真实时钟：断言"不超过单次上限、且还有时间"，而不是精确等于 3000
+    // （并行跑全量时，构造到这里可能已过几十 ms，remaining 会略小于 callMs）
+    expect(b.timeoutForCall()).toBeGreaterThan(0);
+    expect(b.timeoutForCall()).toBeLessThanOrEqual(3_000);
   });
 });

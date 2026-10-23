@@ -44,6 +44,8 @@ export interface TurnTraceInput {
   plan?: {
     decision?: string; reason?: string; emotion?: string | null; tone?: string | null;
     duration?: string; evidence?: string | null; maxSentences?: number; maxQuestions?: number; confidence?: number;
+    /** v2.22：只用于记「有没有引文」的布尔，**引文内容绝不进 trace** */
+    causeQuote?: string | null;
   } | null;
   intrinsic?: {
     accepted?: Array<{ type: string; eventId?: string }>;
@@ -69,7 +71,11 @@ export interface TurnTraceRecord {
   prompt: { blocks: number; chars: number; permits: number; suppressed: string[] };
   strategy: string | null;
   conflict: string | null;
-  plan: TurnTraceInput['plan'] & {};
+  plan: {
+    decision?: string; reason?: string; emotion?: string | null; tone?: string | null;
+    duration?: string; evidence?: string | null; maxSentences?: number; maxQuestions?: number; confidence?: number;
+    hasCauseQuote: boolean;
+  } | null;
   intrinsic: { accepted: string[]; rejected: string[] };
   enforcement: { changed: boolean; changes: string[] };
   budget: TurnTraceInput['budget'];
@@ -124,6 +130,8 @@ export function buildTurnTrace(input: TurnTraceInput, now: Date = new Date()): T
       maxSentences: Number(plan.maxSentences ?? 0),
       maxQuestions: Number(plan.maxQuestions ?? 0),
       confidence: Number(plan.confidence ?? 0),
+      // v2.22：只记存在性，不记引文内容
+      hasCauseQuote: Boolean(plan.causeQuote),
     } : null,
     intrinsic: { accepted: intrinsicAcc.slice(0, 8), rejected: intrinsicRej.slice(0, 8) },
     enforcement: {

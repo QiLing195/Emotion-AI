@@ -219,3 +219,11 @@
 - [x] 全量 2009 通过、tsc 0；真实与合成 trace 审计均正常
 - [ ] 根治：expressionPlan 不把 causeQuote 拼进 evidence（改用结构化字段），或 evidence 只允许固定枚举
 - [ ] 审计合并 `.rot-*`、按 user 哈希分组、按天聚合
+
+### v2.22 evidence 引文从源头拆掉（2026-10-23）
+- [x] `expressionPlan.evidence` 不再拼 causeQuote（只放结构化原因标签）；引文只在 `expressionPlanToSnippet` 里进 Prompt
+- [x] turnTrace 只记 `hasCauseQuote: boolean`；`sanitizeTraceLabel` 保留作防御
+- [x] 测试更新（evidence 无原话 / snippet 有原话 / trace 只有布尔）；全量 2010 连续两跑、tsc 0、场景 14/14
+- [x] 修掉 flake 真根因：singleCallBudget 测试用真实时钟断言精确 3000 → 改为范围断言
+- [ ] causeQuote 在 timeline `causeQuoted` 里的落盘是否也要结构化/遮蔽（本地文件，非 trace）
+- [ ] 场景结果 JSON 是否脱敏（当前记录完整 plan；夹具输入是预设句）

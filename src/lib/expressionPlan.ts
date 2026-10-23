@@ -113,13 +113,16 @@ export function planExpression(input: ExpressionPlanInput): ExpressionPlan {
   const duration: PlanDuration = input.hisAsksAboutHer && !sustained ? 'unknown' : sustained ? 'sustained' : 'transient';
 
   // 5) 证据：只列真实存在的来源；没有就明确"说不清"
+  // v2.22：`evidence` 只放**结构化原因标签**，绝不拼用户原话。
+  // 引文单独留在 `causeQuote` 字段里，由 `expressionPlanToSnippet()` 只拼进 Prompt；
+  // 这样任何把 plan 落盘/上报的消费者（turn trace、审计、日志）都不可能顺手带走原话。
   const evidenceParts: string[] = [];
   if (input.lowEstablished) evidenceParts.push('低谷已持续成段');
   if (sustainedByMood) evidenceParts.push(`心情层偏置 ${Number(input.moodDelta).toFixed(2)}`);
   if (input.ruminationActive) evidenceParts.push('反刍层在运转');
   const intrinsic = (input.intrinsic ?? []).find(c => c && c.eventId && c.evidenceRef);
   if (intrinsic) evidenceParts.push(`内在活动：${intrinsic.type}（${intrinsic.evidenceRef}）`);
-  if (input.causeQuote) evidenceParts.push(`他刚说的「${input.causeQuote}」`);
+  if (input.causeQuote) evidenceParts.push('本轮他的原话（引文只在 Prompt 片段里提供）');
   const evidence = evidenceParts.length ? evidenceParts.join('；') : null;
 
   const confidence = Math.min(0.95,
@@ -152,8 +155,12 @@ export function expressionPlanToSnippet(plan: ExpressionPlan): string | null {
     : plan.duration === 'transient'
       ? '**只能说此刻**；禁止说"这两天/一直/最近几天/这些天"（那会被当成持续状态）。'
       : '只回答你此刻的状态，不延伸成"最近一直"。';
-  const evidenceRule = plan.evidence
-    ? `可引用的原因：${plan.evidence}；除此之外不要编原因，说不清就说"说不上来为什么"。`
+  // v2.22：引文只在 Prompt 片段里拼；`plan.evidence` 本身保持无原话（可安全落盘/上报）
+  const evidenceText = [plan.evidence, plan.causeQuote ? `他刚说的「${plan.causeQuote}」` : null]
+    .filter(Boolean)
+    .join('；');
+  const evidenceRule = evidenceText
+    ? `可引用的原因：${evidenceText}；除此之外不要编原因，说不清就说"说不上来为什么"。`
     : '没有可引用原因：可以说"说不上来为什么"，不许编一个理由。';
   return [
     `【这一轮你可以说一句自己（可选，不说也行；最多 ${plan.maxSentences} 句、≤30 字）】`,

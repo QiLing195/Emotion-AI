@@ -1,8 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { buildTurnTrace, sanitizeTraceLabel } from '../turnTrace.js';
 
-describe('v2.21 evidence 脱敏（trace 不夹带用户原话）', () => {
-  it('expressionPlan 的 evidence 可能含「他刚说的「…」」——必须遮蔽引文', () => {
+describe('v2.21/2.22 evidence 脱敏（trace 不夹带用户原话）', () => {
+  it('v2.22：plan.causeQuote 只记存在性（hasCauseQuote=true），内容不进 trace', () => {
+    const rec = buildTurnTrace({
+      plan: {
+        decision: 'express',
+        reason: 'express:sad(transient)',
+        emotion: 'sad',
+        tone: 'soft',
+        duration: 'transient',
+        evidence: '本轮他的原话（引文只在 Prompt 片段里提供）',
+        causeQuote: '我今天特别难过，什么都做不好',
+        maxSentences: 1,
+        maxQuestions: 1,
+        confidence: 0.75,
+      },
+    } as never);
+    const json = JSON.stringify(rec);
+    expect(json).not.toContain('我今天特别难过');
+    expect(json).not.toContain('什么都做不好');
+    expect(rec.plan.hasCauseQuote).toBe(true);
+    expect(rec.plan.evidence).not.toContain('他刚说的');
+  });
+
+  it('防御：即便调用方塞进带「…」的旧式 evidence，白名单也会遮蔽引文', () => {
     const rec = buildTurnTrace({
       plan: {
         decision: 'express',

@@ -56,10 +56,15 @@ describe('v2.06 ExpressionPlan（表达计划）', () => {
     expect(p.evidence).toContain('心情层偏置');
   });
 
-  it('有原因 → 证据含他的原话，confidence 更高；无原因 → 禁止编', () => {
+  it('有原因 → evidence 不含原话（引文只在 causeQuote/Prompt）；无原因 → 禁止编', () => {
     const withCause = planExpression({ ...base, causeQuote: '我今天特别难过' });
-    expect(withCause.evidence).toContain('我今天特别难过');
+    // v2.22：结构化 evidence 不得携带用户原话（plan 会被落盘/上报）
+    expect(withCause.evidence).not.toContain('我今天特别难过');
+    expect(withCause.evidence).toContain('本轮他的原话');
+    expect(withCause.causeQuote).toBe('我今天特别难过');
     expect(withCause.confidence).toBeGreaterThan(0.5);
+    // 但 Prompt 片段里仍要把原话给她，才能"引用他的原话"
+    expect(expressionPlanToSnippet(withCause)!).toContain('他刚说的「我今天特别难过」');
     const noCause = planExpression({ ...base });
     expect(expressionPlanToSnippet(noCause)!).toContain('说不上来为什么');
   });

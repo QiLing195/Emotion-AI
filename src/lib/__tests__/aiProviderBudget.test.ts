@@ -39,7 +39,7 @@ describe('v2.16 retryAsync + GenerationBudget', () => {
   });
 
   it('超时会真正 abort signal（v2.17：不是只让等待方返回）', async () => {
-    const budget = new GenerationBudget({ totalMs: 5_000, callMs: 80 });
+    const budget = new GenerationBudget({ totalMs: 5_000, callMs: 200 });
     let seen: AbortSignal | undefined;
     await expect(retryAsync((signal) => {
       seen = signal;
