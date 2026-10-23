@@ -203,3 +203,11 @@
 - [x] 修 🟠 桌面隐私文件名外泄提示（`read_my_desktop` 结果后加隐私提示）；行为级未验证
 - [ ] 真人手动使用 15 分钟（脚本替代不了真实节奏）
 - [ ] 桌面隐私提示的行为级验证；自我状态频率是否收一收
+
+### v2.20 脱敏 turn trace（2026-10-23）
+- [x] `turnTrace.ts`：每轮 JSONL 落盘（plan/intrinsic/强制/预算/memory 计数/agent 工具名），白名单脱敏，2MB 轮转留 5 份
+- [x] `ENABLE_TURN_TRACE=false` 可关；`TURN_TRACE_FILE` 可覆盖；`/api/diagnostics.turnTrace` 可观测
+- [x] 单测 5 条；隔离实例两轮验证“有结构、无原文”；全量 2007 通过、tsc 0
+- [ ] plan.evidence 保持“内部短标签”约束（写脏则脱敏失效）——可加长度/字符白名单检查
+- [ ] 旁路生成（主动消息/jev/摘要）是否也进 trace
+- [ ] 简易审计脚本（按 round 聚合 plan/budget/工具）

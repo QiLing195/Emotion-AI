@@ -34,6 +34,7 @@ interface IMessageChannel {
 }
 // Phase 2: Strategy layer injection
 import { aiCoordinator } from './services/aiCoordinator.js';
+import { appendTurnTrace, buildTurnTrace, turnTraceEnabled } from './services/turnTrace.js';
 import { analyzeEmotionEvent, analyzeUserEmotionLocally, fallbackEmotionEvent } from './services/emotionAnalyzer.js';
 import {
   filterRelationshipMemoryItems,
@@ -503,6 +504,8 @@ export class AIGirlfriendServer {
   private _lastExpressionEnforcement: ExpressionEnforcementResult | null = null;
   /** v2.16：最近一轮生成预算快照（总耗时/剩余/调用次数/超时次数），可观测 */
   private _lastGenerationBudget: GenerationBudgetSnapshot | null = null;
+  /** v2.20：最近一轮脱敏 turn trace（只含结构，不含原文；同时落盘 memories/turn_trace.jsonl） */
+  private _lastTurnTrace: ReturnType<typeof buildTurnTrace> | null = null;
 
   private currentActivityUnderstanding(fresh = false): ActivityUnderstanding | null {
     const now = Date.now();
@@ -1494,6 +1497,8 @@ export class AIGirlfriendServer {
 
         // v1.72 Agent 工具层：开关打开时先让她"查一下再回答"（有界 2 轮）
         let result: { text: string };
+        // v2.20：agent 轨迹（只记轮数/工具名，供脱敏 turn trace）
+        let agentTrace: { rounds: number; usedTools: boolean; tools: string[] } | null = null;
         // v2.16：**整轮生成预算**——agent 多轮工具调用 / 收尾 / 接地重写 / 非 agent 路径共享同一 deadline，
         // 一次卡死不会把整轮拖到几分钟（默认 TURN_GEN_BUDGET_MS=25000，单次 GEN_CALL_TIMEOUT_MS=15000）。
         const genBudget = new GenerationBudget();
@@ -1613,6 +1618,11 @@ export class AIGirlfriendServer {
           });
           console.log(`[Agent] rounds=${agent.rounds} usedTools=${agent.usedTools} trace=${agent.toolTrace.map(t => `${t.tool}:${t.ok ? 'ok' : 'fail'}:${t.ms}ms`).join(',') || 'none'}`);
           result = { text: agent.text };
+          agentTrace = {
+            rounds: agent.rounds,
+            usedTools: agent.usedTools,
+            tools: agent.toolTrace.map(t => t.tool),
+          };
           if (!result.text.trim()) {
             // v2.16：预算耗尽时 agent 可能拿不到任何文本 —— 给确定性兜底，避免空回复
             console.warn('[GenBudget] agent 无文本，使用确定性兜底');
@@ -1737,6 +1747,47 @@ export class AIGirlfriendServer {
           + `calls=${this._lastGenerationBudget.calls} timeouts=${this._lastGenerationBudget.timeouts}`
           + (this._lastGenerationBudget.expired ? ' EXPIRED' : ''),
         );
+
+        // v2.20：脱敏 turn trace —— 每轮一行 JSONL（只存结构：plan/intrinsic/强制/预算/工具名/计数；
+        // 不存用户原话、回复正文、记忆正文、causeQuote、动机内容；userId 只存 8 位哈希）。
+        if (turnTraceEnabled()) {
+          try {
+            const manifest = this._lastPromptManifest ?? [];
+            const trace = buildTurnTrace({
+              round: Number.isFinite(persistedRound as number) ? (persistedRound as number) : null,
+              userId: userId ?? null,
+              prompt: {
+                blocks: manifest.length,
+                chars: manifest.filter(b => !b.suppressed).reduce((n, b) => n + b.chars, 0),
+                permits: manifest.filter(b => b.category === 'expression_permit' && !b.suppressed).length,
+                suppressed: manifest.filter(b => b.suppressed).map(b => b.id),
+              },
+              strategy: turnOutput.strategy,
+              conflictPhase: turnOutput.conflictState.phase,
+              plan: aiCoordinator.getLastExpressionPlan(),
+              intrinsic: aiCoordinator.getLastIntrinsic(),
+              enforcement: this._lastExpressionEnforcement,
+              budget: this._lastGenerationBudget,
+              memory: {
+                injected: (visibilitySafeMemories ?? []).length,
+                sources: (recallResult.sources ?? {}) as Record<string, number>,
+                proactivePicked: Boolean(proactiveDecision?.memory),
+              },
+              motive: motiveSelection?.selected
+                ? { kind: motiveSelection.selected.kind, salience: motiveSelection.selected.salience }
+                : null,
+              agent: agentTrace,
+              reply: {
+                chars: aiText.length,
+                questionMarks: (aiText.match(/[？?]/g) ?? []).length,
+              },
+            });
+            this._lastTurnTrace = trace;
+            appendTurnTrace(trace);
+          } catch (e) {
+            console.warn('[TurnTrace] 写入失败（不影响主流程）：', (e as Error).message);
+          }
+        }
 
         const relationshipTurn = processSuccessfulRelationshipTurn(this._relationshipState, {
           userText: message,
@@ -2508,6 +2559,7 @@ export class AIGirlfriendServer {
           },
           lastTurnTimings: this._lastTurnTimings,
           expressionEnforcement: this._lastExpressionEnforcement,
+          turnTrace: this._lastTurnTrace,
           generationBudget: this._lastGenerationBudget,
           prompt: {
             blocks: this._lastPromptManifest?.length ?? 0,
