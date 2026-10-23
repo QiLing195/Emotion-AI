@@ -14,6 +14,8 @@ import {
   buildBranchNode,
   buildOutcomeNode,
   clearTimelineQuoteCache,
+  quoteDigest,
+  redactTimelineNode,
   TIMELINE_MAX_BYTES,
   type EmotionTimelineNode,
 } from '../emotionTimeline.js';
@@ -364,5 +366,48 @@ describe('v2.23 落盘脱敏（默认不把他的话写进文件）', () => {
     if (back.kind !== 'branch') throw new Error('unexpected kind');
     expect(back.branch.causeQuoted).toBe('我今天被领导当众骂了一顿');
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+/**
+ * v2.24：历史清理脚本用的强制脱敏函数（不看 TIMELINE_STORE_QUOTE；幂等）。
+ */
+describe('v2.24 历史节点强制脱敏（redactTimelineNode）', () => {
+  it('把已落盘的 quoted/causeQuoted 换成 hash/长度，且与 quoteDigest 一致、可幂等', () => {
+    const raw = '我今天被领导当众骂了一顿';
+    const stateNode = buildStateChangeNode({
+      ts: 1, round: 1, turnId: 'u-redact-1', userText: raw, hisEmotion: 'sad',
+      before: freshState(), after: stateWithSad(0.3),
+    });
+    // build 阶段仍是原文（v2.23 只在写盘时脱敏）
+    expect(stateNode.trigger.quoted).toBe(raw);
+
+    const r1 = redactTimelineNode(stateNode);
+    expect(r1.changed).toBe(true);
+    if (r1.node.kind !== 'state_change') throw new Error('unexpected kind');
+    expect(r1.node.trigger.quoted).toBeNull();
+    expect(r1.node.trigger.quotedHash).toBe(quoteDigest(raw));
+    expect(r1.node.trigger.quotedLength).toBe(Array.from(raw).length);
+
+    // 幂等：再跑一次不改
+    const r2 = redactTimelineNode(r1.node);
+    expect(r2.changed).toBe(false);
+    if (r2.node.kind !== 'state_change') throw new Error('unexpected kind');
+    expect(r2.node.trigger.quotedHash).toBe(quoteDigest(raw));
+  });
+
+  it('branch.causeQuoted 同样强制脱敏', () => {
+    const raw = '我今天被领导当众骂了一顿';
+    const branchNode = buildBranchNode({
+      ts: 2, round: 2, turnId: 'u-redact-2', lowActive: true, lowSince: 1, lowTurns: 1,
+      hisEmotion: 'joy', usedVoiceSnippet: true, causeQuoted: raw,
+      reply: '我这两天有点沉，今天还被领导当众骂了一顿，所以笑不太出来。',
+    });
+    const r = redactTimelineNode(branchNode);
+    expect(r.changed).toBe(true);
+    if (r.node.kind !== 'branch') throw new Error('unexpected kind');
+    expect(r.node.branch.causeQuoted).toBeNull();
+    expect(r.node.branch.causeQuotedHash).toBe(quoteDigest(raw));
+    expect(redactTimelineNode(r.node).changed).toBe(false);
   });
 });

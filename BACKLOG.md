@@ -235,3 +235,10 @@
 - [ ] 旧 `emotion_timeline.jsonl` 历史原话是否迁移/清理（当前不自动改）
 - [ ] `replyExcerpt`（她的话）与 replay 输出是否也要脱敏
 - [ ] 多实例/多进程下的原因链一致性（缓存不共享）
+
+### v2.24 旧时间线历史清理（2026-10-23）
+- [x] `redactTimelineNode()` 强制脱敏（不看 env、幂等）；`scripts/redact-timeline-history.ts` / `npm run timeline:redact`（dry-run/--apply/--no-backup/--keep-rotations）
+- [x] 真实数据：356 个含原话节点 → 0 残留、0 解析失败；先临时副本演练再执行
+- [x] 单测 23 通过（新增 2）、tsc 0、服务健康
+- [ ] 备份文件 `.pre-redact-*` 若保留仍含原话：是否加 `--purge-backup` 或加密备份
+- [ ] 其它数据面（activity_log / 截图 / episodic 叙事）是否也要同样的历史清理工具

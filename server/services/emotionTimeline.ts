@@ -87,6 +87,42 @@ function maskQuote(raw: string | null): { quoted: string | null; quotedHash: str
   return { quoted: null, quotedHash: hash, quotedLength: Array.from(raw).length };
 }
 
+/** v2.24：**强制**遮蔽（不看 TIMELINE_STORE_QUOTE），供历史清理脚本使用 */
+function maskQuoteAlways(raw: string | null): { quoted: string | null; quotedHash: string | null; quotedLength: number | null } {
+  if (!raw) return { quoted: null, quotedHash: null, quotedLength: null };
+  return { quoted: null, quotedHash: quoteDigest(raw), quotedLength: Array.from(raw).length };
+}
+
+/**
+ * v2.24：把一个**已经落盘**的节点重写成脱敏形态（纯函数）。
+ * 旧文件里的 `trigger.quoted` / `branch.causeQuoted` 被替换成 hash/长度；返回是否真的改了。
+ */
+export function redactTimelineNode(node: TimelineRecord): { node: TimelineRecord; changed: boolean } {
+  if (node.kind === 'state_change' && node.trigger?.quoted) {
+    const masked = maskQuoteAlways(node.trigger.quoted);
+    return {
+      node: { ...node, trigger: { ...node.trigger, ...masked } },
+      changed: true,
+    };
+  }
+  if (node.kind === 'branch' && node.branch?.causeQuoted) {
+    const masked = maskQuoteAlways(node.branch.causeQuoted);
+    return {
+      node: {
+        ...node,
+        branch: {
+          ...node.branch,
+          causeQuoted: masked.quoted,
+          causeQuotedHash: masked.quotedHash,
+          causeQuotedLength: masked.quotedLength,
+        },
+      },
+      changed: true,
+    };
+  }
+  return { node, changed: false };
+}
+
 /** 写盘前脱敏：默认不写原文，只写 hash/长度；原文进内存缓存 */
 function sanitizeForStorage(node: TimelineRecord): TimelineRecord {
   if (timelineStoreQuote()) return node;
