@@ -155,6 +155,10 @@ function createPetWindow() {
       }
     }, 120);
   };
+  // v2.09：拖动兜底 —— 窗口失焦/页面隐藏/渲染进程崩溃时清掉主进程拖动状态
+  petWin.on('blur', () => resetPetDrag('window-blur'));
+  petWin.webContents.on('render-process-gone', () => resetPetDrag('render-process-gone'));
+  petWin.webContents.on('destroyed', () => resetPetDrag('webcontents-destroyed'));
   petWin.on('maximize', () => restorePetWindow('maximize'));
   petWin.on('enter-full-screen', () => restorePetWindow('full-screen'));
   petWin.on('resize', () => restorePetWindow('resize'));
@@ -210,6 +214,11 @@ function petDragMove() {
   }
 }
 function petDragEnd() { petDrag = null; }
+/** v2.09：统一收尾 —— 失焦/渲染进程退出/取消 都走这里，避免主进程残留拖动状态 */
+function resetPetDrag(reason) {
+  if (petDrag) console.log('[Pet] 拖动状态清理:', reason);
+  petDrag = null;
+}
 
 function registerPetIpc() {
   const { ipcMain } = require('electron');
@@ -246,6 +255,7 @@ function registerPetIpc() {
   ipcMain.on('pet:drag-begin', () => petDragBegin());
   ipcMain.on('pet:drag-move', () => petDragMove());
   ipcMain.on('pet:drag-end', () => petDragEnd());
+  ipcMain.on('pet:drag-cancel', () => resetPetDrag('renderer-cancel'));
   ipcMain.on('pet:move-by', (_evt, payload) => {
     const dx = Number(payload?.dx ?? 0);
     const dy = Number(payload?.dy ?? 0);

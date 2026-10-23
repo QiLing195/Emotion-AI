@@ -113,3 +113,11 @@
 - [x] 垂直拖不动：screenY 可能恒为 0，阈值改用 max(screen 位移, client 位移)；恢复 pointer capture
 - [x] 实测：垂直上拖 120px / 水平拖动 / 双击不变大 / 无窗口异常恢复日志
 - [ ] 真机人工确认：透明区点击确实落到桌面（已按 Electron 标准穿透方案实现，自动测试只能验证状态切换）
+
+### v2.09 桌宠交互规则定案（2026-10-23）
+- [x] 规则：她本人可见像素可拖/可点，按钮可点，其余透明区域穿透桌面（放弃“整窗可拖”）
+- [x] 拖动起点限制在 `[data-pet-hit]`；标题/注释改为“按住她拖动”
+- [x] 命中区按 sprite alpha 可见包围盒（矩形；内部透明洞仍是已知局限）
+- [x] 拖动统一收尾：pointerup/cancel/lostpointercapture/blur/visibility/pagehide + 主进程 blur/render-gone 兜底
+- [x] 单击/双击分离：click.detail 判双击，单击延迟 260ms；不再一次双击触发两次摸
+- [ ] 人工点一次授权卡按钮 / 右键菜单 / 拖出窗口松手后的真实手感

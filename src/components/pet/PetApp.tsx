@@ -110,6 +110,10 @@ export default function PetApp() {
   const [dragging, setDragging] = useState(false);
   const draggingRef = useRef(false);
   const captureRef = useRef<{ el: HTMLElement | null; id: number }>({ el: null, id: -1 });
+  /** v2.09：拖动统一收尾时移除全局监听 */
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  /** v2.09：单击延迟定时器（避免双击同时触发两次"摸她"） */
+  const clickTimerRef = useRef<number | null>(null);
   const [frameUrls, setFrameUrls] = useState<string[]>([]);
   const [frameIdx, setFrameIdx] = useState(0);
   const [awake, setAwake] = useState(false);
@@ -372,25 +376,49 @@ export default function PetApp() {
 
   const wave = () => { playAction('wave', 2200); say('嘿，我在这儿。', 2600); };
 
-  // v2.07：整窗可拖 —— 之前只有底部 170x212 的她本人能拖，窗口上方约 190px 透明区域
-  // 没有任何事件目标，所以"往上拖"常常抓空。现在在整个窗口根节点上处理，
-  // 只排除按钮/输入等交互控件；拖动时在主进程里按屏幕光标位移移动窗口。
+  // v2.09：**明确拖动规则**（回应设计审查）：她本人可拖、按钮可点、其余透明区域穿透桌面。
+  // 不再声称"整窗可拖"——窗口忽略鼠标时根节点根本收不到按下事件，那个目标与点击穿透矛盾。
+  const finishDrag = (reason: string) => {
+    const st = dragRef.current;
+    const wasDrag = draggingRef.current || st.moved > 3;
+    st.down = false;
+    draggingRef.current = false;
+    const cleanup = dragCleanupRef.current;
+    dragCleanupRef.current = null;
+    cleanup?.();
+    try {
+      if (captureRef.current.el && captureRef.current.id >= 0) {
+        captureRef.current.el.releasePointerCapture?.(captureRef.current.id);
+      }
+    } catch { /* ignore */ }
+    captureRef.current = { el: null, id: -1 };
+    window.petWindow?.dragEnd?.();
+    if (wasDrag) {
+      setDragging(false);
+      suppressClick.current = Date.now();
+      playAction('shocked', 500);
+    }
+    if (reason !== 'pointerup' && reason !== 'click') {
+      console.log('[Pet] 拖动收尾:', reason);
+    }
+  };
+
   const onPetPointerDown = (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('button, a, input, textarea, select')) return;
+    // v2.09：只允许从她本人身上开始拖动（透明区域穿透桌面，不能作为拖动起点）
+    if (!target?.closest('[data-pet-hit]')) return;
     dragRef.current = { down: true, startX: e.screenX, startY: e.screenY, startCX: e.clientX, startCY: e.clientY, moved: 0 };
-    // v2.08：抓住指针，快速拖动时鼠标离开窗口也能继续收到 pointermove（否则垂直/快速拖会断）
     const el = e.currentTarget as HTMLElement;
     captureRef.current = { el, id: e.pointerId };
     try { el.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     window.petWindow?.dragBegin?.();
+
     const onMove = (ev: PointerEvent) => {
       const st = dragRef.current;
       if (!st.down) return;
-      // ⚠️ 有些环境下 PointerEvent.screenY 恒为 0（垂直拖动会因此永远判定不出位移，
-      // 表现就是"只能水平移动"）。所以同时用 client 坐标算一次，取较大者；
-      // 实际窗口位移由主进程按屏幕光标计算，不依赖这里。
+      // 有些环境下 PointerEvent.screenY 恒为 0：同时用 client 位移兜底（窗口位移由主进程算）
       const screenDelta = Math.abs(ev.screenX - st.startX) + Math.abs(ev.screenY - st.startY);
       const clientDelta = Math.abs(ev.clientX - st.startCX) + Math.abs(ev.clientY - st.startCY);
       st.moved = Math.max(st.moved, screenDelta, clientDelta);
@@ -399,42 +427,51 @@ export default function PetApp() {
         window.petWindow?.dragMove?.();
       }
     };
-    const onUp = () => {
-      const st = dragRef.current;
-      const wasDrag = draggingRef.current || st.moved > 3;
-      st.down = false;
-      draggingRef.current = false;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      try {
-        if (captureRef.current.el && captureRef.current.id >= 0) {
-          captureRef.current.el.releasePointerCapture?.(captureRef.current.id);
-        }
-      } catch { /* ignore */ }
-      captureRef.current = { el: null, id: -1 };
-      window.petWindow?.dragEnd?.();
-      if (wasDrag) {
-        setDragging(false);
-        suppressClick.current = Date.now();
-        playAction('shocked', 500);
-      }
-    };
+    const onEnd = () => finishDrag('pointerup');
+    const onCancel = () => finishDrag('pointercancel');
+    const onLostCapture = () => finishDrag('lostpointercapture');
+    const onBlur = () => finishDrag('window-blur');
+    const onVisibility = () => { if (document.visibilityState === 'hidden') finishDrag('visibility-hidden'); };
+    const onPageHide = () => finishDrag('pagehide');
+
     window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('lostpointercapture', onLostCapture);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+
+    dragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('lostpointercapture', onLostCapture);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
   };
-  const onPetPointerUp = () => { /* 拖动结束统一由 window 级 pointerup 处理 */ };
-  const onPetPointerMove = () => { /* 同上 */ };
-  const onPetDoubleClick = () => {
-    if (Date.now() - suppressClick.current < 400) return;
-    wave();
-  };
+  // 单击：摸她（延迟 260ms 再执行）；双击：挥手并取消单击。
+  // 用 click 的 detail 判定双击，避免"两次摸她 + 一次挥手"重复触发。
   const onRootClick = (e: ReactMouseEvent) => {
     if (Date.now() - suppressClick.current < 400) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('button, a, input, textarea, select')) return;
-    void touch();
+    if (!target?.closest('[data-pet-hit]')) return;
+    if (e.detail >= 2) {
+      if (clickTimerRef.current !== null) {
+        window.clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+      wave();
+      return;
+    }
+    if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      void touch();
+    }, 260);
   };
   const onContextMenu = (e: ReactMouseEvent) => {
     e.preventDefault();
@@ -449,12 +486,62 @@ export default function PetApp() {
   const headColor = low ? '#8e9bb8' : '#f6c1cf';
   const bodyColor = low ? '#6b7896' : '#f7cbd5';
 
-  // v2.08：透明区域点击穿透 —— 定期把"她本人 + 所有按钮/输入"的矩形上报给主进程，
-  // 主进程轮询光标，只有落在这些矩形内才接收鼠标；其余位置点击直接落到桌面。
+  // v2.09：点击穿透的命中区域 —— 角色按**图片可见像素包围盒**（alpha）上报，
+  // 而不是整张 170x212 矩形；按钮/输入按自身矩形。透明像素/空白区域让给桌面。
   useEffect(() => {
+    const alphaCache = new Map<string, { x: number; y: number; w: number; h: number }>();
+    const imgVisibleBox = (img: HTMLImageElement): { x: number; y: number; w: number; h: number } | null => {
+      try {
+        const nw = img.naturalWidth, nh = img.naturalHeight;
+        if (!nw || !nh || !img.complete) return null;
+        const key = img.currentSrc || img.src;
+        let box = alphaCache.get(key);
+        if (!box) {
+          const canvas = document.createElement('canvas');
+          canvas.width = nw; canvas.height = nh;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          ctx.drawImage(img, 0, 0);
+          const data = ctx.getImageData(0, 0, nw, nh).data;
+          let minX = nw, minY = nh, maxX = -1, maxY = -1;
+          for (let y = 0; y < nh; y++) {
+            for (let x = 0; x < nw; x++) {
+              if (data[(y * nw + x) * 4 + 3] > 12) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+              }
+            }
+          }
+          if (maxX < minX || maxY < minY) return null;
+          box = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+          alphaCache.set(key, box);
+        }
+        // object-fit: contain + object-position: bottom center —— 图片坐标 → 显示区域
+        const r = img.getBoundingClientRect();
+        const scale = Math.min(r.width / nw, r.height / nh);
+        const dispW = nw * scale, dispH = nh * scale;
+        const offX = r.left + (r.width - dispW) / 2;
+        const offY = r.top + (r.height - dispH);
+        return {
+          x: offX + box.x * scale,
+          y: offY + box.y * scale,
+          w: box.w * scale,
+          h: box.h * scale,
+        };
+      } catch { return null; }
+    };
     const report = () => {
       const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
-      document.querySelectorAll<HTMLElement>('[data-pet-hit], button, a, input, textarea, select').forEach((el) => {
+      document.querySelectorAll<HTMLElement>('button, a, input, textarea, select').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+      });
+      document.querySelectorAll<HTMLElement>('[data-pet-hit]').forEach((el) => {
+        const img = el.querySelector<HTMLImageElement>('img.anya-img');
+        const visible = img ? imgVisibleBox(img) : null;
+        if (visible) { rects.push(visible); return; }
         const r = el.getBoundingClientRect();
         if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height });
       });
@@ -477,7 +564,6 @@ export default function PetApp() {
       style={{ background: 'transparent', cursor: dragging ? 'grabbing' : 'grab' }}
       onContextMenu={onContextMenu}
       onPointerDown={onPetPointerDown}
-      onDoubleClick={onPetDoubleClick}
       onClick={onRootClick}
     >
       <style>{PET_CSS}</style>
@@ -591,7 +677,7 @@ export default function PetApp() {
 
         <div
           data-pet-hit="1"
-          title={dragging ? '放我下来…' : '摸她 / 按住拖动 / 双击挥手 / 右键菜单'}
+          title={dragging ? '放我下来…' : '按住她拖动 / 点一下摸她 / 双击挥手 / 右键菜单'}
           className="absolute inset-0 select-none border-none p-0 outline-none"
           style={{ background: 'transparent', touchAction: 'none' }}
         >
