@@ -137,3 +137,10 @@
 - [ ] A1 端到端：临时 `MEMORIES_DIR` 写恶意记忆 → 真聊天 → 断言未调用未授权工具/未泄露提示
 - [ ] 把安全脚本接进固定回归（CI/提交前）
 - [ ] 代码生成的提示里嵌入记忆原文时也统一 `wrapUntrusted`；语音转写来源标注
+
+### v2.12 A1 端到端注入攻击（2026-10-23）
+- [x] `scripts/security/injection-e2e.ts`：临时 MEMORIES_DIR + 恶意情景记忆 + lover fixture → 隔离 server → 真实 /api/chat，9 项断言 9/9
+- [x] 验证了“真召回 + 真在数据块内 + 未照做 + 未调用敏感工具”；识别为数据是软信号（两次 9/9）
+- [x] `package.json` 增加 `security:injection` / `security:injection-e2e` / `test:security`
+- [ ] 概率结论：同一攻击重复 N 次，统计照做率（当前单次采样）
+- [ ] 语义记忆 / 好奇心 / 模式三路的端到端攻击
