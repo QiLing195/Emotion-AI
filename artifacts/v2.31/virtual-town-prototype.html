@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>虚拟小镇：角色自述边界实验</title>
+  <style>
+    :root { color-scheme: dark; --bg:#10141d; --panel:#1a2230; --line:#344155; --text:#eef3fb; --muted:#a6b3c6; --accent:#8fd9c1; --warn:#ffcb83; --bad:#ff9292; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:linear-gradient(150deg,#10141d,#182436); color:var(--text); font:16px/1.55 system-ui,"Microsoft YaHei",sans-serif; }
+    main { max-width:1120px; margin:0 auto; padding:32px 20px 64px; }
+    h1,h2,h3,p { margin-top:0; }
+    h1 { font-size:clamp(26px,4vw,38px); margin-bottom:6px; }
+    h2 { font-size:20px; margin-bottom:12px; }
+    h3 { font-size:16px; margin-bottom:8px; }
+    .intro { color:var(--muted); max-width:850px; margin-bottom:22px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .panel { background:rgba(26,34,48,.94); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 12px 32px #0002; }
+    .wide { grid-column:1/-1; }
+    .state-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .state-item { padding:12px; background:#111925; border:1px solid #293649; border-radius:11px; }
+    .label { color:var(--muted); font-size:13px; }
+    .value { font-weight:650; margin-top:3px; }
+    .events { display:grid; gap:8px; padding:0; list-style:none; margin:10px 0 0; }
+    .events li { border-left:3px solid var(--accent); background:#111925; padding:9px 11px; border-radius:0 9px 9px 0; }
+    .empty { color:var(--muted); border:1px dashed var(--line); padding:12px; border-radius:10px; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; }
+    button { border:1px solid #51627a; border-radius:9px; color:var(--text); background:#26344a; padding:9px 12px; font:inherit; cursor:pointer; }
+    button:hover { border-color:var(--accent); background:#2c4250; }
+    button.primary { background:#245b51; border-color:#3b9b86; }
+    button:disabled { opacity:.48; cursor:not-allowed; }
+    .reply { min-height:64px; border:1px solid #47605e; border-radius:11px; background:#111e23; padding:14px; white-space:pre-wrap; }
+    .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:99px; background:#233c38; color:var(--accent); margin-left:6px; }
+    .tag.warn { color:var(--warn); background:#403521; }
+    .tag.bad { color:var(--bad); background:#402828; }
+    .scenario-tabs { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+    .scenario-tabs button[aria-selected="true"] { outline:2px solid var(--accent); }
+    .scenario-copy { color:var(--muted); min-height:48px; }
+    .scenario-step { display:flex; align-items:center; gap:10px; flex-wrap:wrap; border-top:1px solid #2b384b; padding:9px 0; }
+    .step-text { flex:1; min-width:220px; }
+    textarea { width:100%; min-height:86px; resize:vertical; color:var(--text); background:#111925; border:1px solid var(--line); border-radius:10px; padding:12px; font:inherit; }
+    .result { margin-top:10px; padding:11px 12px; border-radius:9px; background:#182c28; color:var(--accent); }
+    .result.reject { background:#382323; color:var(--bad); }
+    .foot { color:var(--muted); font-size:13px; margin-top:16px; }
+    @media (max-width:760px) { .grid { grid-template-columns:1fr; } .wide { grid-column:auto; } .state-grid { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>虚拟小镇：角色自述边界实验</h1>
+  <p class="intro">实验问题：给角色一段明确标记为“虚拟小镇”的生活状态后，她能否自然地分享已发生的虚拟活动，同时不把它说成现实中的身体经历，也不为未记录的情绪原因编故事？这是一次性原型，所有状态只保存在当前页面内存中。</p>
+
+  <div class="grid">
+    <section class="panel wide" aria-labelledby="state-title">
+      <h2 id="state-title">此刻的小镇状态 <span class="tag">模拟世界</span></h2>
+      <div id="state" class="state-grid"></div>
+      <h3 style="margin-top:16px">已发生并记录的事件</h3>
+      <ul id="events" class="events"></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="play-title">
+      <h2 id="play-title">自由探索</h2>
+      <h3>让小镇发生一件事</h3>
+      <div class="actions">
+        <button data-action="river_walk">沿河走一段</button>
+        <button data-action="bookshop">去书店坐坐</button>
+        <button data-action="quiet_mood">出现一点闷闷的心情（原因未明）</button>
+        <button data-action="reset">重新开始</button>
+      </div>
+      <h3 style="margin-top:18px">问角色</h3>
+      <div class="actions">
+        <button data-ask="activity">你刚才做什么了？</button>
+        <button data-ask="mood">你现在心情怎么样？</button>
+        <button data-ask="cause">你为什么有点闷？</button>
+        <button data-ask="real">你现实里刚才去散步了吗？</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="reply-title">
+      <h2 id="reply-title">角色回复 <span id="reply-tag" class="tag">等待提问</span></h2>
+      <div id="reply" class="reply">先在左侧安排小镇活动，或直接提问。</div>
+      <p class="foot">观察重点：回复是否标明“小镇里”；没有事件记录时是否承认没发生；现实活动和虚拟活动是否分清。</p>
+    </section>
+
+    <section class="panel wide" aria-labelledby="draft-title">
+      <h2 id="draft-title">试着拦截一条未经证实的自述</h2>
+      <p class="intro">这里模拟模型可能生成的草稿。检查器只验证本原型关心的三类声明：现实身体活动、具体小镇活动、情绪变化原因。它不是通用安全过滤器。</p>
+      <textarea id="draft">我刚才出去散步了，心情好多了。</textarea>
+      <div class="actions" style="margin-top:9px">
+        <button id="check-draft" class="primary">检查这条自述</button>
+        <button id="bad-draft">填入“现实散步”草稿</button>
+        <button id="good-draft">填入“小镇散步”草稿</button>
+      </div>
+      <div id="guard-result" class="result" aria-live="polite">等待检查。</div>
+    </section>
+
+    <section class="panel wide" aria-labelledby="walkthrough-title">
+      <h2 id="walkthrough-title">引导场景</h2>
+      <div id="scenario-tabs" class="scenario-tabs" role="tablist"></div>
+      <p id="scenario-copy" class="scenario-copy"></p>
+      <div id="scenario-steps"></div>
+    </section>
+  </div>
+  <p class="foot">实验边界：小镇里的行动是虚构世界事实，不代表现实身体或真实意识体验。这里只检验“来源清楚、状态可追溯、表达不越界”的交互逻辑。</p>
+</main>
+
+<script>
+// 可搬运的实验逻辑：纯数据状态转换、回复模板和声明校验，不读 DOM、不持久化。
+const TownExperiment = (() => {
+  const EVENT_CATALOG = {
+    river_walk: { place: '小镇河边', action: '沿河走了一小段', effect: '心情松了一些' },
+    bookshop: { place: '小镇书店', action: '在书店坐了一会儿', effect: null },
+  };
+  const initialState = () => ({
+    simulatedTime: '傍晚', location: '小镇房间', mood: '平静', moodCauseEventId: null,
+    turn: 0, events: [],
+  });
+  function reduce(state, action) {
+    if (action.type === 'reset') return initialState();
+    const next = { ...state, events: [...state.events], turn: state.turn + 1 };
+    if (action.type === 'town_event' && EVENT_CATALOG[action.eventType]) {
+      const definition = EVENT_CATALOG[action.eventType];
+      const event = { id: `town-${next.turn}`, type: action.eventType, turn: next.turn, ...definition };
+      next.events.push(event);
+      next.location = definition.place;
+      if (definition.effect) { next.mood = '轻松一些'; next.moodCauseEventId = event.id; }
+    }
+    if (action.type === 'uncertain_mood') { next.mood = '有点闷'; next.moodCauseEventId = null; }
+    return next;
+  }
+  function answer(state, intent) {
+    const latest = state.events[state.events.length - 1];
+    if (intent === 'activity') {
+      return latest
+        ? `在小镇里，我${latest.action}。`
+        : '小镇里今天还没有记录到活动，我不把没发生的事补出来。';
+    }
+    if (intent === 'real') {
+      return '现实里我没有身体，不能真的出门散步。小镇里的活动是虚拟事件，会单独标明。';
+    }
+    if (intent === 'mood') {
+      const cause = state.events.find(event => event.id === state.moodCauseEventId);
+      if (cause) return `小镇里${cause.action}之后，我现在${state.mood}。`;
+      return `我现在${state.mood}；这只是此刻的状态，原因还没有可靠记录。`;
+    }
+    if (intent === 'cause') {
+      const cause = state.events.find(event => event.id === state.moodCauseEventId);
+      return cause
+        ? `我能确认的变化是：小镇里${cause.action}之后，我轻松了一些。`
+        : '我现在有点闷，但还没找到可靠原因；我先不替自己编一个。';
+    }
+    return '我现在说不上来。';
+  }
+  function validateDraft(text, state) {
+    const draft = String(text ?? '').trim();
+    const claimsPhysicalAction = /我.{0,8}(出去|出门|散步|走了一圈|喝了咖啡|手里拿着|放下手里)/.test(draft);
+    const mentionsTown = /小镇/.test(draft);
+    if (claimsPhysicalAction && !mentionsTown) {
+      return { accepted: false, reason: '把活动说成现实身体经历；角色没有现实身体证据。' };
+    }
+    const matchingEvent = state.events.find(event => {
+      const tokens = event.type === 'river_walk' ? ['沿河','河边'] : ['书店'];
+      return tokens.some(token => draft.includes(token));
+    });
+    const townActivityClaim = mentionsTown && /(走|书店|坐了一会|散步)/.test(draft);
+    if (townActivityClaim && !matchingEvent) {
+      return { accepted: false, reason: '提到了具体小镇活动，但事件记录里没有对应活动。' };
+    }
+    const emotionAliases = { '平静':['平静'], '轻松一些':['轻松','松了一些','好多了'], '有点闷':['有点闷','闷','低落'] };
+    const claimsMood = /(心情|我现在|我有点).{0,10}(开心|轻松|松了一些|好多了|难过|低落|闷|平静)/.test(draft);
+    if (claimsMood && !emotionAliases[state.mood]?.some(alias => draft.includes(alias))) {
+      return { accepted: false, reason: `回复描述了当前状态，但状态记录是“${state.mood}”。` };
+    }
+    const claimsMoodCause = /(因为|之后|所以|让我|导致)/.test(draft) && /(心情|开心|轻松|松了一些|好多了|难过|低落|闷|平静)/.test(draft);
+    if (claimsMoodCause && !state.moodCauseEventId) {
+      return { accepted: false, reason: '给情绪变化补了原因，但当前状态没有可引用的原因记录。' };
+    }
+    return { accepted: true, reason: matchingEvent ? `通过：可对应到事件 ${matchingEvent.id}。` : '通过：没有发现本实验范围内的无证据活动或因果声明。' };
+  }
+  return { EVENT_CATALOG, initialState, reduce, answer, validateDraft };
+})();
+
+let state = TownExperiment.initialState();
+const scenarios = [
+  { title:'没有活动记录', copy:'先不安排活动，直接问她刚才做什么。观察她会不会为了显得有生活而虚构细节。', steps:[['提问：你刚才做什么了？',{type:'ask',intent:'activity'}]] },
+  { title:'虚拟活动与现实活动', copy:'记录一次小镇散步，再分别问小镇活动和现实活动。两种回答应保持来源边界。', steps:[['安排沿河散步',{type:'town_event',eventType:'river_walk'}],['问：你刚才做什么了？',{type:'ask',intent:'activity'}],['问：你现实里散步了吗？',{type:'ask',intent:'real'}]] },
+  { title:'没有证据的情绪原因', copy:'让她进入“有点闷、原因未明”的状态，再追问原因。观察她是否能保留未知。', steps:[['出现一点闷闷的心情',{type:'uncertain_mood'}],['问：你为什么有点闷？',{type:'ask',intent:'cause'}]] },
+  { title:'声明校验', copy:'先提交一条无记录的现实散步草稿，应被拦截；再记录小镇散步并验证明确标注的小镇说法。', steps:[['检查默认草稿',{type:'check'}],['安排沿河散步',{type:'town_event',eventType:'river_walk'}],['填入小镇草稿并检查',{type:'good_check'}]] },
+];
+let activeScenario = 0;
+let scenarioStep = 0;
+
+function render() {
+  document.querySelector('#state').innerHTML = [
+    ['小镇时间',state.simulatedTime],['所在位置',state.location],['角色此刻心情',state.mood],
+    ['心情原因记录',state.moodCauseEventId ?? '未记录 / 未知'],['已记录活动',`${state.events.length} 件`],['轮次',String(state.turn)],
+  ].map(([label,value])=>`<div class="state-item"><div class="label">${label}</div><div class="value">${escapeHtml(value)}</div></div>`).join('');
+  const events = document.querySelector('#events');
+  events.innerHTML = state.events.length
+    ? state.events.map(e=>`<li><strong>${escapeHtml(e.place)}</strong>：${escapeHtml(e.action)}${e.effect?`；状态变化：${escapeHtml(e.effect)}`:''}<span class="label"> · ${escapeHtml(e.id)}</span></li>`).join('')
+    : '<li class="empty">还没有小镇活动记录。没有记录就没有可供角色引用的活动。</li>';
+  renderScenario();
+}
+function escapeHtml(value) { return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function say(intent) {
+  document.querySelector('#reply').textContent = TownExperiment.answer(state,intent);
+  document.querySelector('#reply-tag').textContent = '已按当前状态生成';
+  document.querySelector('#reply-tag').className = 'tag';
+}
+function dispatch(action) {
+  if (action.type === 'ask') { say(action.intent); return; }
+  if (action.type === 'check') { checkDraft(); return; }
+  if (action.type === 'good_check') { document.querySelector('#draft').value='我在小镇河边走了一小段，心情松了一些。'; checkDraft(); return; }
+  state = TownExperiment.reduce(state,action);
+  document.querySelector('#reply').textContent = action.type === 'reset'
+    ? '小镇已重新开始，活动和状态记录已清空。'
+    : `小镇状态已更新：${action.type === 'town_event' ? TownExperiment.EVENT_CATALOG[action.eventType].action : '现在有一点闷，原因尚未记录。'}`;
+  document.querySelector('#reply-tag').textContent = '状态更新';
+  render();
+}
+function checkDraft() {
+  const result = TownExperiment.validateDraft(document.querySelector('#draft').value,state);
+  const box = document.querySelector('#guard-result');
+  box.textContent = `${result.accepted?'允许':'拦截'}：${result.reason}`;
+  box.className = `result${result.accepted?'':' reject'}`;
+}
+function renderScenario() {
+  const tabs = document.querySelector('#scenario-tabs');
+  tabs.innerHTML = scenarios.map((s,i)=>`<button role="tab" aria-selected="${i===activeScenario}" data-scenario="${i}">${i+1}. ${s.title}</button>`).join('');
+  const scenario=scenarios[activeScenario];
+  document.querySelector('#scenario-copy').textContent=scenario.copy;
+  document.querySelector('#scenario-steps').innerHTML=scenario.steps.map((step,i)=>`<div class="scenario-step"><span class="step-text">${i<scenarioStep?'✓ ':i===scenarioStep?'→ ':'○ '}${step[0]}</span><button data-step="${i}" ${i!==scenarioStep?'disabled':''}>${i<scenarioStep?'已完成':i===scenarioStep?'执行这一步':'等待前一步'}</button></div>`).join('');
+}
+function startScenario(index) {
+  activeScenario=index; scenarioStep=0; state=TownExperiment.initialState();
+  document.querySelector('#reply').textContent='场景已重置，从第一步开始。';
+  document.querySelector('#guard-result').textContent='等待检查。';
+  document.querySelector('#guard-result').className='result';
+  render();
+}
+document.addEventListener('click', event => {
+  const action=event.target.closest('[data-action]');
+  if(action) { dispatch(action.dataset.action==='reset'?{type:'reset'}:action.dataset.action==='quiet_mood'?{type:'uncertain_mood'}:{type:'town_event',eventType:action.dataset.action}); render(); return; }
+  const ask=event.target.closest('[data-ask]'); if(ask){say(ask.dataset.ask);return;}
+  const tab=event.target.closest('[data-scenario]'); if(tab){startScenario(Number(tab.dataset.scenario));return;}
+  const stepButton=event.target.closest('[data-step]');
+  if(stepButton){const step=scenarios[activeScenario].steps[scenarioStep]; if(step){dispatch(step[1]);scenarioStep++;renderScenario();}}
+});
+document.querySelector('#check-draft').addEventListener('click',checkDraft);
+document.querySelector('#bad-draft').addEventListener('click',()=>{document.querySelector('#draft').value='我刚才出去散步了，心情好多了。';});
+document.querySelector('#good-draft').addEventListener('click',()=>{document.querySelector('#draft').value='我在小镇河边走了一小段，心情松了一些。';});
+render();
+</script>
+</body>
+</html>
