@@ -12,29 +12,30 @@
 //   // turn.updatedEmotionState → 更新持久化状态
 //   // turn.rhythmDecision → 响应延迟/长度/模式
 
-import { extractEmotionContext, classifyAttachmentStyle, applyEmotionalContagion, suggestReinforcement } from '../../src/lib/emotionEngine.js';
+import { extractEmotionContext, classifyAttachmentStyle, suggestReinforcement } from '../../src/lib/emotionEngine.js';
 // v1.43：服务端时间衰减（此前只有前端 store 在调 `processTimeDecay`，服务端从不衰减 —— 见阶段 0 的说明）
 import { processTimeDecay, serverDecayDisabled } from '../../src/lib/emotionTimeDecay.js';
 import { driftPersonalityParams } from '../../src/lib/personalityEvolution.js';
-import { appraiseEvent, applyAppraisal, appraisalStanceEnabled, appraisalToPromptSnippet, type AppraisalResult } from '../../src/lib/appraisal.js';
+import { appraisalStanceEnabled, appraisalToPromptSnippet, type AppraisalResult } from '../../src/lib/appraisal.js';
 import { activationOf, updateTypicalEmotions } from '../../src/lib/emotionActivation.js';
 import { updateLowPeriod, lowPeriodOf } from '../../src/lib/lowPeriod.js';
-import { applyInternalEvents, deriveInternalEvents, thoughtTypeToInternal } from '../../src/lib/emotionInternal.js';
-import { applyMoodBias, updateMood, moodSampleFrom } from '../../src/lib/moodLayer.js';
-import { ruminationModulation, trackRumination, activatedDominant } from '../../src/lib/rumination.js';
 import {
-  accumulateSource,
   buildEmergenceReport,
   emptyEmergenceStats,
   markTurn,
-  sumEmotionDelta,
+  recordEmotionSourceChange,
+  snapshotEmotionSource,
   type EmergenceReport,
   type EmergenceStats,
+  type EmotionSourceSnapshot,
   applySourceBudgetDelta,
 } from '../../src/lib/emergenceMetrics.js';
 import { applyNonUserTurnBudget } from '../../src/lib/turnBudget.js';
 import { planExpression, expressionPlanToSnippet, type ExpressionPlan } from '../../src/lib/expressionPlan.js';
-import { validateIntrinsicCandidates, IntrinsicDedup, INTRINSIC_DEFAULTS, type IntrinsicCandidate } from '../../src/lib/intrinsicActivity.js';
+import { userBodyStatePromptSnippet } from './emotionAnalyzer.js';
+import { asksAboutVirtualTownActivity, asksAboutVirtualTownMoodCause, getVirtualTownReplayEvent, hasConflictingVirtualTownDates } from '../../src/lib/virtualTown.js';
+import { IntrinsicDedup } from '../../src/lib/intrinsicActivity.js';
+import { applyCharacterEmotionStage } from '../../src/lib/characterEmotionStage.js';
 import { applyEvent, buildEmotionUpdatedPayload } from '../../src/lib/stateReducer.js';
 import { selectStrategy, STRATEGY_PROMPT_SNIPPETS, getSuppressedStrategies, paramsForStrategy, resolveStrategySnippet, lowPeriodStanceEnabled, lowPeriodRestraintEnabled } from '../../src/lib/dialogueStrategy.js';
 import { selfStateVoiceEnabled, buildSelfStateVoiceSnippet } from '../../src/lib/selfStateVoice.js';
@@ -77,7 +78,8 @@ import { recordPatternCounts, getFunnelSnapshot, logFunnelSummary } from '../../
 import { bus } from '../../src/eventBus.js';
 import { ThoughtGraph, assessThoughtGeneration, fillThoughtContent } from '../../src/lib/thoughtGraph.js';
 import { shadowLayer, applyShadowEmotionBias, strategyStatsForShadow } from '../../src/lib/shadowLayer.js';
-import { MemoryGraph, queryMemoryGraph, memoryGraph, createNodeFromThought, createNodeFromDiscovery } from '../../src/lib/memoryGraph.js';
+import { MemoryGraph, memoryGraph, createNodeFromThought, createNodeFromDiscovery } from '../../src/lib/memoryGraph.js';
+import { recallMemoryForTurn } from '../../src/lib/memoryRecallStage.js';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../../src/lib/emotionEngine.js';
 import type { StrategyDecision, StrategyType, StrategyContext, StrategyMotiveContext } from '../../src/lib/dialogueStrategy.js';
 import { herNegativeActivation } from '../../src/lib/dialogueStrategy.js';
@@ -110,6 +112,8 @@ const SHADOW_DETECTION_INTERVAL_ROUNDS = (() => {
 export interface TurnInput {
   /** 用户原始文本 */
   userText: string;
+  /** Recent conversation supplied by the request; used only for short topic continuity. */
+  recentMessages?: Array<{ role?: string; content?: unknown }>;
   /** 当前情感状态（上一轮结束后的快照） */
   currentEmotionState: EmotionState;
   /** 本轮从 LLM 提取的情感事件（可由调用方预先提取，也可留空） */
@@ -262,6 +266,7 @@ export class AICoordinator {
       userAnalysis: UserEmotionAnalysis | null | undefined;
       /** v1.60：本轮他的原话（沉因现场记录要引它） */
       userText: string;
+      recentMessages?: Array<{ role?: string; content?: unknown }>;
     };
     commitInputs: { valenceDelta: number; userDirectedAtAI: boolean };
   } | null = null;
@@ -336,6 +341,7 @@ export class AICoordinator {
       userAnalysis: UserEmotionAnalysis | null | undefined;
       /** v1.60：本轮他的原话（沉因现场记录要引它，保证引文来自真实对话） */
       userText: string;
+      recentMessages?: Array<{ role?: string; content?: unknown }>;
     },
   ): {
     decision: StrategyDecision;
@@ -516,16 +522,47 @@ export class AICoordinator {
           round: emotionExprTurn,
           lastExpressedRound: lastEmotionExpressedRound,
           hisAsksAboutHer: detectAsksAboutHer(extras.userText),
+          asksAboutHerTownActivity: asksAboutVirtualTownActivity(
+            extras.userText,
+            (extras.recentMessages ?? [])
+              .filter(message => message.role === 'user' && typeof message.content === 'string')
+              .slice(-4)
+              .map(message => String(message.content)),
+          ),
+          asksAboutVirtualTownMoodCause: asksAboutVirtualTownMoodCause(
+            extras.userText,
+            (extras.recentMessages ?? [])
+              .filter(message => message.role === 'user' && typeof message.content === 'string')
+              .slice(-4)
+              .map(message => String(message.content)),
+          ),
+          virtualTownNeedsClarification: hasConflictingVirtualTownDates(
+            extras.userText,
+            Math.max(1, Math.min(7, Number(process.env.VIRTUAL_TOWN_REPLAY_DAY) || 7)),
+          ),
+          virtualTownEvent: getVirtualTownReplayEvent(
+            process.env.ENABLE_VIRTUAL_TOWN_EXPERIMENT === 'true',
+            extras.userText,
+            (extras.recentMessages ?? [])
+              .filter(message => message.role === 'user' && typeof message.content === 'string')
+              .slice(-4)
+              .map(message => String(message.content)),
+            Math.max(1, Math.min(7, Number(process.env.VIRTUAL_TOWN_REPLAY_DAY) || 7)),
+          ),
           intrinsic: this.lastIntrinsic?.accepted.length
             ? this.lastIntrinsic.accepted.map(c => ({ ...c, confidence: 0.7 }))
             : [],
         });
         this.lastExpressionPlan = plan;
         const planSnippet = expressionPlanToSnippet(plan);
-        if (plan.decision === 'express' && planSnippet) {
+        if (planSnippet && (plan.decision === 'express' || plan.virtualTownQuestion)) {
           strategySnippet += `\n\n${planSnippet}`;
-          lastEmotionExpressedRound = emotionExprTurn;
-          console.log(`[ExpressionPlan] express ${plan.emotion} duration=${plan.duration} confidence=${plan.confidence} evidence=${plan.evidence ?? '-'}`);
+          if (plan.decision === 'express') {
+            lastEmotionExpressedRound = emotionExprTurn;
+            console.log(`[ExpressionPlan] express ${plan.emotion} duration=${plan.duration} confidence=${plan.confidence} evidence=${plan.evidence ?? '-'}`);
+          } else {
+            console.log('[ExpressionPlan] town evidence boundary attached');
+          }
         } else {
           console.log(`[ExpressionPlan] silent: ${plan.reason}`);
         }
@@ -550,6 +587,8 @@ export class AICoordinator {
         }
       } catch { /* 表达层永不打断主流程 */ }
     }
+    const bodyStateSnippet = userBodyStatePromptSnippet(extras.userAnalysis?.bodyState);
+    if (bodyStateSnippet) strategySnippet += `\n\n${bodyStateSnippet}`;
     if (hasOverrides(arbitrationOutput)) {
     console.log(`[Arbitration] ⚡ 策略覆盖: ${formatOverrides(arbitrationOutput)}`);
     }
@@ -762,7 +801,7 @@ export class AICoordinator {
     }
 
     // v2.03：直接刺激后的状态快照（用于 external 记账 + 非用户来源预算基准）
-    let directStimulusAfter: { emotions: Record<string, number>; valence: number; arousal: number } | null = null;
+    let directStimulusAfter: EmotionSourceSnapshot | null = null;
 
 
     // ── 阶段 3: 情感引擎更新（v1.0 applyEvent 统一路径）──
@@ -787,11 +826,7 @@ export class AICoordinator {
       });
       // v2.03（审查 P1-4）：直接刺激结束时的快照 —— external 记账只到这里，
       // 不能把后面的传染/评价/内在/心情/反刍也算进 external（那会重复计数）。
-      directStimulusAfter = {
-        emotions: { ...updatedEmotionState.emotions } as unknown as Record<string, number>,
-        valence: updatedEmotionState.taiji.valence,
-        arousal: updatedEmotionState.taiji.arousal,
-      };
+      directStimulusAfter = snapshotEmotionSource(updatedEmotionState);
 
       // 发事件（携带完整 stimulus + context，供 Timeline Viewer 消费）
       const oldValence = input.currentEmotionState.taiji.valence;
@@ -920,217 +955,39 @@ export class AICoordinator {
       this.thoughtGraph.cluster();
     }
 
-    // ── 阶段 3.65: v1.7 内在情绪源（情绪不再只由"用户当前这句话"驱动）──
-    // 逐源记录影响量（供涌现诊断：内在驱动 vs 用户驱动）
-    // 记账口径：|Δ效价| + |Δ唤醒| + Σ|Δ九情|（只看太极会低估只改九情的来源，如情绪传染）
-    const valenceBeforeInternal = updatedEmotionState.taiji.valence;
-    const arousalBeforeInternal = updatedEmotionState.taiji.arousal;
-    // ① 情绪传染：用户情绪按共情度传染给她（此前 applyEmotionalContagion 从未接入主链）
-    // v2.04：本轮非用户来源开始前的累计快照 —— 预算只缩放"本轮增量"，不改历史
-    const emergenceBeforeNonUser: typeof this.emergence = { ...this.emergence };
-
-    if (input.userAnalysis) {
-      const beforeTai = updatedEmotionState.taiji;
-      const beforeEmo = { ...updatedEmotionState.emotions };
-      updatedEmotionState = applyEmotionalContagion(
-        updatedEmotionState,
-        input.userAnalysis.expressedEmotion,
-        input.userAnalysis.intensity,
-        updatedEmotionState.evolution.empathy,
-      );
-      const afterTai = updatedEmotionState.taiji;
-      this.emergence = accumulateSource(
-        this.emergence,
-        'contagion',
-        afterTai.valence - beforeTai.valence,
-        afterTai.arousal - beforeTai.arousal,
-        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
-      );
-    }
-    // ①.5 v1.14 评价层：这件事对**她**意味着什么
-    //
-    // 与传染的分工：传染是**镜像**（他也难过 → 我也难过）；
-    // 这里用她自己的目标结构（动机池里"她挂着他的事"）评价他的这句话，
-    // 产出**她自己的**反应——例如"他面试挂了"碰到她挂着的那件事 →
-    // 替他悬着（fear）+ 想靠近（love），而不是只把他的 sad 复制一遍。
-    // 允许为空：他说的与她挂着的无关、或他情绪太弱 → 不硬编反应。
-    if (input.userAnalysis && process.env.DISABLE_APPRAISAL !== 'true') {
-      const concerns = (updatedEmotionState.internal?.motive?.pool ?? [])
-        .filter(m => !m.satisfiedAt && (m.kind === 'open_loop' || m.kind === 'worry'));
-      const appraisal = appraiseEvent({
-        userText: input.userText,
-        userEmotion: input.userAnalysis.expressedEmotion,
-        userIntensity: input.userAnalysis.intensity,
-        concerns,
-      });
-      this.lastAppraisal = appraisal;
-      if (appraisal.readings.length > 0) {
-        const beforeTai = updatedEmotionState.taiji;
-        const beforeEmo = { ...updatedEmotionState.emotions };
-        updatedEmotionState = applyAppraisal(updatedEmotionState, appraisal);
-        const afterTai = updatedEmotionState.taiji;
-        this.emergence = accumulateSource(
-          this.emergence,
-          'appraisal',
-          afterTai.valence - beforeTai.valence,
-          afterTai.arousal - beforeTai.arousal,
-          sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
-        );
-      }
-    }
-
-    // ② 内在事件：孤独/重逢/思维/兴趣/发现/洞察 → 弱强度情绪变化（习惯化 + 单轮总量上限）
+    // ── 阶段 3.65：角色自身情绪更新（传染 → 评价 → 内在活动 → 心情 → 反刍）──
     const t3_65 = Date.now();
-    const internalEvents = deriveInternalEvents({
+    const emotionStage = applyCharacterEmotionStage({
+      previousState: input.currentEmotionState,
+      stateAfterDirectStimulus: updatedEmotionState,
+      directStimulusAfter,
+      userText: input.userText,
+      userAnalysis: input.userAnalysis ?? null,
+      appraisalEnabled: process.env.DISABLE_APPRAISAL !== 'true',
+      activityConcern: input.activityConcern ?? null,
       idleMinutes: input.lastInteractionAt ? idleMins : undefined,
-      interestCount: userInterests.length,
-      thoughtTypes: seeds
-        .map(s => thoughtTypeToInternal(s.type))
-        .filter((t): t is NonNullable<typeof t> => t !== null),
-      hasDiscovery: pendingDiscoveries.length > 0,
-      hasInsight: generatedInsights.length > 0,
-    });
-    // v1.95："他正在做的事"也是一条弱内在事件（她看到他投简历/开会/学习 → 替他悬着一点）
-    if (input.activityConcern) {
-      internalEvents.push({ type: 'activity_concern', intensity: input.activityConcern.intensity });
-      this.lastActivityConcern = input.activityConcern;
-    } else {
-      this.lastActivityConcern = null;
-    }
-    // v2.06（审查建议 #3）：内在事件先变成**带证据/时效的候选**，经校验后才允许施加。
-    // 没有证据、过期、重复（最近已应用过）的候选不得当成真实经历。
-    const intrinsicCandidates: IntrinsicCandidate[] = internalEvents.map((ev) => {
-      const def = INTRINSIC_DEFAULTS[ev.type] ?? { ttlMs: 6 * 3600_000, confidence: 0.6 };
-      const evidenceRef = input.activityConcern && ev.type === 'activity_concern'
-        ? `activity:${input.activityConcern.category ?? 'unknown'}`
-        : ev.type === 'reunion' || ev.type === 'loneliness'
-          ? `idle:${Math.round(idleMins)}m`
-          : ev.type.startsWith('thought_')
-            ? `thought:${ev.type}`
-            : ev.type === 'interest'
-              ? `interest:${userInterests.slice(0, 2).join('/')}`
-              : ev.type === 'discovery'
-                ? `discovery:${pendingDiscoveries[0]?.id ?? pendingDiscoveries.length}`
-                : ev.type === 'insight'
-                  ? `insight:${generatedInsights.length}`
-                  : `event:${ev.type}`;
-      return {
-        eventId: `r${input.roundNumber ?? this.turnCounter}:${ev.type}:${evidenceRef}`,
-        type: ev.type,
-        source: ev.type.startsWith('thought_') ? 'thought'
-          : ev.type === 'interest' ? 'interest'
-            : ev.type === 'discovery' ? 'discovery'
-              : ev.type === 'insight' ? 'insight'
-                : ev.type === 'activity_concern' ? 'activity' : 'idle',
-        evidenceRef,
-        confidence: def.confidence,
-        expiresAt: Date.now() + def.ttlMs,
-        intensity: ev.intensity,
-      };
-    });
-    const intrinsicResult = validateIntrinsicCandidates(intrinsicCandidates, {
-      now: Date.now(),
+      interestTopics: userInterests,
+      thoughtTypes: seeds.map(seed => seed.type),
+      discoveryIds: pendingDiscoveries.map(discovery => discovery.id),
+      generatedInsightCount: generatedInsights.length,
+      roundNumber,
+      emergence: this.emergence,
       seen: this.intrinsicDedup,
-      maxPerTurn: 3,
+      now: Date.now,
     });
-    this.lastIntrinsic = {
-      accepted: intrinsicResult.accepted.map(c => ({ eventId: c.eventId, type: c.type, evidenceRef: c.evidenceRef })),
-      rejected: intrinsicResult.rejected,
-    };
-    const acceptedInternal = intrinsicResult.accepted.map(c => ({ type: c.type, intensity: c.intensity })) as Parameters<typeof applyInternalEvents>[1];
-    if (intrinsicResult.rejected.length > 0) {
-      console.log(`[Intrinsic] 候选 ${intrinsicCandidates.length} 个：通过 ${intrinsicResult.accepted.length}，拒绝 ${intrinsicResult.rejected.map(r => r.reason).join('/')}`);
+    updatedEmotionState = emotionStage.state;
+    this.emergence = emotionStage.emergence;
+    const emergenceBeforeNonUser = emotionStage.emergenceBeforeNonUser;
+    if (emotionStage.appraisalUpdated && emotionStage.appraisal) {
+      this.lastAppraisal = emotionStage.appraisal;
     }
-    if (acceptedInternal.length > 0) {
-      const beforeTai = updatedEmotionState.taiji;
-      const beforeEmo = { ...updatedEmotionState.emotions };
-      updatedEmotionState = applyInternalEvents(updatedEmotionState, acceptedInternal);
-      const afterTai = updatedEmotionState.taiji;
-      this.emergence = accumulateSource(
-        this.emergence,
-        'internal',
-        afterTai.valence - beforeTai.valence,
-        afterTai.arousal - beforeTai.arousal,
-        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+    this.lastActivityConcern = emotionStage.activityConcern;
+    this.lastIntrinsic = emotionStage.intrinsic;
+    if (emotionStage.intrinsic.rejected.length > 0) {
+      console.log(
+        `[Intrinsic] 候选 ${emotionStage.intrinsicCandidateCount} 个：通过 ${emotionStage.intrinsic.accepted.length}，拒绝 ${emotionStage.intrinsic.rejected.map(r => r.reason).join('/')}`,
       );
     }
-    // ③ v1.8 心情层：把"上一轮之后的底色心情"轻推回本轮（强烈情绪时让位）
-    const nowMs = Date.now();
-    const prevMood = input.currentEmotionState.internal?.mood;
-    const prevRumination = input.currentEmotionState.internal?.rumination;
-    if (prevMood && prevMood.samples > 0) {
-      // 让位权重用"被激活的情绪"强度（不能把静息就高的 calm 算进来）
-      const dominantNow = activatedDominant(updatedEmotionState.emotions).intensity;
-      const beforeTai = updatedEmotionState.taiji;
-      const beforeEmo = { ...updatedEmotionState.emotions };
-      updatedEmotionState = applyMoodBias(
-        updatedEmotionState,
-        prevMood,
-        nowMs,
-        dominantNow,
-        // 起点取"本轮开始前"的效价：心情只推动底色，不抹平用户当下造成的变化
-        input.currentEmotionState.taiji.valence,
-      );
-      const afterTai = updatedEmotionState.taiji;
-      this.emergence = accumulateSource(
-        this.emergence,
-        'mood',
-        afterTai.valence - beforeTai.valence,
-        afterTai.arousal - beforeTai.arousal,
-        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
-      );
-    }
-    // ④ v1.8 反刍：同一情绪连续主导 → 边际强度钝化 + 自我安抚（给情绪切换留出口）
-    {
-      const beforeTai = updatedEmotionState.taiji;
-      const beforeEmo = { ...updatedEmotionState.emotions };
-      updatedEmotionState = ruminationModulation(updatedEmotionState, prevRumination, nowMs);
-      const afterTai = updatedEmotionState.taiji;
-      this.emergence = accumulateSource(
-        this.emergence,
-        'rumination',
-        afterTai.valence - beforeTai.valence,
-        afterTai.arousal - beforeTai.arousal,
-        sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
-      );
-    }
-    // 用户话语直接刺激（阶段 3 的 applyEvent）作为 external 来源一并记账
-    // v2.03（审查 P1-4）：external 只统计"本轮开始 → 直接刺激结束"，
-    // 传染/评价/内在/心情/反刍各自记自己的来源（此前这里取到全部步骤结束后，导致重复计数）。
-    this.emergence = accumulateSource(
-      this.emergence,
-      'external',
-      directStimulusAfter ? directStimulusAfter.valence - input.currentEmotionState.taiji.valence : 0,
-      directStimulusAfter ? directStimulusAfter.arousal - input.currentEmotionState.taiji.arousal : 0,
-      directStimulusAfter
-        ? sumEmotionDelta(input.currentEmotionState.emotions, directStimulusAfter.emotions as unknown as typeof input.currentEmotionState.emotions)
-        : 0,
-    );
-
-    // ⑤ 回写内在状态：心情采样（本轮九情净效价）+ 反刍链推进（只看激活情绪）
-    const activeDominant = activatedDominant(updatedEmotionState.emotions);
-    updatedEmotionState.internal = {
-      satiation: updatedEmotionState.internal?.satiation ?? {},
-      // v1.9 动机池由 server 在 Prompt 组装阶段维护，这里必须原样带走（否则每轮被清空）
-      ...(input.currentEmotionState.internal?.motive
-        ? { motive: input.currentEmotionState.internal.motive }
-        : {}),
-      mood: updateMood(
-        prevMood,
-        moodSampleFrom(updatedEmotionState),
-        nowMs,
-        // 锚点用她的人格基线（不是此刻的效价），否则心情会锚死在当下的低谷
-        Number.isFinite(input.currentEmotionState.evolution?.baseline)
-          ? input.currentEmotionState.evolution.baseline
-          : input.currentEmotionState.taiji.valence,
-      ),
-      rumination: trackRumination(
-        prevRumination,
-        activeDominant.name,
-        activeDominant.intensity,
-        nowMs,
-      ),
-    };
     const internalEmotionMs = Date.now() - t3_65;
 
     // ⑥ 涌现可观测：记轮数 + 她的效价序列（用于自相关/波动诊断）
@@ -1188,17 +1045,14 @@ export class AICoordinator {
     // 施加潜意识情绪偏置（限幅 ±SHADOW_MAX_TURN_BIAS：底色级慢变量，不许盖过用户当下的话）
     {
       const activeTraits = shadowLayer.getActiveTraits();
-      const before = updatedEmotionState.taiji;
-      const beforeEmo = { ...updatedEmotionState.emotions };
+      const before = snapshotEmotionSource(updatedEmotionState);
       updatedEmotionState = applyShadowEmotionBias(updatedEmotionState, shadowEmotionMod);
       if (activeTraits.length > 0) {
-        const after = updatedEmotionState.taiji;
-        this.emergence = accumulateSource(
+        this.emergence = recordEmotionSourceChange(
           this.emergence,
           'shadow',
-          after.valence - before.valence,
-          after.arousal - before.arousal,
-          sumEmotionDelta(beforeEmo, updatedEmotionState.emotions),
+          before,
+          snapshotEmotionSource(updatedEmotionState),
         );
       }
     }
@@ -1260,20 +1114,13 @@ export class AICoordinator {
     // ── 阶段 3.8: 🧩 Memory Graph 激活 ──
     // 根据当前上下文，通过 BFS 激活扩散召回相关记忆
     const t3_8 = Date.now();
-    const memoryContext = queryMemoryGraph(
-      this.memoryGraph,
-      { text: input.userText, emotionState: updatedEmotionState },
-      { maxDepth: 2, maxResults: 5 },
-    );
-
-    // 🌑 Shadow 记忆调制：negativityBias 影响负情绪记忆的召回权重
-    if (shadowMemoryMod.negativityBias > 0.1) {
-      for (const item of memoryContext) {
-        if (item.emotionalMatch === 'sad' || item.emotionalMatch === 'fear' || item.emotionalMatch === 'anger') {
-          item.relevanceScore = Math.min(1, item.relevanceScore * (1 + shadowMemoryMod.negativityBias));
-        }
-      }
-    }
+    const memoryContext = recallMemoryForTurn({
+      graph: this.memoryGraph,
+      text: input.userText,
+      emotionState: updatedEmotionState,
+      shadowMemoryModulation: shadowMemoryMod,
+      traversal: { maxDepth: 2, maxResults: 5 },
+    });
     const memoryMs = Date.now() - t3_8;
 
     // ── 阶段 3.9: v1.1 依恋风格计算（每 20 轮淬炼一次）──
@@ -1337,6 +1184,7 @@ export class AICoordinator {
       conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod,
       userAnalysis: input.userAnalysis,
       userText: input.userText,
+      recentMessages: input.recentMessages,
     });
     const strategyDecision = strategyPlan.decision;
     const finalStrategy = strategyPlan.finalStrategy;
@@ -1352,7 +1200,16 @@ export class AICoordinator {
       // `commitFinalStrategyWithMotive()` 一次性提交 —— 于是只有一个最终策略被记账。
       this.pendingStrategy = {
         strategyCtx,
-        extras: { conflictState, contextSnapshot, generatedInsights, updatedEmotionState, shadowStrategyMod, userAnalysis: input.userAnalysis, userText: input.userText },
+        extras: {
+          conflictState,
+          contextSnapshot,
+          generatedInsights,
+          updatedEmotionState,
+          shadowStrategyMod,
+          userAnalysis: input.userAnalysis,
+          userText: input.userText,
+          recentMessages: input.recentMessages,
+        },
         commitInputs,
       };
     } else {

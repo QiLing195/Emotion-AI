@@ -5,6 +5,7 @@ import { XIAONUAN_STAGE_LABELS, resolveLoverStage } from '../lib/xiaoNuanStages'
 import { STAGE_LABELS_V2 } from '../lib/relationshipProgressionV2';
 import { initVoiceOutput, speakText } from '../lib/voiceOutput';
 import { pickVoiceEmotion, buildVoiceState } from '../lib/voiceTone';
+import { providerFailureHint } from '../lib/providerFailure';
 
 function MessageBubble({ msg }: { msg: ChatMessageType }) {
   const isUser = msg.role === 'user';
@@ -46,11 +47,18 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
   const settings = useAIBrainStore(s => s.settings);
   const setPersona = useAIBrainStore(s => s.setPersona);
   const setLastTurnInfo = useAIBrainStore(s => s.setLastTurnInfo);
+  const setCharacterPresence = useAIBrainStore(s => s.setCharacterPresence);
 
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const speakingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
+    setCharacterPresence(useAIBrainStore.getState().voiceSessionActive ? 'listening' : 'idle');
+  }, [setCharacterPresence]);
 
   const dominantEmotion = persona.emotionState ? getDominantEmotion(persona.emotionState.emotions) : null;
   const affinityScore = persona.affinityScore ?? 20;
@@ -104,6 +112,7 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
           const ttsEnabled = voiceOn && (settings.tts?.enabled ?? true);
           speakText(m.text, ttsEnabled, voice.emotion, {
             provider: settings.tts?.provider ?? 'cosyvoice',
+            voiceId: settings.tts?.voiceId || 'zh-CN-XiaoxiaoNeural',
             intensity: voice.intensity,
             voiceState: buildVoiceState(latestState, voice),
           });
@@ -114,7 +123,7 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
     const timer = setInterval(poll, 20_000);
     void poll();
     return () => { stopped = true; clearInterval(timer); };
-  }, [addChatMessage, voiceOn, settings.tts?.enabled, settings.tts?.provider]);
+  }, [addChatMessage, voiceOn, settings.tts?.enabled, settings.tts?.provider, settings.tts?.voiceId]);
 
   const syncServerState = (data: any) => {
     const updates: Partial<typeof persona> = {};
@@ -137,7 +146,10 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
     if (!text.trim() || isTyping) return;
 
     setIsTyping(true);
+    setCharacterPresence('thinking');
+    if (speakingTimerRef.current) clearTimeout(speakingTimerRef.current);
     abortControllerRef.current = new AbortController();
+    let hasResponse = false;
 
     try {
       if (!settings.apiKey && !settings.serverConfigured && settings.provider !== 'custom') {
@@ -169,12 +181,18 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error((errData as any).error || `Server error ${response.status}`);
+        const failureCode = (errData as any).failureCode;
+        const message = typeof failureCode === 'string'
+          ? providerFailureHint(failureCode)
+          : (errData as any).hint || (errData as any).error || `Server error ${response.status}`;
+        throw new Error(message);
       }
 
       const data = await response.json();
       const aiText = data.response || data.text || '';
       if (aiText) {
+        hasResponse = true;
+        setCharacterPresence('speaking');
         addChatMessage({
           id: `ai_${Date.now()}`,
           role: 'assistant',
@@ -190,12 +208,20 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
         const ttsEnabled = voiceOn && (settings.tts?.enabled ?? true);
         speakText(aiText, ttsEnabled, voice.emotion, {
           provider: settings.tts?.provider ?? 'cosyvoice',
+          voiceId: settings.tts?.voiceId || 'zh-CN-XiaoxiaoNeural',
           intensity: voice.intensity,
           voiceState: buildVoiceState(latestState, voice),
           // v1.11 句内状态弧线：把"用户这句话之前"她的状态也带上（服务端给的纯数据快照）；
           // 要不要分段、每段什么语气由服务端决定，前端不解释
           voiceStateBefore: buildVoiceState((data as { emotionStateBefore?: unknown }).emotionStateBefore),
         });
+        const speakingDuration = ttsEnabled
+          ? Math.min(15_000, Math.max(2_500, [...aiText].length * 230))
+          : 1_800;
+        speakingTimerRef.current = setTimeout(() => {
+          setCharacterPresence(useAIBrainStore.getState().voiceSessionActive ? 'listening' : 'idle');
+          speakingTimerRef.current = null;
+        }, speakingDuration);
       }
 
       syncServerState(data);
@@ -214,6 +240,9 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
     } finally {
       setIsTyping(false);
       abortControllerRef.current = null;
+      if (!hasResponse) {
+        setCharacterPresence(useAIBrainStore.getState().voiceSessionActive ? 'listening' : 'idle');
+      }
     }
   };
 
@@ -273,7 +302,11 @@ export default function ChatView({ voiceOn, voiceText, onVoiceTextConsumed }: Ch
         <div className="flex items-end gap-3">
           <textarea
             value={input}
-            onChange={event => setInput(event.target.value)}
+            onChange={event => {
+              const nextValue = event.target.value;
+              setInput(nextValue);
+              setCharacterPresence(nextValue.trim() ? 'listening' : 'idle');
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             className="flex-1 resize-none rounded-2xl border border-rose-100 bg-white/80 px-4 py-3 text-sm text-moon-800 outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"

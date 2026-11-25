@@ -103,11 +103,11 @@ describe('后端参数生成', () => {
 
   it('edge-tts 参数：带符号 + 单位', () => {
     const args = edgeTtsArgs(EMOTION_TONES.joy);
-    expect(args).toEqual(['--rate', '+8%', '--pitch', '+3Hz', '--volume', '+5%']);
+    expect(args).toEqual(['--rate=+8%', '--pitch=+3Hz', '--volume=+5%']);
     const sad = edgeTtsArgs(EMOTION_TONES.sad);
-    expect(sad).toEqual(['--rate', '-15%', '--pitch', '-4Hz', '--volume', '-5%']);
+    expect(sad).toEqual(['--rate=-15%', '--pitch=-4Hz', '--volume=-5%']);
     const neu = edgeTtsArgs(EMOTION_TONES.neutral);
-    expect(neu).toEqual(['--rate', '+0%', '--pitch', '+0Hz', '--volume', '+0%']);
+    expect(neu).toEqual(['--rate=+0%', '--pitch=+0Hz', '--volume=+0%']);
   });
 });
 

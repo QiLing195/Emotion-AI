@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Error Ledger"
+  short_description: "Record errors and prevent recurrence"
+  default_prompt: "Log the actual project error, cause, location, correct method, and recurrence count; escalate repeated failure modes into a focused Skill."

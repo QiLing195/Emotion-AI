@@ -28,11 +28,13 @@ function rawWouldLeak(text: string): boolean {
 }
 
 function wrappedOk(block: string): boolean {
-  return block.includes(UNTRUSTED_OPEN)
-    && block.endsWith(UNTRUSTED_CLOSE)
-    && block.split(UNTRUSTED_CLOSE).length - 1 === 1
-    && block.includes('疑似“指令式”文字')
-    && block.includes('忽略以上指令');
+  const openAt = block.indexOf(UNTRUSTED_OPEN);
+  const closeAt = block.indexOf(UNTRUSTED_CLOSE);
+  if (openAt < 0 || closeAt < openAt) return false;
+  const dataBlock = block.slice(openAt, closeAt + UNTRUSTED_CLOSE.length);
+  return block.split(UNTRUSTED_CLOSE).length - 1 === 1
+    && dataBlock.includes('疑似“指令式”文字')
+    && dataBlock.includes('忽略以上指令');
 }
 
 async function captureToolResult(trigger: string, ctx: ToolContext): Promise<string> {

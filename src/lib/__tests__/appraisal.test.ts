@@ -103,6 +103,11 @@ describe('appraiseEvent — 用她自己的目标结构评价他这件事', () =
     expect(r.readings).toHaveLength(0);
   });
 
+  it('原始身体疲劳标签 tired 不应进入负向情绪 appraisal', () => {
+    const r = appraiseEvent({ userText: '我今天很累', userEmotion: 'tired', userIntensity: 0.9, concerns: [] });
+    expect(r.readings).toHaveLength(0);
+  });
+
   it('牵挂越紧迫，反应越强（用真实的动机紧迫度，不另造权重）', () => {
     // 用中性情绪，避免 for_him 一起触发后撞上总量上限把差异抹平
     const weak = appraiseEvent({

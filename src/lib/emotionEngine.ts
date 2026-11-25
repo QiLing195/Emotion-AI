@@ -366,6 +366,10 @@ export function updateEmotionState(
   const eventValence = clamp((deltaA - deltaB) * 0.6 + (GC ?? 0) * 0.4, -1, 1);
   const eventSalience = Math.min(1, Math.abs(deltaA) + Math.abs(deltaB) + Math.abs(deltaR) + Math.abs(GC ?? 0));
 
+  // No usable stimulus is not a new event. Keep turn-count out of the affect clock;
+  // elapsed-time relaxation is handled by processTimeDecay in the coordinator.
+  if (eventSalience <= SALIENCE_DEADZONE) return state;
+
   // ── 第 1 步：太极更新（预测误差驱动）──
   taijiUpdate(state.taiji, eventValence, eventSalience, state.evolution);
 
@@ -472,21 +476,25 @@ export function updateEmotionState(
   }
 
   // ── 第 6 步：亲密更新 ──
-  const posContrib = Math.max(0, state.emotions.joy) + Math.max(0, state.emotions.love) + Math.max(0, state.emotions.calm) * 0.3;
-  const negContrib = Math.max(0, state.emotions.anger) * 0.5 + Math.max(0, state.emotions.sad) * 0.2 + Math.max(0, state.emotions.fear) * 0.3 + Math.max(0, state.emotions.disgust) * 0.5;
-  const intimacyDelta = (posContrib - negContrib) * 0.01;
-  state.intimacyToUser = clamp(state.intimacyToUser + intimacyDelta, 0, 1);
-  state.intimacyToUser += (0.5 - state.intimacyToUser) * 0.005;
+  if (eventSalience > SALIENCE_DEADZONE && intent === 'user') {
+    const posContrib = Math.max(0, state.emotions.joy) + Math.max(0, state.emotions.love) + Math.max(0, state.emotions.calm) * 0.3;
+    const negContrib = Math.max(0, state.emotions.anger) * 0.5 + Math.max(0, state.emotions.sad) * 0.2 + Math.max(0, state.emotions.fear) * 0.3 + Math.max(0, state.emotions.disgust) * 0.5;
+    const intimacyDelta = (posContrib - negContrib) * 0.01;
+    state.intimacyToUser = clamp(state.intimacyToUser + intimacyDelta, 0, 1);
+    state.intimacyToUser += (0.5 - state.intimacyToUser) * 0.005;
+  }
 
   // ── 第 7 步：强化兼容层 ──
   // 将预测误差映射到旧的 reinforcement 结构
-  const pe = Math.abs(eventValence - state.taiji.expectation);
-  if (eventValence > 0) {
-    state.reinforcement.rewardTally = Math.min(1, state.reinforcement.rewardTally + pe * 0.1);
-    state.reinforcement.greedDrive = Math.min(1, state.reinforcement.greedDrive + pe * 0.05);
-  } else {
-    state.reinforcement.punishmentTally = Math.min(1, state.reinforcement.punishmentTally + pe * 0.1);
-    state.reinforcement.fearAvoidance = Math.min(1, state.reinforcement.fearAvoidance + pe * 0.05);
+  if (eventSalience > SALIENCE_DEADZONE) {
+    const pe = Math.abs(eventValence - state.taiji.expectation);
+    if (eventValence > 0) {
+      state.reinforcement.rewardTally = Math.min(1, state.reinforcement.rewardTally + pe * 0.1);
+      state.reinforcement.greedDrive = Math.min(1, state.reinforcement.greedDrive + pe * 0.05);
+    } else if (eventValence < 0) {
+      state.reinforcement.punishmentTally = Math.min(1, state.reinforcement.punishmentTally + pe * 0.1);
+      state.reinforcement.fearAvoidance = Math.min(1, state.reinforcement.fearAvoidance + pe * 0.05);
+    }
   }
 
   // ── 第 8 步：演化 ──
@@ -496,7 +504,9 @@ export function updateEmotionState(
     sad: state.emotions.sad,
     love: state.emotions.love,
   };
-  processEvolution(state.evolution, state.taiji, emotionDelta, undefined, intent, eventValence);
+  if (eventSalience > SALIENCE_DEADZONE) {
+    processEvolution(state.evolution, state.taiji, emotionDelta, undefined, intent, eventValence);
+  }
 
   return state;
 }

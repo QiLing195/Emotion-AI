@@ -2,7 +2,9 @@
   "name": "ai-girlfriend",
   "private": true,
   "version": "0.5.1",
+  "description": "本地 AI 桌宠与情感陪伴应用",
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build && tsc --project tsconfig.server.json",
@@ -11,6 +13,7 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit && tsc --project tsconfig.server.json",
     "test": "vitest run",
+    "quality:gate": "npm run typecheck && npm test && npm run security:injection",
     "test:security": "npm run security:injection && npm run security:injection-e2e",
     "security:injection": "tsx scripts/security/injection-attacks.ts",
     "security:injection-e2e": "tsx scripts/security/injection-e2e.ts",
@@ -20,6 +23,10 @@
     "smoke:emotion": "tsx scripts/smoke-internal-emotion.ts",
     "gate:v160:agreement": "node node_modules/tsx/dist/cli.mjs scripts/v160-gate.ts",
     "desktop:pet": "node scripts/run-pet.cjs",
+    "desktop:pet:portable-data": "node scripts/run-pet.cjs --portable-data",
+    "desktop:pet:epipe-e2e": "node scripts/desktop-epipe-e2e.cjs",
+    "package:win:portable": "npm run build && node scripts/package-win-portable.cjs",
+    "pet:assets:check": "node scripts/validate-pet-assets.mjs",
     "voice:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/voice-wake.ps1 -OutFile memories/voice_events.jsonl",
     "trace:audit": "node scripts/trace-audit.mjs",
     "timeline:redact": "tsx scripts/redact-timeline-history.ts",
@@ -28,33 +35,35 @@
   "dependencies": {
     "@google/genai": "^1.46.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "firebase": "^12.12.0",
     "firebase-admin": "^14.1.0",
-    "lucide-react": "^0.546.0",
     "openai": "^6.32.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "proper-lockfile": "4.1.2",
     "tailwind-merge": "^3.5.0",
-    "vite": "^6.2.0",
-    "xml2js": "^0.6.2",
-    "zustand": "^5.0.12"
+    "tsx": "^4.23.15",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/xml2js": "^0.4.14",
+    "@vitejs/plugin-react": "^5.0.4",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "firebase": "^12.12.0",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.23.1",
     "typescript": "~5.8.2",
-    "vitest": "^4.1.7"
+    "vite": "^6.2.0",
+    "vitest": "^4.1.7",
+    "zustand": "^5.0.12"
   },
   "overrides": {
     "gaxios": "^7.2.0",
@@ -62,5 +71,59 @@
     "gtoken": "^8.0.0",
     "retry-request": "^8.0.3",
     "teeny-request": "^10.1.3"
+  },
+  "build": {
+    "appId": "com.aigirlfriend.desktop",
+    "productName": "AI Girlfriend",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "dist/**/*",
+      "public/pet/**/*",
+      "package.json",
+      "!**/__tests__/**",
+      "!**/*.test.*",
+      "!**/.env*",
+      "!**/memories/**",
+      "!**/data/**",
+      "!**/*.log",
+      "!**/firebase-applet-config.json",
+      "!**/mcp-servers.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/index.html",
+        "to": "web/index.html"
+      },
+      {
+        "from": "dist/assets",
+        "to": "web/assets"
+      },
+      {
+        "from": "scripts/activity-sampler.ps1",
+        "to": "scripts/activity-sampler.ps1"
+      },
+      {
+        "from": "scripts/ocr-image.ps1",
+        "to": "scripts/ocr-image.ps1"
+      },
+      {
+        "from": "scripts/voice-wake.ps1",
+        "to": "scripts/voice-wake.ps1"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "signExecutable": false
+    },
+    "portable": {
+      "artifactName": "AI-Girlfriend-Portable-${version}.${ext}"
+    }
   }
 }

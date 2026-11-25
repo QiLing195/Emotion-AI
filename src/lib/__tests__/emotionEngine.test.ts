@@ -15,6 +15,7 @@ import {
   classifyAttachmentStyle,
 } from '../emotionEngine';
 import type { EmotionEvent, EmotionState } from '../emotionEngine';
+import { emotionSmoother } from '../emotionOptimizer';
 
 // 启用确定性模式避免噪声影响测试
 beforeAll(() => { setDeterministicMode(true); });
@@ -31,6 +32,43 @@ function makeEvent(overrides: Partial<EmotionEvent> = {}): EmotionEvent {
 }
 
 describe('updateEmotionState', () => {
+  it('a zero-salience event leaves the complete state unchanged', () => {
+    const state = structuredClone(INITIAL_EMOTION_STATE);
+    emotionSmoother.reset();
+
+    const result = updateEmotionState(state, makeEvent());
+
+    expect(result).toEqual(state);
+    expect(result).not.toBe(state);
+    emotionSmoother.reset();
+  });
+
+  it('zero-salience turns do not count as learned interactions or reinforcement', () => {
+    const state = structuredClone(INITIAL_EMOTION_STATE);
+    emotionSmoother.reset();
+
+    let result = state;
+    for (let i = 0; i < 5; i++) result = updateEmotionState(result, makeEvent());
+
+    expect(result.evolution.totalInteractions).toBe(state.evolution.totalInteractions);
+    expect(result.evolution.positiveInteractions).toBe(state.evolution.positiveInteractions);
+    expect(result.evolution.negativeInteractions).toBe(state.evolution.negativeInteractions);
+    expect(result.reinforcement).toEqual(state.reinforcement);
+
+    emotionSmoother.reset();
+  });
+
+  it('zero-salience turns do not increase intimacy from resting calm', () => {
+    const state = structuredClone(INITIAL_EMOTION_STATE);
+    emotionSmoother.reset();
+
+    let result = state;
+    for (let i = 0; i < 5; i++) result = updateEmotionState(result, makeEvent());
+
+    expect(result.intimacyToUser).toBe(state.intimacyToUser);
+    emotionSmoother.reset();
+  });
+
   it('正向事件提升效价和 joy', () => {
     const state = structuredClone(INITIAL_EMOTION_STATE);
     const event = makeEvent({ deltaA: 0.3, deltaB: -0.1, GC: 0.5 });

@@ -13,19 +13,20 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 import { readRecentActivity, activityWatchEnabled } from './activityWatcher.js';
 
 export type ScreenPolicy = 'on_demand_10' | 'on_demand_5' | 'explicit_only' | 'auto_no_prompt';
 export const SCREEN_POLICIES: ScreenPolicy[] = ['on_demand_10', 'on_demand_5', 'explicit_only', 'auto_no_prompt'];
 export const DEFAULT_SCREEN_POLICY: ScreenPolicy = 'on_demand_10';
 
-export const SCREEN_DIR = join('memories', 'screens');
-export const SCREEN_SETTINGS_PATH = join('memories', 'pet_settings.json');
-export const SCREEN_AUDIT_PATH = join('memories', 'screen_captures.jsonl');
+export const SCREEN_DIR = resolveMemoryPath('screens');
+export const SCREEN_SETTINGS_PATH = resolveMemoryPath('pet_settings.json');
+export const SCREEN_AUDIT_PATH = resolveMemoryPath('screen_captures.jsonl');
 /** Electron 轮询"有没有截屏请求" */
-export const CAPTURE_REQUEST_PATH = join('memories', 'screen_request.json');
+export const CAPTURE_REQUEST_PATH = resolveMemoryPath('screen_request.json');
 /** Electron 截完后回写结果 */
-export const CAPTURE_RESULT_PATH = join('memories', 'screen_result.json');
+export const CAPTURE_RESULT_PATH = resolveMemoryPath('screen_result.json');
 export const SCREEN_RETENTION_DAYS = 7;
 export const SCREEN_MIN_GAP_MS = 60_000;
 export const SESSION_GRANT_MS = 15 * 60_000;

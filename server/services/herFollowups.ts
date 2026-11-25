@@ -15,8 +15,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseCnTime, toLocalIso } from './cnTimeParse.js';
+import { resolveMemoryPath } from '../appPaths.js';
 
-export const HER_FOLLOWUPS_PATH = 'memories/her_followups.json';
+export const HER_FOLLOWUPS_PATH = resolveMemoryPath('her_followups.json');
 export const MAX_PENDING = 20;
 export const MAX_AGE_MS = 7 * 24 * 3_600_000;
 /** 可排的最远时间：14 天（"下周三"这类 6~7 天后的提醒要能排上） */

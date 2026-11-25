@@ -17,9 +17,11 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { resolveAppResource, resolveMemoryPath } from '../appPaths.js';
 
-export const MCP_CONFIG_PATH = 'mcp-servers.json';
-export const MCP_AUDIT_PATH = join('memories', 'mcp_calls.jsonl');
+export const MCP_CONFIG_PATH = resolveMemoryPath('mcp-servers.json');
+const LEGACY_MCP_CONFIG_PATH = resolveAppResource('mcp-servers.json');
+export const MCP_AUDIT_PATH = resolveMemoryPath('mcp_calls.jsonl');
 export const MCP_CALL_TIMEOUT_MS = 15_000;
 const AUDIT_MAX_BYTES = 1_000_000;
 
@@ -69,10 +71,11 @@ export function parseMcpConfig(raw: unknown): McpConfig {
   return out;
 }
 
-export function loadMcpConfig(path = MCP_CONFIG_PATH): McpConfig {
-  if (!existsSync(path)) return { servers: {} };
+export function loadMcpConfig(path?: string): McpConfig {
+  const configPath = path ?? (existsSync(MCP_CONFIG_PATH) ? MCP_CONFIG_PATH : LEGACY_MCP_CONFIG_PATH);
+  if (!existsSync(configPath)) return { servers: {} };
   try {
-    return parseMcpConfig(JSON.parse(readFileSync(path, 'utf8')) as unknown);
+    return parseMcpConfig(JSON.parse(readFileSync(configPath, 'utf8')) as unknown);
   } catch (e) {
     console.warn(`[MCP] 配置解析失败（按空处理）：${(e as Error).message}`);
     return { servers: {} };

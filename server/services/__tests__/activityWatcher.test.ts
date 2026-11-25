@@ -86,7 +86,9 @@ describe('读最近活动（给她看的视图）', () => {
       'Visual Studio Code',
     ]);
     expect(v.entries[0].minutesAgo).toBe(5);
-    expect(v.entries[0].process).toBe('chrome');
+    // The redacted placeholder must not retain process metadata as activity evidence.
+    expect(v.entries[0].process).toBe('');
+    expect(v.entries[1].process).toBe('chrome');
   });
 
   it('limit 被夹到 1~20', () => {

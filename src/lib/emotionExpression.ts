@@ -30,9 +30,14 @@ export function unifiedExpressionEnabled(env: NodeJS.ProcessEnv = process.env): 
  * 只认明确的问句/询问，不把普通闲聊当"在问她"。
  */
 export function detectAsksAboutHer(text: string | null | undefined): boolean {
-  const s = String(text ?? '');
+  const s = String(text ?? '').replace(/\s+/g, '');
   if (!s) return false;
-  return /(你呢|你怎么样|你最近|你好吗|你还好吗|你今天|你现在|你在做什么|你在干嘛|你在干什么|你开心吗|你难受吗|你怎么想|你的感觉|你那边怎么样)/.test(s);
+  return /(你呢|你怎么样|你最近|你好吗|你还好吗|你今天|你现在|你在做什么|你在干嘛|你在干什么|你刚才(?:做什么|干什么|在干嘛)|你开心吗|你难受吗|你怎么想|你的感觉|你那边怎么样)/.test(s)
+    || /你.{0,10}(?:小镇|镇上|镇里).{0,12}(?:做什么|干什么|在干嘛|活动|散步|走了|去哪|看了什么|去了哪|喝咖啡|咖啡馆)/.test(s)
+    || /(?:小镇|镇上|镇里).{0,8}你.{0,12}(?:做什么|干什么|在干嘛|活动|散步|走了|去哪|看了什么|去了哪|喝咖啡|咖啡馆)/.test(s)
+    || /你.{0,8}(?:现实里|现实中|真的).{0,10}(?:做什么|散步|出门|喝咖啡)/.test(s)
+    || /(?:你听完|听完这些|这些事听下来|听下来)[^。！？?]{0,16}(?:你|心情|感受|感觉|情绪)/.test(s)
+    || /你自己[^。！？?]{0,8}(?:心情|感受|感觉|情绪)/.test(s);
 }
 
 export function emotionExpressionEnabled(env: NodeJS.ProcessEnv = process.env): boolean {

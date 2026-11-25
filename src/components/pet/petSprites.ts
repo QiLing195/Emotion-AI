@@ -41,6 +41,24 @@ export const PET_SPRITES: PetSpriteDef[] = [
 export const PET_SPRITE_KEYS = PET_SPRITES.map(s => s.key);
 export const PET_SPRITE_PATH = (state: PetSpriteState) => `/pet/anya_${state}.png`;
 
+/** Map only clear, activated emotions to expressions that exist in the current art set. */
+export function emotionSpriteForMood(top: string | null | undefined, delta: number): PetSpriteState | null {
+  const thresholds: Partial<Record<string, number>> = {
+    joy: 0.10,
+    sad: 0.15,
+    fear: 0.15,
+    anger: 0.15,
+    disgust: 0.15,
+  };
+  const threshold = top ? thresholds[top] : undefined;
+  if (threshold === undefined || !Number.isFinite(delta) || delta < threshold) return null;
+  if (top === 'joy') return 'happy';
+  if (top === 'sad') return 'sad';
+  if (top === 'fear') return 'shocked';
+  if (top === 'anger' || top === 'disgust') return 'angry';
+  return null;
+}
+
 export function spriteLabel(state: PetSpriteState): string {
   return PET_SPRITES.find(s => s.key === state)?.label ?? state;
 }
@@ -62,8 +80,8 @@ export function fallbackChain(state: PetSpriteState): PetSpriteState[] {
 
 /** 多帧动作（可选）：如果有 anya_<state>_1.png…anya_<state>_N.png，就按帧播放；没有就用单图 + CSS 动画 */
 export const PET_FRAME_FPS: Partial<Record<PetSpriteState, number>> = {
-  idle: 8, blink: 12, happy: 8, talk: 8, walk: 10, angry: 6, shocked: 8,
-  sleepy: 6, peanut: 8, coffee: 6, reading: 6, sad: 4, sit: 4, wave: 8, think: 4,
+  idle: 8, blink: 12, happy: 8, talk: 3, walk: 2.5, angry: 6, shocked: 8,
+  sleepy: 6, peanut: 8, coffee: 6, reading: 0.28, sad: 4, sit: 4, wave: 8, think: 4,
 };
 
 /** 单帧上限：超过这个数就认为你的命名不是帧序列 */

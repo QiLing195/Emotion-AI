@@ -9,15 +9,15 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { resolveMemoriesDir, resolveMemoryPath } from '../appPaths.js';
 import type { EpisodicMemory, EpisodicMemoryStore } from '../../src/lib/episodicMemory.js';
 import type { MemoryGraph } from '../../src/lib/memoryGraph.js';
 
-export const MEMORY_ADMIN_AUDIT_PATH = join('memories', 'memory_admin_audit.jsonl');
+export const MEMORY_ADMIN_AUDIT_PATH = resolveMemoryPath('memory_admin_audit.jsonl');
 
 /** v2.00：数据目录（与 persistence 的 MEMORIES_DIR 同一套规则，便于测试隔离） */
 export function memoriesDir(): string {
-  const dir = process.env.MEMORIES_DIR ? resolve(process.env.MEMORIES_DIR) : 'memories';
-  return dir;
+  return resolveMemoriesDir();
 }
 /** 导出时读取的文件类型（顶层目录，不含 screens/） */
 const EXPORTABLE_EXT = ['.json', '.jsonl', '.txt', '.md'];

@@ -8,8 +8,9 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 
-export const HER_NOTES_PATH = 'memories/her_notes.jsonl';
+export const HER_NOTES_PATH = resolveMemoryPath('her_notes.jsonl');
 export const NOTE_MAX_CHARS = 80;
 export const NOTE_MIN_CHARS = 4;
 const MAX_BYTES = 512_000;

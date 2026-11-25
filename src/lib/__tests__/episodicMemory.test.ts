@@ -3,6 +3,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   createEpisodicMemoryStore,
+  advanceEpisodeTrackingState,
+  hasActiveEpisodicEmbeddings,
   tryFormEpisode,
   recallRelevantMemories,
   getSignificantEpisodes,
@@ -15,7 +17,49 @@ import {
   parseNarrativeReply,
   updateEpisodeNarrative,
 } from '../episodicMemory';
+import type { EpisodicMemory } from '../episodicMemory';
 import { INITIAL_EMOTION_STATE } from '../emotionEngine';
+
+function makeEpisode(id: string): EpisodicMemory {
+  return {
+    id,
+    timestamp: Date.now(),
+    roundNumber: 1,
+    eventSummary: '一个测试事件',
+    emotionalImpact: {
+      valenceBefore: 0,
+      valenceAfter: 0,
+      valenceDelta: 0,
+      arousalPeak: 0,
+      dominantEmotion: 'calm',
+    },
+    narrativeFragment: '测试记忆',
+    recallWeight: 1,
+    tags: [],
+    recallCount: 0,
+    lastRecalledAt: null,
+  };
+}
+
+describe('hasActiveEpisodicEmbeddings', () => {
+  it('is false when no episodes have vectors', () => {
+    const store = createEpisodicMemoryStore();
+    store.episodes.push({ ...makeEpisode('plain'), embedding: undefined });
+    expect(hasActiveEpisodicEmbeddings(store)).toBe(false);
+  });
+
+  it('is true when an active episode has a vector', () => {
+    const store = createEpisodicMemoryStore();
+    store.episodes.push({ ...makeEpisode('vectorized'), embedding: [0.2, 0.8] });
+    expect(hasActiveEpisodicEmbeddings(store)).toBe(true);
+  });
+
+  it('ignores archived vector episodes because recall excludes them', () => {
+    const store = createEpisodicMemoryStore();
+    store.episodes.push({ ...makeEpisode('archived'), embedding: [0.2, 0.8], archived: true });
+    expect(hasActiveEpisodicEmbeddings(store)).toBe(false);
+  });
+});
 
 function makeEmotionState(valence: number, dominant: string) {
   const state = structuredClone(INITIAL_EMOTION_STATE);
@@ -39,6 +83,19 @@ describe('createEpisodicMemoryStore', () => {
 });
 
 describe('tryFormEpisode', () => {
+  it('延后记忆时可推进情绪基线而不创建 episode', () => {
+    const store = createEpisodicMemoryStore();
+    const state = makeEmotionState(0.42, 'joy');
+
+    advanceEpisodeTrackingState(store, state);
+
+    expect(store.episodes).toHaveLength(0);
+    expect(store.roundCounter).toBe(1);
+    expect(store.prevValence).toBe(0.42);
+    expect(store.prevArousal).toBe(0.5);
+    expect(store.prevDominantEmotion).toBe('joy');
+  });
+
   it('显著情感变化形成情景记忆', () => {
     const store = createEpisodicMemoryStore();
     store.prevValence = 0.0;

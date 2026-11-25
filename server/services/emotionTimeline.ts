@@ -24,12 +24,13 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 import type { EmotionState } from '../../src/lib/emotionTypes.js';
 import { separateActivation } from '../../src/lib/emotionActivation.js';
 import { lowPeriodOf } from '../../src/lib/lowPeriod.js';
 import { quoteFromUserText } from '../../src/lib/lowPeriodCause.js';
 
-export const TIMELINE_DEFAULT_PATH = 'memories/emotion_timeline.jsonl';
+export const TIMELINE_DEFAULT_PATH = resolveMemoryPath('emotion_timeline.jsonl');
 export const TIMELINE_MAX_BYTES = 2 * 1024 * 1024;   // 单文件 2MB
 export const TIMELINE_KEEP_ROTATIONS = 14;          // 保留最近 14 份滚动文件
 

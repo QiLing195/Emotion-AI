@@ -1,0 +1,4 @@
+interface:
+  display_name: "Virtual Activity Grounding"
+  short_description: "Prevent unsupported virtual activity claims"
+  default_prompt: "Review virtual-town activity and mood claims against event evidence; distinguish fictional events, real activities, and mood causation."

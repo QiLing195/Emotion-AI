@@ -5,10 +5,12 @@
 //   · activeValues 未传    → dialogueStrategy 的 S7 价值观调制永不成立
 // 本文件锁死这些输入一旦被传入就必须生效，避免再次"看起来接好了其实空转"。
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { aiCoordinator } from '../aiCoordinator';
 import { INITIAL_EMOTION_STATE } from '../../../src/lib/emotionEngine';
 import type { EmotionState } from '../../../src/lib/emotionTypes';
+import * as memoryRecallStage from '../../../src/lib/memoryRecallStage';
+import { shadowLayer } from '../../../src/lib/shadowLayer';
 
 const HOUR = 3_600_000;
 
@@ -71,6 +73,34 @@ describe('aiCoordinator — activeValues 透传（S7 价值观调制）', () => 
     expect(out.strategyDecision.confidence).toBeGreaterThan(0);
   });
 
+  it('记忆召回接收本轮更新后的情绪状态和 Shadow 调制', () => {
+    const modulation = { negativityBias: 0.24, selectiveAttention: ['abandonment'] };
+    const recall = vi.spyOn(memoryRecallStage, 'recallMemoryForTurn');
+    const getMemoryModulation = vi.spyOn(shadowLayer, 'getMemoryModulation').mockReturnValue(modulation);
+    try {
+      const out = run({
+        userText: '这件事让我有点难过',
+        emotionEvent: {
+          deltaA: -0.3, deltaB: 0.15, deltaR: 0.05, intent: 'user',
+          GC: -0.4, agency: -0.2, fairness: 0.1, control: -0.2,
+        },
+        roundNumber: 3,
+      });
+
+      expect(getMemoryModulation).toHaveBeenCalled();
+      expect(recall).toHaveBeenCalledTimes(1);
+      const recallInput = recall.mock.calls[0][0];
+      expect(recallInput.text).toBe('这件事让我有点难过');
+      expect(recallInput.emotionState).toBe(out.updatedEmotionState);
+      expect(recallInput.emotionState).not.toBe(INITIAL_EMOTION_STATE);
+      expect(recallInput.shadowMemoryModulation).toBe(modulation);
+      expect(recallInput.traversal).toEqual({ maxDepth: 2, maxResults: 5 });
+    } finally {
+      recall.mockRestore();
+      getMemoryModulation.mockRestore();
+    }
+  });
+
   it('v2.03：external 只记"直接刺激"，不再把其它来源一起吞进 external（审查 P1-4）', () => {
     const before = aiCoordinator.getEmergenceReport().breakdown;
     run({
@@ -117,4 +147,19 @@ describe('aiCoordinator — activeValues 透传（S7 价值观调制）', () => 
     }
   });
 
+});
+
+describe('aiCoordinator — 用户身体疲劳提示', () => {
+  it('把身体疲劳与悲伤/焦虑区分后传给回复提示', () => {
+    const out = run({
+      userText: '今天工作做完了，我挺开心的，就是身体有点累。',
+      userAnalysis: {
+        expressedEmotion: 'joy', likelyCause: 'finished work', intensity: 0.5, directedAtAI: false,
+        bodyState: { fatigue: 'mild', evidence: '有点累' },
+      },
+      roundNumber: 1,
+    });
+    expect(out.strategySnippet).toContain('用户明确表达了轻度疲劳');
+    expect(out.strategySnippet).toContain('不等同于悲伤或焦虑');
+  });
 });

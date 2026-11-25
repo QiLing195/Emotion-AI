@@ -360,6 +360,11 @@ export interface UserEmotionAnalysis {
   evidence?: string;
   /** v2.03：不确定度 0~1（越高越不该大幅改变状态） */
   uncertainty?: number;
+  /** Deterministic user somatic signal; kept separate from mood/emotion labels. */
+  bodyState?: {
+    fatigue: 'none' | 'mild' | 'moderate' | 'strong';
+    evidence: string;
+  };
   /** v2.03：归因一致性裁决结果 */
   attribution?: { consensus: 'consistent' | 'downgraded' | 'unknown'; issues: string[] };
 }

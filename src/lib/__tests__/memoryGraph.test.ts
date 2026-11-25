@@ -910,15 +910,23 @@ describe('MemoryGraph 边界条件', () => {
       });
     }
 
-    const t0 = Date.now();
-    const result = graph.traverse(mockQuery({
+    const query = mockQuery({
       text: '摄影旅行',
       emotionState: mockEmotionState(),
-    }));
-    const elapsed = Date.now() - t0;
+    });
+    graph.traverse(query); // 预热，减少首次执行与 JIT 编译对样本的影响
+    const samples: number[] = [];
+    let result = graph.traverse(query);
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      result = graph.traverse(query);
+      samples.push(performance.now() - t0);
+    }
+    samples.sort((a, b) => a - b);
+    const median = samples[Math.floor(samples.length / 2)];
 
-    // 遍历应该在 50ms 内完成
-    expect(elapsed).toBeLessThan(50);
+    // 用中位数降低并行测试调度造成的单次计时尖峰；稳定回归仍要求 <50ms。
+    expect(median).toBeLessThan(50);
     expect(result.activatedNodes.length).toBeGreaterThan(0);
     expect(result.visitedCount).toBeGreaterThan(0);
   });

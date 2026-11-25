@@ -12,8 +12,9 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 
-export const CARE_MEMORY_PATH = join('memories', 'activity_care.json');
+export const CARE_MEMORY_PATH = resolveMemoryPath('activity_care.json');
 export const CARE_MEMORY_MAX = 20;
 export const CARE_MEMORY_TTL_MS = 14 * 24 * 3600_000;
 /** 问过多久之后才适合"接着问结果"（太短像追问，太久像忘了） */

@@ -159,23 +159,27 @@ describe('v1.95：关键词可配置 + 接进情绪/主动关心', () => {
     expect(d.shouldCare).toBe(false);
     expect(d.reason).toBe('new_category');
     s = d.streak;
-    d = m.updateCareStreak(s, u, t0 + 5 * 60_000, '2026-10-22');
+    const advance = (fromMinute: number, toMinute: number) => {
+      let current = d;
+      for (let minute = fromMinute; minute <= toMinute; minute += 1) {
+        current = m.updateCareStreak(s, u, t0 + minute * 60_000, '2026-10-22');
+        s = current.streak;
+      }
+      return current;
+    };
+    d = advance(1, 5);
     expect(d.shouldCare).toBe(false);
     expect(d.reason).toBe('not_long_enough');
-    s = d.streak;
-    d = m.updateCareStreak(s, u, t0 + 21 * 60_000, '2026-10-22');
+    d = advance(6, 20);
     expect(d.shouldCare).toBe(true);
-    s = d.streak;
-    d = m.updateCareStreak(s, u, t0 + 40 * 60_000, '2026-10-22');
+    d = advance(21, 40);
     expect(d.shouldCare).toBe(false);
     expect(d.reason).toBe('cooldown');
-    s = d.streak;
-    // 过了冷却 → 第二次可以
-    d = m.updateCareStreak(s, u, t0 + 21 * 60_000 + 91 * 60_000, '2026-10-22');
+    // 过了冷却 → 第二次可以；中间保持每分钟都有有效观测。
+    d = advance(41, 110);
     expect(d.shouldCare).toBe(true);
-    s = d.streak;
-    // 第三次被每日上限挡住
-    d = m.updateCareStreak(s, u, t0 + 21 * 60_000 + 200 * 60_000, '2026-10-22');
+    // 第三次被每日上限挡住；仍逐分钟提供有效观测。
+    d = advance(111, 200);
     expect(d.shouldCare).toBe(false);
     expect(d.reason).toBe('daily_cap');
   });
@@ -214,7 +218,7 @@ describe('v1.96：时间窗 + 低谷更矜持', () => {
     const u = await jobU();
     const t0 = 1_700_000_000_000;
     const d = m.updateCareStreak(
-      { ...m.emptyCareStreak('d'), category: 'job', since: t0 - 30 * 60_000, samples: 5 },
+      { ...m.emptyCareStreak('d'), category: 'job', since: t0 - 30 * 60_000, lastSampleAt: t0 - 60_000, samples: 5 },
       u, t0, 'd', { hour: 2 },
     );
     expect(d.shouldCare).toBe(false);
@@ -225,7 +229,7 @@ describe('v1.96：时间窗 + 低谷更矜持', () => {
     const m = await import('../activityUnderstanding.js');
     const u = await jobU();
     const t0 = 1_700_000_000_000;
-    const streak = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 30 * 60_000, samples: 5 };
+    const streak = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 30 * 60_000, lastSampleAt: t0 - 60_000, samples: 5 };
     expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 8 }).shouldCare).toBe(true);
     expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 22 }).shouldCare).toBe(true);
     expect(m.updateCareStreak(streak, u, t0, 'd', { hour: 23 }).reason).toBe('outside_window');
@@ -236,19 +240,28 @@ describe('v1.96：时间窗 + 低谷更矜持', () => {
     const m = await import('../activityUnderstanding.js');
     const u = await jobU();
     const t0 = 1_700_000_000_000;
-    let s = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 21 * 60_000, samples: 5 };
+    let s = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 21 * 60_000, lastSampleAt: t0 - 60_000, samples: 5 };
     let d = m.updateCareStreak(s, u, t0, 'd', { hour: 10, inLowPeriod: true });
     expect(d.shouldCare).toBe(false);
     expect(d.reason).toBe('not_long_enough');
     expect(d.thresholds!.sustainMs).toBe(m.CARE_LOW_SUSTAIN_MS);
-    s = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 41 * 60_000, samples: 5 };
+    s = { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 41 * 60_000, lastSampleAt: t0 - 60_000, samples: 5 };
     d = m.updateCareStreak(s, u, t0, 'd', { hour: 10, inLowPeriod: true });
     expect(d.shouldCare).toBe(true);
     // 冷却 180 分钟
-    const after1h = m.updateCareStreak(d.streak, u, t0 + 60 * 60_000, 'd', { hour: 11, inLowPeriod: true });
+    let continuous = d.streak;
+    let after1h = d;
+    for (let minute = 1; minute <= 60; minute += 1) {
+      after1h = m.updateCareStreak(continuous, u, t0 + minute * 60_000, 'd', { hour: 11, inLowPeriod: true });
+      continuous = after1h.streak;
+    }
     expect(after1h.reason).toBe('cooldown');
     // 过了 180 分钟也不放第二次（每天 1 次）
-    const after4h = m.updateCareStreak(d.streak, u, t0 + 181 * 60_000, 'd', { hour: 13, inLowPeriod: true });
+    let after4h = after1h;
+    for (let minute = 61; minute <= 181; minute += 1) {
+      after4h = m.updateCareStreak(continuous, u, t0 + minute * 60_000, 'd', { hour: 13, inLowPeriod: true });
+      continuous = after4h.streak;
+    }
     expect(after4h.reason).toBe('daily_cap');
   });
 
@@ -257,7 +270,7 @@ describe('v1.96：时间窗 + 低谷更矜持', () => {
     const u = await jobU();
     const t0 = 1_700_000_000_000;
     const d = m.updateCareStreak(
-      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 21 * 60_000, samples: 3 },
+      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 21 * 60_000, lastSampleAt: t0 - 60_000, samples: 3 },
       u, t0, 'd', { hour: 15 },
     );
     expect(d.shouldCare).toBe(true);
@@ -288,14 +301,14 @@ describe('v1.98：门槛可调（验证/调优用）', () => {
     ]));
     const t0 = 1_700_000_000_000;
     const d = m.updateCareStreak(
-      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 61_000, samples: 2 },
+      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 61_000, lastSampleAt: t0 - 30_000, samples: 2 },
       u, t0, 'd', { hour: 12, thresholds: { sustainMs: 60_000, cooldownMs: 60_000, maxPerDay: 5 } },
     );
     expect(d.shouldCare).toBe(true);
     expect(d.thresholds).toEqual({ sustainMs: 60_000, cooldownMs: 60_000, maxPerDay: 5 });
     // 不传 thresholds 时仍是默认 20 分钟
     const d2 = m.updateCareStreak(
-      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 61_000, samples: 2 },
+      { ...m.emptyCareStreak('d'), category: 'job' as const, since: t0 - 61_000, lastSampleAt: t0 - 30_000, samples: 2 },
       u, t0, 'd', { hour: 12 },
     );
     expect(d2.shouldCare).toBe(false);

@@ -156,7 +156,8 @@ export interface AppraisalResult {
 /** 他的情绪是偏正还是偏负 */
 function polarity(emotion?: string | null): 'positive' | 'negative' | 'neutral' {
   const POSITIVE = ['joy', 'love', 'gratitude', 'calm', 'excitement', 'hope'];
-  const NEGATIVE = ['sad', 'anger', 'fear', 'anxiety', 'disgust', 'loneliness', 'stress', 'tired'];
+  // 身体疲劳不是负向情绪；如需表达情绪低落，应传 sad 等情绪键。
+  const NEGATIVE = ['sad', 'anger', 'fear', 'anxiety', 'disgust', 'loneliness', 'stress'];
   const e = (emotion ?? '').toLowerCase();
   if (POSITIVE.includes(e)) return 'positive';
   if (NEGATIVE.includes(e)) return 'negative';

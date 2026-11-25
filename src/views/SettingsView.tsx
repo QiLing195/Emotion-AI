@@ -7,6 +7,12 @@ import {
   type VoicePerformanceView,
 } from '../lib/voiceTone';
 import { emotionLabel } from '../lib/emotionActivation';
+import { speakText } from '../lib/voiceOutput';
+
+const EDGE_TTS_VOICE_PRESETS = [
+  { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 · 温柔自然（推荐）' },
+  { id: 'zh-CN-XiaoyiNeural', name: '晓艺 · 明亮亲切' },
+] as const;
 
 /** `/state → activation` 的形状（服务端算好的「她被激起了什么」） */
 /** v1.25 `/state → activationTypical`：相对**她最近一段时间的常态**的读数（并排的第二读法，只读诊断） */
@@ -587,6 +593,37 @@ function ProviderChip({ provider, active, onClick }: {
 export default function SettingsView() {
   const { settings, setSettings } = useAIBrainStore();
   const [showTestResult, setShowTestResult] = useState<'success' | 'error' | null>(null);
+  const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const ttsProvider = settings.tts?.provider ?? 'cosyvoice';
+  const savedEdgeVoiceId = settings.tts?.voiceId;
+  const voiceId = EDGE_TTS_VOICE_PRESETS.some(preset => preset.id === savedEdgeVoiceId)
+    ? savedEdgeVoiceId!
+    : EDGE_TTS_VOICE_PRESETS[0].id;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const refreshVoices = () => setBrowserVoices(window.speechSynthesis.getVoices().filter(v => v.lang.toLowerCase().startsWith('zh')));
+    refreshVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', refreshVoices);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', refreshVoices);
+  }, []);
+
+  const updateTtsSettings = (updates: Partial<TTSSettings>) => {
+    setSettings({ tts: {
+      enabled: settings.tts?.enabled ?? true,
+      provider: ttsProvider as TTSSettings['provider'],
+      voiceId,
+      ...settings.tts,
+      ...updates,
+    } });
+  };
+
+  const previewVoice = () => {
+    speakText('嗨，我在这里。今天也慢慢来，先从你最想说的开始。', true, 'calm', {
+      provider: ttsProvider,
+      voiceId: ttsProvider === 'browser' ? (settings.tts?.voiceId || browserVoices[0]?.voiceURI) : voiceId,
+    });
+  };
 
   const handleProviderChange = (p: Provider) => {
     const defaults: Record<string, Partial<typeof settings>> = {
@@ -732,15 +769,18 @@ export default function SettingsView() {
         <SettingGroup title="TTS 服务商">
           <div className="px-4 py-3">
             <div className="flex flex-wrap gap-2">
-              {(['browser', 'cosyvoice', 'voxcpm', 'rvc_custom', 'gemini', 'openai', 'elevenlabs'] as const).map(p => {
+              {(['browser', 'edge_tts', 'cosyvoice'] as const).map(p => {
                 const labels: Record<string, string> = {
-                  browser: '浏览器', cosyvoice: 'CosyVoice（本地·情感）', voxcpm: 'VoxCPM', rvc_custom: 'RVC',
-                  gemini: 'Gemini', openai: 'OpenAI', elevenlabs: 'ElevenLabs',
+                  browser: '系统语音', edge_tts: 'Edge TTS', cosyvoice: 'CosyVoice（本地·情感）',
                 };
                 return (
                   <button
                     key={p}
-                    onClick={() => setSettings({ tts: { ...settings.tts as TTSSettings, provider: p } })}
+                    onClick={() => updateTtsSettings({
+                      provider: p,
+                      ...(p === 'browser' ? { voiceId: browserVoices[0]?.voiceURI ?? '' } : {}),
+                      ...(p === 'edge_tts' ? { voiceId: EDGE_TTS_VOICE_PRESETS[0].id } : {}),
+                    })}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                       settings.tts?.provider === p
                         ? 'bg-indigo-500 text-white shadow-sm'
@@ -752,16 +792,34 @@ export default function SettingsView() {
                 );
               })}
             </div>
+            <p className="mt-2 text-xs text-slate-400">推荐先试听「晓晓 · 温柔自然」；晓艺的音色更明亮。点击切换后可直接试听。</p>
+            {!(['browser', 'edge_tts', 'cosyvoice'] as string[]).includes(ttsProvider) && (
+              <p className="mt-2 text-xs text-amber-600">当前保存的是旧版 TTS 选项，尚未接入实际播报。请选择系统语音、Edge TTS 或 CosyVoice。</p>
+            )}
           </div>
-          <SettingRow icon="🎵" label="音色 ID" last>
-            <input
-              type="text"
-              value={settings.tts?.voiceId || ''}
-              onChange={e => setSettings({ tts: { ...(settings.tts as TTSSettings), voiceId: e.target.value } })}
-              placeholder={settings.tts?.provider === 'rvc_custom' ? 'my_voice_v1' : 'alloy'}
-              className="w-full text-sm font-mono bg-transparent outline-none placeholder:text-slate-300 text-slate-700"
-            />
-          </SettingRow>
+          {ttsProvider === 'edge_tts' && (
+            <SettingRow icon="🎵" label="角色音色">
+              <select value={voiceId} onChange={e => updateTtsSettings({ voiceId: e.target.value })} className="w-full text-sm bg-transparent outline-none text-slate-700 cursor-pointer">
+                {EDGE_TTS_VOICE_PRESETS.map(preset => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+              </select>
+            </SettingRow>
+          )}
+          {ttsProvider === 'browser' && (
+            <SettingRow icon="🎵" label="系统音色">
+              <select value={settings.tts?.voiceId || browserVoices[0]?.voiceURI || ''} onChange={e => updateTtsSettings({ voiceId: e.target.value })} className="w-full text-sm bg-transparent outline-none text-slate-700 cursor-pointer" disabled={browserVoices.length === 0}>
+                {browserVoices.length === 0
+                  ? <option value="">系统暂未提供中文语音</option>
+                  : browserVoices.map(voice => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>)}
+              </select>
+            </SettingRow>
+          )}
+          {ttsProvider === 'cosyvoice' && (
+            <p className="px-4 pb-3 text-xs leading-5 text-slate-500">CosyVoice 的角色声线由参考音决定（COSYVOICE_PROMPT_WAV）；音色 ID 不会改变它。情绪和语速仍按她当前状态变化。</p>
+          )}
+          <div className="px-4 pb-3 flex items-center gap-3">
+            <button onClick={previewVoice} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100">试听这套声音</button>
+            <span className="text-xs text-slate-400">试听句：嗨，我在这里。今天也慢慢来，先从你最想说的开始。</span>
+          </div>
         </SettingGroup>
       )}
 

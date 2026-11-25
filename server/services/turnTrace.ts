@@ -25,7 +25,7 @@ export function turnTraceEnabled(env: NodeJS.ProcessEnv = process.env): boolean 
 
 export function turnTracePath(env: NodeJS.ProcessEnv = process.env): string {
   if (env.TURN_TRACE_FILE) return env.TURN_TRACE_FILE;
-  const dir = env.MEMORIES_DIR || path.join(process.cwd(), 'memories');
+  const dir = path.resolve(process.cwd(), env.MEMORIES_DIR?.trim() || 'memories');
   return path.join(dir, 'turn_trace.jsonl');
 }
 
@@ -59,7 +59,10 @@ export interface TurnTraceInput {
     proactivePicked?: boolean;
   } | null;
   motive?: { kind?: string | null; salience?: number | null } | null;
-  agent?: { rounds?: number; usedTools?: boolean; tools?: string[] } | null;
+  agent?: {
+    rounds?: number; usedTools?: boolean; tools?: string[];
+    agentLoopMs?: number; mcpDiscoveryMs?: number; mcpToolCount?: number;
+  } | null;
   reply?: { chars?: number; questionMarks?: number } | null;
 }
 
@@ -81,7 +84,10 @@ export interface TurnTraceRecord {
   budget: TurnTraceInput['budget'];
   memory: { injected: number; sources: Record<string, number>; proactivePicked: boolean };
   motive: { kind: string | null; salience: number | null } | null;
-  agent: { rounds: number; usedTools: boolean; tools: string[] } | null;
+  agent: {
+    rounds: number; usedTools: boolean; tools: string[];
+    agentLoopMs: number; mcpDiscoveryMs: number; mcpToolCount: number;
+  } | null;
   reply: { chars: number; questionMarks: number };
 }
 
@@ -158,6 +164,9 @@ export function buildTurnTrace(input: TurnTraceInput, now: Date = new Date()): T
       rounds: Number(input.agent.rounds ?? 0),
       usedTools: Boolean(input.agent.usedTools),
       tools: (input.agent.tools ?? []).map(String).slice(0, 8),
+      agentLoopMs: Math.max(0, Number(input.agent.agentLoopMs ?? 0)),
+      mcpDiscoveryMs: Math.max(0, Number(input.agent.mcpDiscoveryMs ?? 0)),
+      mcpToolCount: Math.max(0, Number(input.agent.mcpToolCount ?? 0)),
     } : null,
     reply: {
       chars: Number(input.reply?.chars ?? 0),

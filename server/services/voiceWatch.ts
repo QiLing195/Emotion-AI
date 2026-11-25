@@ -9,12 +9,12 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs';
-import { loadVoiceConfig } from './voiceConfig.js';
+import { loadVoiceConfig, VOICE_CONFIG_PATH } from './voiceConfig.js';
 import { dirname, join } from 'node:path';
+import { resolveAppResource, resolveMemoryPath } from '../appPaths.js';
 
-export const VOICE_EVENTS_PATH = join('memories', 'voice_events.jsonl');
-export const VOICE_CONFIG_PATH = join('scripts', 'voice-config.json');
-export const VOICE_SCRIPT_PATH = join('scripts', 'voice-wake.ps1');
+export const VOICE_EVENTS_PATH = resolveMemoryPath('voice_events.jsonl');
+export const VOICE_SCRIPT_PATH = resolveAppResource(join('scripts', 'voice-wake.ps1'));
 export const VOICE_POLL_MS = 700;
 export const VOICE_MAX_EVENTS = 100;
 

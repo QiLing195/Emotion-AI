@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { startVoiceInput, stopVoiceInput, isVoiceSupported } from '../lib/voiceInput';
 import { startVoiceChat, stopVoiceChat } from '../lib/voiceChat';
 import { stopSpeaking, initVoiceOutput } from '../lib/voiceOutput';
+import { useAIBrainStore } from '../store/useAIBrainStore';
 
 interface Props {
   voiceOn: boolean;
@@ -15,6 +16,8 @@ type VoiceMode = 'push' | 'chat';
 type ChatStatus = 'idle' | 'silence' | 'listening' | 'processing' | 'error';
 
 export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: Props) {
+  const setCharacterPresence = useAIBrainStore(s => s.setCharacterPresence);
+  const setVoiceSessionActive = useAIBrainStore(s => s.setVoiceSessionActive);
   const [cameraStatus, setCameraStatus] = useState<CamStatus>('off');
   const [camError, setCamError] = useState('');
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('push');
@@ -33,7 +36,14 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
   const voiceSupported = isVoiceSupported();
   const isSecure = typeof window !== 'undefined' && window.isSecureContext;
 
-  useEffect(() => { initVoiceOutput(); return () => { stopVoiceChat(); }; }, []);
+  useEffect(() => {
+    initVoiceOutput();
+    return () => {
+      stopVoiceChat();
+      setVoiceSessionActive(false);
+      setCharacterPresence('idle');
+    };
+  }, [setCharacterPresence, setVoiceSessionActive]);
 
   // callback ref for video
   const videoRef = useCallback((node: HTMLVideoElement | null) => {
@@ -145,10 +155,20 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
       },
       (status, msg) => {
         setChatStatus(status as ChatStatus);
+        if (status === 'listening' || status === 'silence') setCharacterPresence('listening');
+        else if (status === 'processing') setCharacterPresence('thinking');
+        else if (status === 'error') {
+          setVoiceSessionActive(false);
+          setCharacterPresence('idle');
+        }
         if (status === 'error') setVoiceError(msg || '语音错误');
       }
     );
-    if (ok) setListening(true);
+    if (ok) {
+      setListening(true);
+      setVoiceSessionActive(true);
+      setCharacterPresence('listening');
+    }
     else setVoiceError('启动失败');
   };
 
@@ -157,17 +177,34 @@ export default function MediaPanel({ voiceOn, onVoiceToggle, onSpeechResult }: P
     setListening(false);
     setChatText('');
     setChatStatus('idle');
+    setVoiceSessionActive(false);
+    setCharacterPresence('idle');
   };
 
   // ── 按钮模式 ──
   const handlePushMic = () => {
-    if (listening) { stopVoiceInput(); setListening(false); return; }
+    if (listening) {
+      stopVoiceInput();
+      setListening(false);
+      setCharacterPresence('idle');
+      return;
+    }
     if (!isSecure) { setVoiceError('需要 HTTPS'); return; }
     setVoiceError('');
     setListening(true);
+    setCharacterPresence('listening');
     startVoiceInput(
-      (text) => { if (text) onSpeechResult(text, true); setListening(false); },
-      () => setListening(false)
+      (text) => {
+        if (text) {
+          onSpeechResult(text, true);
+          setCharacterPresence('thinking');
+        }
+        setListening(false);
+      },
+      () => {
+        setListening(false);
+        if (!useAIBrainStore.getState().voiceSessionActive) setCharacterPresence('idle');
+      }
     );
   };
 

@@ -1,7 +1,7 @@
 // ── OS 桌面外壳（v1.61）：壁纸 + 菜单栏 + Dock + 多窗口 ──
 // 每个应用是一个可拖动/缩放/最小化的窗口；聊天、媒体、时间线与回放、设置、人格各占一窗。
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { MessageCircle, Camera, History, Settings as SettingsIcon, Sparkles, HeartPulse } from 'lucide-react';
+import { MessageCircle, Camera, History, Settings as SettingsIcon, Sparkles, HeartPulse, BookOpen } from 'lucide-react';
 import { useAIBrainStore } from './store/useAIBrainStore';
 import { db } from './firebase';
 import { doc, getDoc, setDoc, collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
@@ -11,6 +11,7 @@ import ChatView from './views/ChatView';
 import OSShell, { type OSAppDef } from './components/os/OSShell';
 import TimelineApp from './components/os/TimelineApp';
 import HerStateApp from './components/os/HerStateApp';
+import EmotionLearningApp from './components/os/EmotionLearningApp';
 const MediaPanel = lazy(() => import('./components/MediaPanel'));
 const SettingsView = lazy(() => import('./views/SettingsView'));
 const PersonalityView = lazy(() => import('./views/PersonalityView'));
@@ -263,6 +264,14 @@ export default function App() {
           </div>
         </Suspense>
       ),
+    },
+    {
+      id: 'emotion-learning',
+      title: '情感学习',
+      icon: <BookOpen size={20} />,
+      accent: 'from-rose-400/80 to-fuchsia-300/70',
+      window: { x: 180, y: 74, w: 1040, h: 720 },
+      content: <EmotionLearningApp />,
     },
   ], [showOscilloscope, voiceOn, voiceText]);
 

@@ -7,10 +7,11 @@
  *            / 图片(.png,.jpg,.jpeg,.webp,.gif) —— **exe/bat/cmd/ps1/vbs/msi 一律拒绝**
  *   · 每次打开都要你在桌宠上点「允许」（服务端只挂一个待确认动作，120 秒过期）
  */
-import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 
 export const DESKTOP_MAX_ITEMS = 80;
 export const DESKTOP_ACTION_TTL_MS = 120_000;
@@ -291,11 +292,10 @@ export function requestRenameDesktopItem(query: string, newName: string): Deskto
 
 function appendDesktopEvent(ev: Record<string, unknown>): void {
   try {
-    const dir = 'memories';
-    if (!existsSync(dir)) return;
     const line = JSON.stringify({ ts: Date.now(), ...ev }) + '\n';
-    const p = join(dir, 'desktop_events.jsonl');
-    writeFileSync(p, line, { flag: 'a' });
+    const p = resolveMemoryPath('desktop_events.jsonl');
+    mkdirSync(dirname(p), { recursive: true });
+    appendFileSync(p, line, 'utf8');
   } catch { /* ignore */ }
 }
 
@@ -360,7 +360,7 @@ export interface DesktopEventView {
 
 export function readDesktopEvents(limit = 10): DesktopEventView[] {
   try {
-    const p = join('memories', 'desktop_events.jsonl');
+    const p = resolveMemoryPath('desktop_events.jsonl');
     if (!existsSync(p)) return [];
     const rows: DesktopEventView[] = [];
     for (const line of readFileSync(p, 'utf8').split(/\r?\n/)) {

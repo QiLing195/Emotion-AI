@@ -1,0 +1,3 @@
+interface:
+  display_name: "Candidate Claim Grounding"
+  short_description: "Ground literary motives and action labels in source text"

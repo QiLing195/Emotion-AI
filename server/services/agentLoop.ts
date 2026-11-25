@@ -425,6 +425,10 @@ export interface AgentLoopResult {
   toolTrace: ToolTraceEntry[];
   /** 是否真的调过工具（用于 A/B 与观测） */
   usedTools: boolean;
+  /** MCP 工具声明探测耗时（不含模型请求），用于区分冷连接延迟 */
+  mcpDiscoveryMs: number;
+  /** 实际传给模型的 MCP 工具声明数 */
+  mcpToolCount: number;
 }
 
 /**
@@ -446,12 +450,16 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
 
   // 外部 MCP 工具声明（懒加载一次；失败就当没有，不影响内置工具）
   let mcpDeclarations: Array<{ name: string; description: string; parameters: unknown }> = [];
+  let mcpDiscoveryMs = 0;
   if (input.ctx.mcp) {
+    const discoveryStartedAt = Date.now();
     try {
       mcpDeclarations = (await input.ctx.mcp.declarations()) ?? [];
     } catch (e) {
       console.warn(`[Agent] MCP 工具声明获取失败：${(e as Error).message}`);
       mcpDeclarations = [];
+    } finally {
+      mcpDiscoveryMs = Date.now() - discoveryStartedAt;
     }
   }
 
@@ -465,7 +473,10 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
 
     const calls = Array.isArray(out?.functionCalls) ? out.functionCalls : [];
     if (!calls.length) {
-      return { text: lastText || (out?.text ?? ''), rounds, toolTrace, usedTools: toolTrace.length > 0 };
+      return {
+        text: lastText || (out?.text ?? ''), rounds, toolTrace, usedTools: toolTrace.length > 0,
+        mcpDiscoveryMs, mcpToolCount: mcpDeclarations.length,
+      };
     }
 
     for (const c of calls) {
@@ -497,5 +508,8 @@ export async function runAgentLoop(input: AgentLoopInput): Promise<AgentLoopResu
     const out = await input.callModel(messages, null);
     if (typeof out?.text === 'string' && out.text.trim()) lastText = out.text;
   }
-  return { text: lastText, rounds, toolTrace, usedTools: toolTrace.length > 0 };
+  return {
+    text: lastText, rounds, toolTrace, usedTools: toolTrace.length > 0,
+    mcpDiscoveryMs, mcpToolCount: mcpDeclarations.length,
+  };
 }

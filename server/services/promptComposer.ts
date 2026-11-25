@@ -69,7 +69,9 @@ export function splitStrategyAndPermit(text: string): { strategy: string; permit
 }
 
 export class PromptComposer {
-  private blocks: Array<PromptBlockInput & { accepted: boolean }> = [];
+  // add() normalizes priority before storing; encode that invariant in the
+  // internal type so later arbitration and manifests never see undefined.
+  private blocks: Array<PromptBlockInput & { priority: number; accepted: boolean }> = [];
   private seenUnique = new Map<BlockCategory, string>();
 
   /** 单例类别：同类只能留一份 */
@@ -111,9 +113,9 @@ export class PromptComposer {
     return priority > holder.priority;
   }
 
-  /** 最终文本 = 已接受块按加入顺序拼接（保持原行为；被抑制的块不出现） */
-  compose(): { text: string; manifest: PromptBlockRecord[] } {
-    const accepted = this.blocks.filter(b => b.accepted);
+  /** 最终文本 = 已接受块按加入顺序拼接；可在评测时按 block id 做可观测消融。 */
+  compose(excludedIds: ReadonlySet<string> = new Set()): { text: string; manifest: PromptBlockRecord[] } {
+    const accepted = this.blocks.filter(b => b.accepted && !excludedIds.has(b.id));
     const text = accepted.map(b => b.text).join('\n\n');
     const manifest = this.blocks.map(b => ({
       id: b.id,
@@ -121,7 +123,7 @@ export class PromptComposer {
       priority: b.priority,
       chars: b.text.length,
       source: b.source ?? '',
-      suppressed: !b.accepted,
+      suppressed: !b.accepted || excludedIds.has(b.id),
     }));
     return { text, manifest };
   }

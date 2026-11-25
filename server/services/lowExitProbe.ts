@@ -10,13 +10,14 @@
  */
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 import {
   evaluateLowExitProbe,
   positiveActivationOf,
   type LowExitProbeResult,
 } from '../../src/lib/lowExitProbe.js';
 
-export const LOW_EXIT_PROBE_PATH = 'memories/low_exit_probe.jsonl';
+export const LOW_EXIT_PROBE_PATH = resolveMemoryPath('low_exit_probe.jsonl');
 const MAX_BYTES = 1_000_000;
 const KEEP_ROTATIONS = 3;
 

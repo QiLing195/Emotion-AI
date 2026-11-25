@@ -26,6 +26,23 @@ export function classifyAttachmentStyle(
   return { style, anxiety, avoidance };
 }
 
+function isNegatedAt(text: string, index: number): boolean {
+  const prefix = text.slice(Math.max(0, index - 8), index);
+  if (/(?:不但|不只|不光|不仅)$/.test(prefix)) return false;
+  return /(?:并不|并没有|没有|没|不太|不|未|不是|并非|说不上|谈不上|算不上)(?:那么|太|很|特别)?$/u.test(prefix);
+}
+
+function hasUnnegatedKeyword(text: string, keyword: string): boolean {
+  let from = 0;
+  while (from <= text.length - keyword.length) {
+    const index = text.indexOf(keyword, from);
+    if (index < 0) return false;
+    if (!isNegatedAt(text, index)) return true;
+    from = index + keyword.length;
+  }
+  return false;
+}
+
 /** 基于关键词的用户情感分析（本地快速通道，无需 LLM） */
 export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
   const t = text.trim();
@@ -33,7 +50,7 @@ export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
     { emotion: 'joy',    keywords: ['开心', '高兴', '哈哈', '嘻嘻', '好开心', '太棒了', '真好', '快乐', '爽'], cause: '遇到了开心的事' },
     { emotion: 'love',   keywords: ['爱你', '喜欢你', '想你', '亲', '抱', '爱', '喜欢', '么么', '宝贝'], cause: '对你有感情表达' },
     { emotion: 'anger',  keywords: ['生气', '烦', '讨厌', '滚', '气死', '受不了', '可恶', '有病', '无语'], cause: '对某事感到不满' },
-    { emotion: 'sad',    keywords: ['难过', '伤心', '哭', '不开心', '低落', '忧郁', '悲伤', '委屈', '心累'], cause: '遇到了伤心事' },
+    { emotion: 'sad',    keywords: ['难过', '难受', '伤心', '哭', '不开心', '不高兴', '不快乐', '低落', '忧郁', '悲伤', '委屈', '孤单', '孤独', '失望', '心累', '崩溃', '撑不住', '撑不下去', '什么都做不好', '没用', '一无是处', '空了'], cause: '遇到了伤心事' },
     { emotion: 'fear',   keywords: ['害怕', '担心', '怕', '紧张', '焦虑', '慌', '不安', '恐惧'], cause: '感到担心或害怕' },
     { emotion: 'disgust', keywords: ['恶心', '讨厌', '反感', '受不了', '恶心死了', '烦人'], cause: '对某事感到反感' },
     { emotion: 'gratitude', keywords: ['谢谢', '多谢', '感谢', '辛苦', '你真好', '太感谢'], cause: '对你表示感谢' },
@@ -75,7 +92,7 @@ export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
   for (const p of patterns) {
     let score = 0;
     for (const kw of p.keywords) {
-      if (t.includes(kw)) score += 1.0 / p.keywords.length;
+      if (hasUnnegatedKeyword(t, kw)) score += 1.0 / p.keywords.length;
     }
     if (score > bestMatch.score) bestMatch = { emotion: p.emotion, score, cause: p.cause };
   }
@@ -83,8 +100,12 @@ export function analyzeUserSentiment(text: string): UserEmotionAnalysis {
   const directedAtAI = ['你', '你让', '你给', '你总是', '你从来'].some(w => t.includes(w)) && !quoted;
   let intensity = Math.min(1, bestMatch.score * 0.5 + Math.min(1, t.length / 100) * 0.3 + ((t.match(/[！!]/g)?.length ?? 0) * 0.2));
   // v2.03：混合情绪（同时命中正/负类）与引用 → 降低强度 + 提高不确定度
-  const NEG_HIT = /(难过|伤心|生气|烦|害怕|怕|担心|焦虑|紧张|慌|闷|累|失望|委屈|讨厌)/.test(t);
-  const POS_HIT = /(开心|高兴|哈哈|快乐|幸福|谢谢|感谢|拿到|通过|成功|升职|录取|offer|好消息|涨薪)/i.test(t);
+  // 身体疲劳由 bodyState 表达，不能仅因“累”就把喜悦/好消息降成混合情绪；
+  // 保留“心累”等明确情绪短语作为负向命中。
+  const NEG_HIT = ['难过', '伤心', '不开心', '不高兴', '不快乐', '生气', '烦', '害怕', '怕', '担心', '焦虑', '紧张', '慌', '闷', '心好累', '心很累', '心累', '失望', '委屈', '讨厌']
+    .some(keyword => hasUnnegatedKeyword(t, keyword));
+  const POS_HIT = ['开心', '高兴', '哈哈', '快乐', '幸福', '谢谢', '感谢', '拿到', '通过', '成功', '升职', '录取', 'offer', '好消息', '涨薪']
+    .some(keyword => hasUnnegatedKeyword(t.toLowerCase(), keyword.toLowerCase()));
   const mixed = NEG_HIT && POS_HIT;
   if (quoted) intensity *= 0.6;
   if (mixed) intensity *= 0.85;

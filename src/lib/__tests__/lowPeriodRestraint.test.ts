@@ -69,8 +69,13 @@ describe('v1.42 低谷期「少追问」片段', () => {
           .toBe(STRATEGY_PROMPT_SNIPPETS[s]);
       }
     }
-    // 未归一/自然语言标签也要按归一键判 —— 「有点累」是 sad，不是平常事
-    for (const raw of ['有点累', 'tired', 'worried', '焦虑', '烦']) {
+    // 未归一/自然语言标签也要按归一键判。身体疲劳不属于情绪负向键，仍是平常事；
+    // 担心/焦虑/烦躁则保留在负向情绪通路。
+    for (const raw of ['有点累', 'tired']) {
+      expect(resolveStrategySnippet('neutral', { inEstablishedLowPeriod: true, hisEmotion: raw }), raw)
+        .toBe(LOW_PERIOD_RESTRAINT_SNIPPET);
+    }
+    for (const raw of ['worried', '焦虑', '烦', '心累']) {
       expect(resolveStrategySnippet('neutral', { inEstablishedLowPeriod: true, hisEmotion: raw }), raw)
         .toBe(STRATEGY_PROMPT_SNIPPETS.neutral);
     }

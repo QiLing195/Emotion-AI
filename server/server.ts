@@ -3,12 +3,14 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import os from 'os';
 import http from 'http';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { resolveTurnMotive } from './services/turnMotive.js';
-// v1.60-p0 / P0-2：来源归属安全闸（纯函数，判据层已由 scripts/check-p0-2-ownership-guard.ts 锁定 12/12）
-import { guardExpression } from '../src/lib/memoryProvenance.js';
+// v2.28：共享最终输出护栏，服务端与固定候选回放使用同一条链。
+import { finalizeAssistantResponse } from '../src/lib/finalResponseGuards.js';
+import { isExplicitNoMemoryWriteRequest, shouldSkipAutomaticMemoryWrite } from '../src/lib/memoryWriteGuard.js';
 import { motiveActionStrategyEnabled } from '../src/lib/dialogueStrategy.js';
 import { parseString } from 'xml2js';
 import { parseChatRequest, parseTtsRequest, parseVisionRequest } from './utils/requestValidation.js';
@@ -24,6 +26,7 @@ import type { Application } from 'express';
 import type { EmotionEvent } from '../src/lib/emotionEngine.js';
 // v1.33：Laya 决策层的入参类型（取意见在 server 这侧做）
 import type { EmotionState, UserEmotionAnalysis } from '../src/lib/emotionTypes.js';
+import { classifyProviderFailure } from '../src/lib/providerFailure.js';
 import { rewardLearner } from '../src/lib/rewardLearner.js';
 
 interface IMessageChannel {
@@ -45,7 +48,7 @@ import {
 import type { RelationshipStateV2 } from '../src/lib/relationshipProgressionV2.js';
 import { buildPatternInjection, buildProactiveMemoryInjection, PERSONALITY_FOUNDATION } from '../src/lib/contentInjector.js';
 import { wrapUntrusted, wrapMemoryItems, UNTRUSTED_DATA_RULE } from '../src/lib/untrustedData.js';
-import { enforceExpressionPlan, type ExpressionEnforcementResult } from '../src/lib/expressionEnforcement.js';
+import type { ExpressionEnforcementResult } from '../src/lib/expressionEnforcement.js';
 import { GenerationBudget, GenerationBudgetExceededError, type GenerationBudgetSnapshot } from '../src/lib/generationBudget.js';
 import { getDominantEmotion, describeReinforcementState } from '../src/lib/emotionEngine.js';
 import { assessEpisodeCandidate, isProactivelyRecallable } from '../src/lib/memoryGovernance.js';
@@ -114,9 +117,11 @@ import { addNote, listNotes as listHerNotes, herNotesEnabled } from './services/
 import { addFollowup, pickDueFollowup, markFollowupSent, herFollowupEnabled, listFollowups, buildRecallHint } from './services/herFollowups.js';
 import { buildRememberedView } from './services/herRemembered.js';
 import { deleteEpisode, updateEpisode, exportMemories, viewEpisode, memoriesDir, parsePurgeBackups } from './services/memoryAdmin.js';
+import { resolveMemoriesDir, resolveWebDistDir } from './appPaths.js';
 import { PromptComposer, summarizeManifest, type PromptBlockRecord } from './services/promptComposer.js';
 import { readRecentActivity } from './services/activityWatcher.js';
 import { understandActivity, describeUnderstanding, toActivityConcern, activityPromptLine, updateCareStreak, emptyCareStreak, type ActivityUnderstanding, type CareStreak } from './services/activityUnderstanding.js';
+import { emptyActivityEmotionShadow, stepActivityEmotionShadow, type ActivityEmotionShadowDiagnostics, type ActivityEmotionShadowState } from './services/activityEmotionShadow.js';
 import { recordCare, recentCareAsks, findPendingFollowUp, buildFollowUpHint } from './services/herCareMemory.js';
 import { startActivitySampler, stopActivitySampler, activityWatchEnabled } from './services/activityWatcher.js';
 import { getMcpToolDeclarations, callMcpTool, shutdownMcp, mcpClientEnabled, loadMcpConfig, listAllMcpTools, isToolAllowedByServer, isMcpConnected, MCP_CONFIG_PATH } from './services/mcpClient.js';
@@ -145,6 +150,7 @@ import { bus } from '../src/eventBus.js';
 // Phase 2: Web search integration
 import { searchForLLM } from '../src/curiosity/search.js';
 import { generateAIResponse, generateEmbeddings } from '../src/lib/aiProvider.js';
+import { getAICallMetrics } from '../src/lib/aiCallMetrics.js';
 
 // v1.30：让位那段话怎么写（三档，实测裁定见 `motive.ts` 的 `DEFAULT_DEFER_STYLE`）。
 // **每次调用都读 env** —— 这样同一个进程内可以逐轮切换，A/B 脚本才能用一条真管道跑完三档
@@ -231,8 +237,8 @@ function isFactualQuestion(text: string): boolean {
 
 import {
   EpisodicMemoryStore, tryFormEpisode,
-  getSignificantEpisodes, decideProactiveRecall,
-  buildNarrativePrompt, parseNarrativeReply, updateEpisodeNarrative,
+  getSignificantEpisodes, decideProactiveRecall, advanceEpisodeTrackingState,
+  buildNarrativePrompt, parseNarrativeReply, updateEpisodeNarrative, hasActiveEpisodicEmbeddings,
 } from '../src/lib/episodicMemory.js';
 import { recall, type RecallQuery } from '../src/lib/unifiedMemory.js';
 import { driftPersonalityParams, DEFAULT_DRIFT_CONFIG, applyLongTermDrift, LONG_TERM_DRIFT_INTERVAL_ROUNDS, LONG_TERM_DRIFT_MIN_EPISODES, LONG_TERM_DRIFT_SCALE } from '../src/lib/personalityEvolution.js';
@@ -495,6 +501,12 @@ export class AIGirlfriendServer {
   private _activityUnderstandingCache: { at: number; value: ActivityUnderstanding | null } | null = null;
   private _activityCareStreak: CareStreak = emptyCareStreak(new Date().toISOString().slice(0, 10));
   private _activityCareTimer: ReturnType<typeof setInterval> | null = null;
+  /** Read-only candidate windows for future emotion gates; never passed to the emotion stage. */
+  private _activityEmotionShadowState: ActivityEmotionShadowState = emptyActivityEmotionShadow();
+  private _activityEmotionShadowDiagnostics: ActivityEmotionShadowDiagnostics = stepActivityEmotionShadow(
+    emptyActivityEmotionShadow(), null, Date.now(),
+  ).diagnostics;
+  private _activityEmotionShadowTimer: ReturnType<typeof setInterval> | null = null;
   /** v2.01 诊断：进程启动时间与最近一轮分阶段耗时（GET /api/diagnostics 用） */
   private _startedAt: number = Date.now();
   private _lastTurnTimings: Record<string, unknown> | null = null;
@@ -504,6 +516,10 @@ export class AIGirlfriendServer {
   private _lastExpressionEnforcement: ExpressionEnforcementResult | null = null;
   /** v2.16：最近一轮生成预算快照（总耗时/剩余/调用次数/超时次数），可观测 */
   private _lastGenerationBudget: GenerationBudgetSnapshot | null = null;
+  /** Total /api/chat wall time, including chat-lock wait; contains no request content. */
+  private _lastChatWallTimeMs: number | null = null;
+  /** Time spent waiting for the serialized chat lock. */
+  private _lastChatLockWaitMs: number | null = null;
   /** v2.20：最近一轮脱敏 turn trace（只含结构，不含原文；同时落盘 memories/turn_trace.jsonl） */
   private _lastTurnTrace: ReturnType<typeof buildTurnTrace> | null = null;
 
@@ -513,9 +529,42 @@ export class AIGirlfriendServer {
       return this._activityUnderstandingCache.value;
     }
     let value: ActivityUnderstanding | null = null;
-    try { value = understandActivity(readRecentActivity(6)); } catch { value = null; }
+    // Activity inference needs repeated 20-second samples even when the user stays in one window.
+    try { value = understandActivity(readRecentActivity(20, now, undefined, false)); } catch { value = null; }
     this._activityUnderstandingCache = { at: now, value };
     return value;
+  }
+
+  private startActivityEmotionShadowLoop(): void {
+    if (!activityWatchEnabled() || this._activityEmotionShadowTimer) return;
+    const tick = () => {
+      const now = Date.now();
+      // Shadow diagnostics must not refresh the cache shared by chat prompts.
+      // Otherwise enabling a read-only observer can change which activity
+      // evidence the next chat turn sees.
+      let understanding: ActivityUnderstanding | null = null;
+      try { understanding = understandActivity(readRecentActivity(20, now, undefined, false)); } catch { understanding = null; }
+      const step = stepActivityEmotionShadow(
+        this._activityEmotionShadowState,
+        understanding,
+        now,
+      );
+      this._activityEmotionShadowState = step.state;
+      this._activityEmotionShadowDiagnostics = step.diagnostics;
+    };
+    tick();
+    this._activityEmotionShadowTimer = setInterval(tick, 60_000);
+  }
+
+  private stopActivityEmotionShadowLoop(): void {
+    if (this._activityEmotionShadowTimer) {
+      clearInterval(this._activityEmotionShadowTimer);
+      this._activityEmotionShadowTimer = null;
+    }
+    this._activityEmotionShadowState = emptyActivityEmotionShadow();
+    this._activityEmotionShadowDiagnostics = stepActivityEmotionShadow(
+      this._activityEmotionShadowState, null, Date.now(),
+    ).diagnostics;
   }
 
   /** v1.98 门槛可用 env 调（默认值不变）：CARE_SUSTAIN_MINUTES / CARE_COOLDOWN_MINUTES / CARE_MAX_PER_DAY */
@@ -845,7 +894,10 @@ export class AIGirlfriendServer {
 
     // AI chat endpoint — accepts client-provided persona/systemPrompt for consistency
     this.app.post('/api/chat', async (req, res) => {
+      const chatStartedAt = Date.now();
+      const chatLockWaitStartedAt = Date.now();
       const releaseChatLock = await this.acquireChatLock();
+      this._lastChatLockWaitMs = Date.now() - chatLockWaitStartedAt;
       try {
         const parsedRequest = parseChatRequest(req.body);
         if (parsedRequest.ok === false) {
@@ -900,12 +952,15 @@ export class AIGirlfriendServer {
                 const userAnalysis = analyzeUserEmotionLocally(message);
                 return { event: fallbackEmotionEvent(message, userAnalysis), userAnalysis, source: 'disabled' as const };
               })())
-            : analyzeEmotionEvent(message, effectiveSettings as any);
-        // ponytail: 短问候跳过 embedding（≤3字符或纯标点），省 API 调用
-        const skipEmbedding = message.length < 4 || /^[\s!?！？.。，,、~-]+$/.test(message);
+            : analyzeEmotionEvent(message, effectiveSettings as any, undefined, { metricStage: 'emotion_analysis' });
+        // 记忆都没有向量时，query embedding 不可能改变召回结果；跳过无效的外部调用。
+        // 继续保留短问候/纯标点跳过规则，召回会使用现有非向量评分。
+        const skipEmbedding = !hasActiveEpisodicEmbeddings(episodicStore)
+          || message.length < 4
+          || /^[\s!?！？.。，,、~-]+$/.test(message);
         const queryEmbeddingPromise: Promise<number[] | undefined> = (effectiveSettings?.apiKey && !skipEmbedding)
           ? Promise.race([
-              generateEmbeddings(effectiveSettings, message),
+              generateEmbeddings(effectiveSettings, message, { metricStage: 'query_embedding' }),
               new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), 2000)),
             ]).catch(() => undefined)
           : Promise.resolve(undefined);
@@ -987,6 +1042,7 @@ export class AIGirlfriendServer {
           // `commitFinalStrategyWithMotive()` **一次性提交**（临时策略绝不产生副作用）。
           deferStrategyCommit: true,
           userText: message,
+          recentMessages: (recentMessages ?? []) as Array<{ role?: string; content?: unknown }>,
           currentEmotionState,
           emotionEvent: emotionAnalysis.event,
           userAnalysis: emotionAnalysis.userAnalysis,
@@ -1477,7 +1533,15 @@ export class AIGirlfriendServer {
         // 只能靠片段本身的写法（见 `accompany` 片段「先给在场感」那条）。
         promptComposer.addStrategySnippet(turnOutput.strategySnippet, 'aiCoordinator.strategySnippet');
         {
-          const composed = promptComposer.compose();
+          // 阶段 8 配对评测的窄消融：只移除由情感状态/动机/策略产生的提示块。
+          // 情绪分析、状态更新、记忆、共同 persona、事实和安全后处理在两臂保持一致；
+          // 该对照只估计这些 Prompt 块对回复的增量作用，不代表关闭整套情感引擎。
+          const stage8PromptAblation = process.env.STAGE8_PROMPT_ABLATION === 'true';
+          const stage8ExcludedBlocks = new Set([
+            'appraisal', 'herState', 'moodHint', 'ruminationHint', 'goodNewsReception',
+            'motive', 'strategy', 'expression_permit',
+          ]);
+          const composed = promptComposer.compose(stage8PromptAblation ? stage8ExcludedBlocks : undefined);
           enrichedSystemPrompt = composed.text;
           this._lastPromptManifest = composed.manifest;
           console.log('[Prompt] ' + summarizeManifest(composed.manifest));
@@ -1498,7 +1562,10 @@ export class AIGirlfriendServer {
         // v1.72 Agent 工具层：开关打开时先让她"查一下再回答"（有界 2 轮）
         let result: { text: string };
         // v2.20：agent 轨迹（只记轮数/工具名，供脱敏 turn trace）
-        let agentTrace: { rounds: number; usedTools: boolean; tools: string[] } | null = null;
+        let agentTrace: {
+          rounds: number; usedTools: boolean; tools: string[];
+          agentLoopMs: number; mcpDiscoveryMs: number; mcpToolCount: number;
+        } | null = null;
         // v2.16：**整轮生成预算**——agent 多轮工具调用 / 收尾 / 接地重写 / 非 agent 路径共享同一 deadline，
         // 一次卡死不会把整轮拖到几分钟（默认 TURN_GEN_BUDGET_MS=25000，单次 GEN_CALL_TIMEOUT_MS=15000）。
         const genBudget = new GenerationBudget();
@@ -1509,6 +1576,7 @@ export class AIGirlfriendServer {
             turnOutput.updatedEmotionState.emotions as unknown as Record<string, number>,
             turnOutput.updatedEmotionState.baselineEmotions as unknown as Record<string, number> | undefined,
           );
+          const agentStartedAt = Date.now();
           const agent = await runAgentLoop({
             systemPrompt: enrichedSystemPrompt,
             userMessage: message,
@@ -1598,7 +1666,7 @@ export class AIGirlfriendServer {
                   false,
                   0.7,
                   (tools ?? undefined) as never,
-                  { budget: genBudget } as never,
+                  { budget: genBudget, metricStage: 'agent_response' } as never,
                 );
               } catch (e) {
                 if (e instanceof GenerationBudgetExceededError) {
@@ -1616,12 +1684,16 @@ export class AIGirlfriendServer {
               };
             },
           });
+          const agentLoopMs = Date.now() - agentStartedAt;
           console.log(`[Agent] rounds=${agent.rounds} usedTools=${agent.usedTools} trace=${agent.toolTrace.map(t => `${t.tool}:${t.ok ? 'ok' : 'fail'}:${t.ms}ms`).join(',') || 'none'}`);
           result = { text: agent.text };
           agentTrace = {
             rounds: agent.rounds,
             usedTools: agent.usedTools,
             tools: agent.toolTrace.map(t => t.tool),
+            agentLoopMs,
+            mcpDiscoveryMs: agent.mcpDiscoveryMs,
+            mcpToolCount: agent.mcpToolCount,
           };
           if (!result.text.trim()) {
             // v2.16：预算耗尽时 agent 可能拿不到任何文本 —— 给确定性兜底，避免空回复
@@ -1637,6 +1709,7 @@ export class AIGirlfriendServer {
               emotionState: turnOutput.updatedEmotionState,
               recentMessages,
               generationBudget: genBudget,
+              metricStage: 'chat_response',
             });
           } catch (e) {
             if (e instanceof GenerationBudgetExceededError) {
@@ -1669,6 +1742,7 @@ export class AIGirlfriendServer {
                 emotionState: turnOutput.updatedEmotionState,
                 recentMessages,
                 generationBudget: genBudget,
+                metricStage: 'dedup_rewrite',
               });
               if (typeof retry?.text === 'string' && retry.text.trim()) result = retry;
             } catch (e) {
@@ -1802,7 +1876,7 @@ export class AIGirlfriendServer {
         }
 
         // v1.0: capture episodic memory server-side
-        if (emotionAnalysis.event) {
+        if (emotionAnalysis.event && !shouldSkipAutomaticMemoryWrite(message)) {
           const emoState = turnOutput.updatedEmotionState;
           const chatContext = recentMessages
             ? recentMessages.slice(-5).map((m: any) => m.content).join(' | ')
@@ -1895,6 +1969,11 @@ export class AIGirlfriendServer {
               console.log(`[Narrative] 已用她自己的话替换模板：${text}`);
             }).catch(() => { /* 生成失败不影响主流程 */ });
           }
+        } else if (emotionAnalysis.event) {
+          advanceEpisodeTrackingState(episodicStore, turnOutput.updatedEmotionState);
+          console.log(isExplicitNoMemoryWriteRequest(message)
+            ? '[MemoryWriteGuard] 用户明确拒绝记忆；跳过自动情景记忆提炼'
+            : '[MemoryWriteGuard] 本轮请求先核实来源再决定；跳过自动情景记忆提炼');
         }
 
         this._tick++;
@@ -2127,32 +2206,48 @@ export class AIGirlfriendServer {
           strategyReason: turnOutput.strategyDecision.reason,
         };
 
-        // ── v2.13：ExpressionPlan 运行时强制（输出端）──
-        // 计划器给的是结构化约束；这里对**可判定**的违规做最小改写：
-        // ① transient/unknown 不得声称“这两天/一直”；② 问句不超过计划上限。
-        // 不确定的（主意图/语气/事实）不猜——留给 Prompt 与人工复核。
-        try {
-          const enforcement = enforceExpressionPlan(aiText, aiCoordinator.getLastExpressionPlan(), {
-            enabled: process.env.DISABLE_EXPRESSION_ENFORCEMENT !== 'true',
-          });
-          this._lastExpressionEnforcement = enforcement;
-          if (enforcement.changed) {
-            console.log(`[ExpressionGuard] ${enforcement.changes.join(' / ')}`);
-            aiText = enforcement.text;
-          }
-        } catch { /* 强制层永不打断主流程 */ }
-
-        // ── v1.60-p0 / P0-2：**来源归属安全闸**（Guard 只判定，不改写原表达）──
-        // 位置就在最终响应之前 ⇒ **任何**发出去的 aiText 都必须经过它。
-        // FAIL ⇒ 换成只从**已确认 provenance** 造句的安全回退；PASS/AMBIGUOUS/NOT_APPLICABLE ⇒ 逐字采用原表达。
-        const provenanceGuard = guardExpression({
+        // ── 最终输出护栏：服务端与固定候选回放共用 ──
+        const finalizedResponse = finalizeAssistantResponse({
           text: aiText,
+          userText: message,
+          priorContext: recentMessages
+            ? recentMessages.slice(-5).map((m: any) => String(m.content ?? '')).join('\n')
+            : '',
+          userEmotionAnalysis: emotionAnalysis.userAnalysis,
+          expressionPlan: aiCoordinator.getLastExpressionPlan(),
+          expressionEnforcementEnabled: process.env.DISABLE_EXPRESSION_ENFORCEMENT !== 'true',
+          virtualTownCausalPrecisionEnabled: process.env.ENABLE_VIRTUAL_TOWN_CAUSAL_PRECISION === 'true',
           provenance: motiveSelection.selected?.provenance,
           memoryId: motiveSelection.selected?.memoryId,
         });
+        const expressionEnforcement = finalizedResponse.expressionEnforcement;
+        this._lastExpressionEnforcement = expressionEnforcement;
+        if (expressionEnforcement.changed) {
+          console.log(`[ExpressionGuard] ${expressionEnforcement.changes.join(' / ')}`);
+        }
+        const provenanceGuard = finalizedResponse.provenanceGuard;
         if (!provenanceGuard.accepted) {
           console.log(`[Provenance] ⛔ 拒绝该表达：${provenanceGuard.rejectedReason}`);
-          aiText = provenanceGuard.text;
+        }
+        if (finalizedResponse.virtualTownEvidenceEnforcement.changed) {
+          console.log(`[VirtualTownEvidenceGuard] ${finalizedResponse.virtualTownEvidenceEnforcement.changes.join(' / ')}`);
+        }
+
+        // ── v2.28：自我经历/原因来源闸 ──
+        // 记忆归属校验不证明角色真的做过某件线下活动，也不证明她为何敷衍。
+        // 当前没有可信的自我活动事实源，因此不把 ExpressionPlan 的情绪证据当作活动证据。
+        const selfClaimCandidateText = finalizedResponse.selfClaimInputText;
+        const selfClaimGrounding = finalizedResponse.selfClaimGrounding;
+        aiText = finalizedResponse.text;
+        const isolatedMemoryDir = process.env.MEMORIES_DIR ? path.resolve(process.env.MEMORIES_DIR) : '';
+        const selfClaimTraceEnabled = process.env.SELF_CLAIM_GROUNDING_TRACE === 'true'
+          && (process.env.BIND_HOST || '127.0.0.1') === '127.0.0.1'
+          && isolatedMemoryDir.startsWith(`${path.resolve(os.tmpdir())}${path.sep}`)
+          && path.basename(isolatedMemoryDir) === 'memories'
+          && path.basename(path.dirname(isolatedMemoryDir)).startsWith('ai-friend-emotion-rounds-');
+        if (selfClaimGrounding.changed) {
+          console.log(`[SelfClaimGuard] ${selfClaimGrounding.changes.join(' / ')}`);
+          aiText = selfClaimGrounding.text;
         }
         // v1.60 Stage 3（只写、默认关）：记录**她的决策分支**（有限枚举 + 路径隔离 segment）
         if (timelineEnabled()) {
@@ -2190,6 +2285,16 @@ export class AIGirlfriendServer {
           expressionAccepted: provenanceGuard.accepted,
           expressionRejectedReason: provenanceGuard.rejectedReason,
           fallbackUsed: provenanceGuard.fallbackUsed,
+          selfClaimGrounding: {
+            accepted: selfClaimGrounding.accepted,
+            changed: selfClaimGrounding.changed,
+            changes: selfClaimGrounding.changes,
+            violations: selfClaimGrounding.violations.map(v => v.kind),
+          },
+          virtualTownEvidenceEnforcement: finalizedResponse.virtualTownEvidenceEnforcement,
+          ...(selfClaimTraceEnabled
+            ? { selfClaimGroundingTrace: { candidateText: selfClaimCandidateText, finalText: aiText } }
+            : {}),
           emotionEvent: emotionAnalysis.event,
           emotionAnalysis: {
             source: emotionAnalysis.source,
@@ -2228,10 +2333,12 @@ export class AIGirlfriendServer {
         res.status(status).json({
           ok: false,
           error: error instanceof AIRequestError ? 'model_unavailable' : 'chat_failed',
+          failureCode: classifyProviderFailure(error),
           detail: error instanceof AIRequestError ? error.message : (error as Error)?.message ?? 'unknown',
           hint: '模型服务不可用：检查网络/VPN 或 API key 后重试。本地记忆与界面仍然可用（不会丢数据）。',
         });
       } finally {
+        this._lastChatWallTimeMs = Date.now() - chatStartedAt;
         releaseChatLock();
       }
     });
@@ -2293,7 +2400,7 @@ export class AIGirlfriendServer {
     // 注意：/export 必须在 /:id 之前注册，否则会被 :id 吃掉。
     this.app.get('/api/memories/export', (_req, res) => {
       try {
-        const data = exportMemories('memories');
+        const data = exportMemories(resolveMemoriesDir());
         const stamp = new Date().toISOString().replace(/[-:T]/g, '').replace(/\..*$/, '');
         res.setHeader('Content-Disposition', `attachment; filename="memories-${stamp}.json"`);
         res.json({ ok: true, ...data });
@@ -2521,6 +2628,10 @@ export class AIGirlfriendServer {
           understanding,
           understandingLine: describeUnderstanding(understanding),
           concern: toActivityConcern(understanding),
+          emotionGateShadow: {
+            enabled: activityWatchEnabled(),
+            ...this._activityEmotionShadowDiagnostics,
+          },
           care: {
             enabled: this.activityCareEnabled(),
             streak: this._activityCareStreak,
@@ -2556,9 +2667,13 @@ export class AIGirlfriendServer {
             activityCare: process.env.ENABLE_ACTIVITY_CARE === 'true',
             voiceWake: process.env.ENABLE_VOICE_WAKE === 'true',
             mcpClient: process.env.ENABLE_MCP_CLIENT === 'true',
+            stage8PromptAblation: process.env.STAGE8_PROMPT_ABLATION === 'true',
             debugTimings: process.env.DEBUG_TIMINGS === 'true',
           },
           lastTurnTimings: this._lastTurnTimings,
+          lastChatWallTimeMs: this._lastChatWallTimeMs,
+          lastChatLockWaitMs: this._lastChatLockWaitMs,
+          aiCallMetrics: getAICallMetrics(),
           expressionEnforcement: this._lastExpressionEnforcement,
           turnTrace: this._lastTurnTrace,
           generationBudget: this._lastGenerationBudget,
@@ -3274,11 +3389,12 @@ export class AIGirlfriendServer {
     });
 
     // Static files for web interface (Vite build output)
-    this.app.use(express.static(path.join(__dirname, '../dist')));
+    const webDistDir = resolveWebDistDir();
+    this.app.use(express.static(webDistDir));
 
     // Fallback to index.html for SPA routing
     this.app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, '../dist/index.html'));
+      res.sendFile(path.join(webDistDir, 'index.html'));
     });
   }
 
@@ -3336,6 +3452,8 @@ export class AIGirlfriendServer {
 
       // v1.82 活动窗口采样（只读：只记窗口标题/进程名；ENABLE_ACTIVITY_WATCH 控制）
       startActivitySampler();
+      // Read-only duration candidates for future emotion gating; no state writes.
+      this.startActivityEmotionShadowLoop();
     startVoiceSampler();   // v1.88 语音唤醒（ENABLE_VOICE_WAKE=true 时）
       // v1.95 持续观察「他一直在做什么」→ 到点主动关心一句（ENABLE_ACTIVITY_CARE 控制）
       this.startActivityCareLoop();
@@ -3402,6 +3520,7 @@ export class AIGirlfriendServer {
   async stop() {
     stopActivitySampler();        // v1.82 停采样器（别留下孤儿 PowerShell）
     this.stopActivityCareLoop();  // v1.95 停"主动关心"计时器
+    this.stopActivityEmotionShadowLoop();
     stopVoiceSampler();           // v1.88 语音唤醒进程
     await shutdownMcp();          // v1.82 断开外部 MCP server
     await mcpService.shutdown();

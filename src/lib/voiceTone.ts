@@ -29,8 +29,8 @@ export const EMOTION_TONES: Record<VoiceEmotion, VoiceToneProfile> = {
   sad:     { ratePct: -15, pitchHz: -4, volumePct: -5, label: '低沉缓慢，声音轻轻的' },
   anger:   { ratePct: 5,  pitchHz: 2,  volumePct: 8,  label: '带着一点情绪，语气略重' },
   fear:    { ratePct: -10, pitchHz: 2,  volumePct: -8, label: '小心翼翼，放轻声音' },
-  love:    { ratePct: -3,  pitchHz: 1,  volumePct: 0,  label: '温柔而柔软，像哄人一样' },
-  calm:    { ratePct: -5,  pitchHz: 0,  volumePct: -3, label: '平静安稳，不疾不徐' },
+  love:    { ratePct: -5,  pitchHz: 2,  volumePct: -4, label: '温柔而柔软，像哄人一样' },
+  calm:    { ratePct: -8,  pitchHz: 1,  volumePct: -6, label: '平静安稳，轻声慢一些' },
   disgust: { ratePct: 0,   pitchHz: 0,  volumePct: 0,  label: '平平淡淡' },
   lust:    { ratePct: -6,  pitchHz: -1, volumePct: -6, label: '低声，带着一点克制' },
   greed:   { ratePct: 3,   pitchHz: 1,  volumePct: 2,  label: '语气里有一点期待' },
@@ -80,9 +80,9 @@ export function browserSpeechParams(profile: VoiceToneProfile): { rate: number; 
 export function edgeTtsArgs(profile: VoiceToneProfile): string[] {
   const signed = (v: number, unit: string): string => `${v >= 0 ? '+' : ''}${v}${unit}`;
   return [
-    '--rate', signed(profile.ratePct, '%'),
-    '--pitch', signed(profile.pitchHz, 'Hz'),
-    '--volume', signed(profile.volumePct, '%'),
+    `--rate=${signed(profile.ratePct, '%')}`,
+    `--pitch=${signed(profile.pitchHz, 'Hz')}`,
+    `--volume=${signed(profile.volumePct, '%')}`,
   ];
 }
 

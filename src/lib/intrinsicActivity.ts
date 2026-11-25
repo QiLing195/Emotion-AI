@@ -32,7 +32,7 @@ export interface CandidateValidationResult {
 export interface ValidateOptions {
   now: number;
   /** 最近已应用过的 eventId（调用方维护：有界去重表，需同时支持 has/add） */
-  seen: { has(id: string): boolean; add(id: string): void };
+  seen: { has(id: string, now?: number): boolean; add(id: string, expiresAt?: number): void };
   minConfidence?: number;
   maxPerTurn?: number;
 }
@@ -61,7 +61,7 @@ export function validateIntrinsicCandidates(
       rejected.push({ eventId: c.eventId, reason: 'no_evidence' });
       continue;
     }
-    if (opts.seen.has(c.eventId)) {
+    if (opts.seen.has(c.eventId, opts.now)) {
       rejected.push({ eventId: c.eventId, reason: 'duplicate' });
       continue;
     }
@@ -74,7 +74,7 @@ export function validateIntrinsicCandidates(
       continue;
     }
     accepted.push({ ...c, intensity: clamp01(c.intensity), confidence: clamp01(c.confidence) });
-    opts.seen.add(c.eventId);
+    opts.seen.add(c.eventId, c.expiresAt);
   }
   return { accepted, rejected };
 }
@@ -83,15 +83,30 @@ export function validateIntrinsicCandidates(
 export class IntrinsicDedup {
   private ids: string[] = [];
   private set = new Set<string>();
+  private expiresAt = new Map<string, number>();
   constructor(private readonly capacity = 200) {}
-  has(id: string): boolean { return this.set.has(id); }
-  add(id: string): void {
+  has(id: string, now = Date.now()): boolean {
+    if (!this.set.has(id)) return false;
+    const expiry = this.expiresAt.get(id);
+    if (expiry !== undefined && expiry <= now) {
+      this.set.delete(id);
+      this.expiresAt.delete(id);
+      this.ids = this.ids.filter(existing => existing !== id);
+      return false;
+    }
+    return true;
+  }
+  add(id: string, expiresAt = Number.POSITIVE_INFINITY): void {
     if (this.set.has(id)) return;
     this.set.add(id);
+    this.expiresAt.set(id, expiresAt);
     this.ids.push(id);
     while (this.ids.length > this.capacity) {
       const old = this.ids.shift();
-      if (old) this.set.delete(old);
+      if (old) {
+        this.set.delete(old);
+        this.expiresAt.delete(old);
+      }
     }
   }
   get size(): number { return this.set.size; }

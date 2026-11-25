@@ -1,5 +1,11 @@
 node_modules/
 build/
+!build/
+build/*
+!build/icon.svg
+!build/icon.ico
+release/
+.electron-builder-cache/
 dist/
 coverage/
 .DS_Store
@@ -30,3 +36,46 @@ mcp-servers.json
 
 # 活动关键词表（本机自定义，模板：activity-keywords.example.json）
 activity-keywords.json
+
+# Local indexes, temp exports, and runtime capture files
+/.codegraph/
+/tmp/
+/logs/
+/.web.log
+/server-runtime*.log
+/observation.log
+/*.jsonl
+/firebase-applet-config.json
+/elevate-copy-check.tmp
+/_secserve.cjs
+/true
+/judge-human-labels.md
+
+# Local and blinded evaluation material; publish only reviewed aggregate reports
+/artifacts/**/answer-key*
+/artifacts/**/*.private.*
+/artifacts/**/*blind-key*
+/artifacts/emotion-learning/**/consented-*.json
+/artifacts/emotion-learning/**/local-activity-summary*.json
+
+# Large generated 3D exports belong in a separately managed asset release/LFS
+/artifacts/**/*.blend
+/artifacts/**/*.blend1
+/artifacts/**/*.glb
+
+# Experimental artifacts are opt-in; allow only reviewed public summaries
+/artifacts/*
+!/artifacts/project-error-ledger.md
+!/artifacts/project-error-ledger.jsonl
+!/artifacts/emotion-learning/
+/artifacts/emotion-learning/*
+!/artifacts/emotion-learning/dual-loop-emotion-demo-v0.7.html
+!/artifacts/emotion-learning/dual-loop-emotion-architecture-v1.md
+!/artifacts/emotion-learning/current-emotion-write-path-verification-v1.md
+!/artifacts/emotion-learning/current-emotion-write-path-audit-v1.md
+!/artifacts/v2.46/
+/artifacts/v2.46/*
+!/artifacts/v2.46/fatigue-matrix.md
+!/artifacts/v2.49/
+/artifacts/v2.49/*
+!/artifacts/v2.49/fatigue-prompt-recheck.md

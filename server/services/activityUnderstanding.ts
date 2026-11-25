@@ -35,7 +35,8 @@ export const ACTIVITY_KEYWORDS: CategoryDef[] = [
   { key: 'shopping', label: '逛购物', summary: '你在逛购物网站', keywords: ['淘宝', '天猫', '京东', '拼多多', '亚马逊', 'amazon', '闲鱼', '购物'] },
   { key: 'gaming', label: '玩游戏', summary: '你在玩游戏', keywords: ['steam', 'epic games', '游戏', 'game', '原神', '英雄联盟'] },
   { key: 'doc', label: '看文档/写东西', summary: '你在看文档或写东西', keywords: ['word', 'excel', 'powerpoint', 'wps', 'notion', 'obsidian', 'typora', 'pdf', '简历模板', 'docs'] },
-  { key: 'browsing', label: '随便逛', summary: '你在随便逛网页', keywords: ['chrome', 'edge', 'firefox', 'safari', '浏览器'] },
+  // Browser process/shell names alone do not establish what the user is doing.
+  { key: 'browsing', label: '浏览网页', summary: '你在浏览网页', keywords: ['浏览器'] },
 ];
 
 export interface ActivityCategoryHit {
@@ -66,7 +67,7 @@ export interface ActivityUnderstanding {
 }
 
 const MAX_EVIDENCE = 3;
-const MIN_CONFIDENT_WINDOWS = 2;
+const MIN_CATEGORY_EVIDENCE_WINDOWS = 2;
 
 // ===== v1.95 关键词表可配置（activity-keywords.json；不写就用内置默认） =====
 
@@ -177,7 +178,9 @@ export function understandActivity(view: ActivityView | null | undefined, within
 
   const top = categories[0];
   const def = table.find(d => d.key === top.key);
-  const vague = recent.length < MIN_CONFIDENT_WINDOWS || top.share < 0.4;
+  // Require two actual hits for the leading category; one hit plus one
+  // unclassified window must not be mistaken for sustained activity.
+  const vague = top.count < MIN_CATEGORY_EVIDENCE_WINDOWS || top.share < 0.4;
   return {
     summary: def?.summary ?? '你在用电脑',
     category: top.key,
@@ -195,8 +198,13 @@ export function understandActivity(view: ActivityView | null | undefined, within
 export function describeUnderstanding(u: ActivityUnderstanding | null): string {
   if (!u) return '活动采样没开，她看不到你在用什么';
   if (u.category === 'unknown') return u.summary;
-  const span = u.spanMinutes > 0 ? `约 ${u.spanMinutes} 分钟里` : '刚才';
+  const span = u.spanMinutes > 0 ? `${formatActivitySpan(u.spanMinutes)}里` : '刚才';
   return `${u.summary}（${span} ${u.windows} 个窗口，${Math.round(u.confidence * 100)}% 都是这一类）`;
+}
+
+function formatActivitySpan(minutes: number): string {
+  if (minutes < 1) return `约 ${Math.max(1, Math.round(minutes * 60))} 秒`;
+  return `约 ${Math.round(minutes * 10) / 10} 分钟`;
 }
 
 // ===== v1.95 把"理解"接进她的情绪与主动关心 =====
@@ -223,7 +231,7 @@ export function toActivityConcern(u: ActivityUnderstanding | null): ActivityConc
 /** 给 Prompt 的一行（只在她真的看出来时加；数据陈述，语气由人格决定） */
 export function activityPromptLine(u: ActivityUnderstanding | null): string {
   if (!u || u.vague || u.category === 'unknown') return '';
-  const span = u.spanMinutes > 0 ? `约 ${u.spanMinutes} 分钟` : '刚才';
+  const span = u.spanMinutes > 0 ? formatActivitySpan(u.spanMinutes) : '刚才';
   const ev = u.evidence.slice(0, 2).join(' / ');
   const concern = CONCERN_CATEGORIES.includes(u.category) ? '（这件事你可能想自然关心一句，但别像在监控他）' : '';
   return `【我看到的】他${span}一直在${u.label}${ev ? `：${ev}` : ''}${concern}`;
@@ -233,6 +241,8 @@ export function activityPromptLine(u: ActivityUnderstanding | null): string {
 export interface CareStreak {
   category: ActivityCategory | null;
   since: number;
+  /** 上次有效的跨采样观测；间隔过长不能算连续活动 */
+  lastSampleAt: number;
   samples: number;
   lastCareAt: number;
   caresToday: number;
@@ -240,10 +250,12 @@ export interface CareStreak {
 }
 
 export function emptyCareStreak(day: string): CareStreak {
-  return { category: null, since: 0, samples: 0, lastCareAt: 0, caresToday: 0, day };
+  return { category: null, since: 0, lastSampleAt: 0, samples: 0, lastCareAt: 0, caresToday: 0, day };
 }
 
 export const CARE_MIN_SUSTAIN_MS = 20 * 60_000;
+/** Care loop samples once per minute; allow one missed tick, then restart continuity. */
+export const CARE_MAX_SAMPLE_GAP_MS = 2 * 60_000;
 export const CARE_COOLDOWN_MS = 90 * 60_000;
 export const CARE_MAX_PER_DAY = 2;
 
@@ -292,20 +304,36 @@ export function updateCareStreak(
     maxPerDay: low ? CARE_LOW_MAX_PER_DAY : CARE_MAX_PER_DAY,
   };
   const s: CareStreak = { ...streak };
-  if (s.day !== day) { s.day = day; s.caresToday = 0; }
+  if (s.day !== day) {
+    s.day = day;
+    s.caresToday = 0;
+    s.category = null;
+    s.since = 0;
+    s.lastSampleAt = 0;
+    s.samples = 0;
+  }
   const concern = toActivityConcern(u);
   if (!concern) {
-    return { shouldCare: false, reason: 'not_a_concern', streak: { ...s, category: null, since: 0, samples: 0 }, thresholds };
+    return { shouldCare: false, reason: 'not_a_concern', streak: { ...s, category: null, since: 0, lastSampleAt: 0, samples: 0 }, thresholds };
   }
   if (typeof opts.hour === 'number' && (opts.hour < CARE_WINDOW_START_HOUR || opts.hour >= CARE_WINDOW_END_HOUR)) {
-    return { shouldCare: false, reason: 'outside_window', streak: s, thresholds };
+    return { shouldCare: false, reason: 'outside_window', streak: { ...s, category: null, since: 0, lastSampleAt: 0, samples: 0 }, thresholds };
   }
   if (s.category !== concern.category) {
     s.category = concern.category;
     s.since = now;
+    s.lastSampleAt = now;
     s.samples = 1;
     return { shouldCare: false, reason: 'new_category', streak: s, thresholds };
   }
+  const sampleGap = now - s.lastSampleAt;
+  if (sampleGap < 0 || sampleGap > CARE_MAX_SAMPLE_GAP_MS) {
+    s.since = now;
+    s.lastSampleAt = now;
+    s.samples = 1;
+    return { shouldCare: false, reason: 'sample_gap_reset', streak: s, thresholds };
+  }
+  s.lastSampleAt = now;
   s.samples += 1;
   const sustained = now - s.since;
   if (sustained < thresholds.sustainMs) return { shouldCare: false, reason: 'not_long_enough', streak: s, thresholds };

@@ -2,15 +2,83 @@
 // - 透明置顶无边框窗口，加载 http://127.0.0.1:3000/pet
 // - 轮询 /api/pet/capture/request，收到请求就用 desktopCapturer 截屏，回写 /api/pet/capture/result
 //   （PowerShell 抓屏会被杀软当恶意脚本拦，所以抓屏放在 Electron 里；OCR 仍由 server 侧 PowerShell 做）
-const { app, BrowserWindow, desktopCapturer, screen, shell, Menu } = require('electron');
+const { installConsolePipeGuards } = require('./consolePipeGuard.cjs');
+installConsolePipeGuards();
+
+const { app, BrowserWindow, desktopCapturer, screen, shell, Menu, Tray, nativeImage } = require('electron');
+const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { displayProbePoint, isCursorInsideHitRects, mouseIgnoreTransition } = require('./petWindowGeometry.cjs');
+const { PetDragController, bindPetDragResetEvents } = require('./petDragController.cjs');
+const { PetRendererRecovery } = require('./petRendererRecovery.cjs');
+const { buildPetTrayMenuTemplate } = require('./petTrayMenu.cjs');
+
+const APP_ROOT = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..');
+const PORTABLE_DIR = process.env.PORTABLE_EXECUTABLE_DIR;
+const DATA_ROOT = process.env.MEMORIES_DIR || (app.isPackaged
+  ? (PORTABLE_DIR ? path.join(PORTABLE_DIR, 'data') : app.getPath('userData'))
+  : path.join(APP_ROOT, 'memories'));
+process.env.APP_ROOT = APP_ROOT;
+process.env.MEMORIES_DIR = DATA_ROOT;
+process.env.WEB_DIST_DIR = app.isPackaged ? path.join(APP_ROOT, 'web') : path.join(APP_ROOT, 'dist');
+if (app.isPackaged) process.env.DOTENV_CONFIG_PATH = path.join(DATA_ROOT, '.env');
 
 const APP_URL = process.env.PET_APP_URL || 'http://127.0.0.1:3000';
-const SCREEN_DIR = path.join(process.cwd(), 'memories', 'screens');
+const SCREEN_DIR = path.resolve(DATA_ROOT, 'screens');
 const POLL_MS = 1500;
+let backendChild = null;
+
+async function ensureBackend() {
+  try {
+    const health = await apiJson(`${APP_URL}/health`);
+    if (health?.status === 'ok') return;
+  } catch { /* start the packaged or development server below */ }
+
+  const appPath = app.getAppPath();
+  const compiledEntry = path.join(appPath, 'dist', 'server', 'index.js');
+  const serverEntry = app.isPackaged ? compiledEntry : path.join(APP_ROOT, 'server', 'index.ts');
+  const tsxCli = path.join(appPath, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  if (!fs.existsSync(tsxCli) || !fs.existsSync(serverEntry)) {
+    throw new Error(`后端运行文件缺失: tsx=${tsxCli}, server=${serverEntry}`);
+  }
+
+  fs.mkdirSync(DATA_ROOT, { recursive: true });
+  const logPath = path.join(DATA_ROOT, 'server.log');
+  const logFd = fs.openSync(logPath, 'a');
+  const childEnv = {
+    ...process.env,
+    APP_ROOT,
+    MEMORIES_DIR: DATA_ROOT,
+    WEB_DIST_DIR: process.env.WEB_DIST_DIR,
+    ELECTRON_RUN_AS_NODE: '1',
+    ...(app.isPackaged ? { DOTENV_CONFIG_PATH: path.join(DATA_ROOT, '.env') } : {}),
+  };
+  backendChild = spawn(process.execPath, [tsxCli, serverEntry], {
+    cwd: APP_ROOT,
+    env: childEnv,
+    stdio: ['ignore', logFd, logFd],
+    windowsHide: true,
+  });
+  backendChild.on('error', (error) => console.error('[Pet] 后端启动失败:', error));
+
+  for (let i = 0; i < 60; i++) {
+    await sleep(500);
+    try {
+      const health = await apiJson(`${APP_URL}/health`);
+      if (health?.status === 'ok') return;
+    } catch { /* wait for startup */ }
+    if (backendChild.exitCode !== null) break;
+  }
+  throw new Error(`后端未能启动，查看日志: ${logPath}`);
+}
 
 let petWin = null;
+let petTray = null;
+const petRendererRecovery = new PetRendererRecovery({
+  getWebContents: () => petWin && !petWin.isDestroyed() ? petWin.webContents : null,
+});
+let petMotionMode = 'normal';
 let chatWin = null;
 let captureTimer = null;
 let busy = false;
@@ -154,7 +222,7 @@ function createPetWindow() {
         if (petWin.isMaximized()) petWin.unmaximize();
         // v2.10：拖动过程中被 Windows Aero Snap 当成最大化时，只取消最大化，
         // **不要挪窗口**（旧写法会 setBounds 到右下角，表现就是"一拖到上面就弹回右下角"）。
-        if (petDrag) {
+        if (petDragController.isActive()) {
           petAllowResize = false;
           petRestoring = false;
           return;
@@ -177,9 +245,7 @@ function createPetWindow() {
     }, 120);
   };
   // v2.09：拖动兜底 —— 窗口失焦/页面隐藏/渲染进程崩溃时清掉主进程拖动状态
-  petWin.on('blur', () => resetPetDrag('window-blur'));
-  petWin.webContents.on('render-process-gone', () => resetPetDrag('render-process-gone'));
-  petWin.webContents.on('destroyed', () => resetPetDrag('webcontents-destroyed'));
+  bindPetDragResetEvents(petWin, resetPetDrag, (details) => petRendererRecovery.recover(details));
   petWin.on('maximize', () => restorePetWindow('maximize'));
   petWin.on('enter-full-screen', () => restorePetWindow('full-screen'));
   petWin.on('resize', () => restorePetWindow('resize'));
@@ -191,6 +257,54 @@ function createPetWindow() {
     if (key === 'p') { openChat(); event.preventDefault(); }
     if (key === 'q') { app.quit(); event.preventDefault(); }
   });
+}
+
+function focusPetWindow() {
+  if (!petWin || petWin.isDestroyed()) {
+    createPetWindow();
+  } else if (petWin.webContents.isCrashed()) {
+    petRendererRecovery.manualReload();
+  }
+  if (petWin && !petWin.isDestroyed()) {
+    petWin.show();
+    petWin.focus();
+  }
+}
+
+function reloadPetWindow() {
+  if (!petWin || petWin.isDestroyed()) {
+    createPetWindow();
+  } else {
+    resetPetDrag('manual-renderer-reload');
+    petRendererRecovery.manualReload();
+  }
+  if (petWin && !petWin.isDestroyed()) {
+    petWin.show();
+    petWin.focus();
+  }
+}
+
+function createPetTray() {
+  if (petTray) return;
+  try {
+    const iconPath = path.join(__dirname, '..', 'public', 'pet', 'anya_idle.png');
+    const icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) throw new Error(`tray icon unavailable: ${iconPath}`);
+    petTray = new Tray(icon.resize({ width: 16, height: 16 }));
+    petTray.setToolTip('AI 桌宠');
+    petTray.setContextMenu(Menu.buildFromTemplate(buildPetTrayMenuTemplate({
+      focusPet: focusPetWindow,
+      reloadPet: reloadPetWindow,
+      openChat,
+      openVoiceSettings,
+      quit: () => app.quit(),
+    })));
+    petTray.on('click', focusPetWindow);
+    petTray.on('double-click', focusPetWindow);
+    console.log('[Pet] 系统托盘已就绪');
+  } catch (error) {
+    console.error('[Pet] 系统托盘创建失败:', error?.message || error);
+  }
 }
 
 function openChat() {
@@ -208,10 +322,7 @@ function movePetBy(dx, dy) {
   if (!petWin || petWin.isDestroyed()) return;
   const [x, y] = petWin.getPosition();
   const [w, h] = petWin.getSize();
-  const display = screen.getDisplayNearestPoint({
-    x: x + Math.round(w / 2),
-    y: Math.max(0, Math.min(y + Math.round(h / 2), screen.getPrimaryDisplay().workArea.height - 1)),
-  });
+  const display = screen.getDisplayNearestPoint(displayProbePoint({ x, y, width: w, height: h }));
   const wa = display.workArea;
   // 她本人矩形在窗口内的位置（底部居中）
   const px = Math.round((w - PET_VISIBLE.w) / 2);
@@ -227,63 +338,60 @@ function movePetBy(dx, dy) {
   savePetPos();
 }
 
-let petDrag = null;
+const petDragController = new PetDragController({
+  getCursor: () => screen.getCursorScreenPoint(),
+  moveBy: (dx, dy) => movePetBy(dx, dy),
+  savePosition: () => savePetPos(),
+});
 /** v2.07：整窗拖动开始 —— 记录屏幕光标起点（不再依赖 renderer 的 movementX） */
 function petDragBegin() {
   if (!petWin || petWin.isDestroyed()) return;
   // 曾被双击拖动区/系统手势意外最大化或全屏 → 先恢复，否则拖动坐标与窗口大小都会错
   if (petWin.isFullScreen()) petWin.setFullScreen(false);
   if (petWin.isMaximized()) petWin.unmaximize();
-  petDrag = { last: screen.getCursorScreenPoint() };
+  petDragController.begin();
 }
 function petDragMove() {
-  if (!petDrag || !petWin || petWin.isDestroyed()) return;
-  const now = screen.getCursorScreenPoint();
-  const dx = now.x - petDrag.last.x;
-  const dy = now.y - petDrag.last.y;
-  if (dx || dy) {
-    movePetBy(dx, dy);
-    petDrag.last = now;
-  }
+  if (!petWin || petWin.isDestroyed()) return;
+  petDragController.move();
 }
-function petDragEnd() { petDrag = null; savePetPos(); }
+function petDragEnd() { petDragController.end(); }
 /** v2.09：统一收尾 —— 失焦/渲染进程退出/取消 都走这里，避免主进程残留拖动状态 */
 function resetPetDrag(reason) {
-  if (petDrag) console.log('[Pet] 拖动状态清理:', reason);
-  petDrag = null;
-  savePetPos();
+  if (petDragController.reset()) console.log('[Pet] 拖动状态清理:', reason);
 }
 
 function registerPetIpc() {
   const { ipcMain } = require('electron');
+  let petIgnoreState = null;
   // v2.08：点击穿透 —— 主进程轮询光标位置，只有落在"她本人/按钮"矩形内才接收鼠标，
   // 其余透明区域 setIgnoreMouseEvents(true)，点击直接落到桌面。
   ipcMain.on('pet:set-ignore-mouse', (_evt, ignore) => {
     if (!petWin || petWin.isDestroyed()) return;
-    try { petWin.setIgnoreMouseEvents(Boolean(ignore), { forward: true }); } catch { /* 老版本 Electron 无 forward */ }
+    const transition = mouseIgnoreTransition(petIgnoreState, ignore);
+    petIgnoreState = transition.next;
+    if (!transition.changed) return;
+    try { petWin.setIgnoreMouseEvents(petIgnoreState, { forward: true }); } catch { /* 老版本 Electron 无 forward */ }
   });
   let petHitRects = [];
-  let petIgnoreState = null;
   ipcMain.on('pet:set-hit-rects', (_evt, rects) => {
     if (Array.isArray(rects)) petHitRects = rects.filter(r => r && Number.isFinite(r.x) && Number.isFinite(r.y));
   });
   function startPetHoverWatcher() {
     setInterval(() => {
-      if (!petWin || petWin.isDestroyed() || petDrag) return;
+      if (!petWin || petWin.isDestroyed() || petDragController.isActive()) return;
       if (!petHitRects.length) return;
       const [wx, wy] = petWin.getPosition();
       const p = screen.getCursorScreenPoint();
-      const inside = petHitRects.some(r => {
-        const x = wx + r.x, y = wy + r.y;
-        return p.x >= x && p.y >= y && p.x <= x + r.w && p.y <= y + r.h;
-      });
+      const inside = isCursorInsideHitRects(p, { x: wx, y: wy }, petHitRects);
       const ignore = !inside;
-      if (ignore !== petIgnoreState) {
-        petIgnoreState = ignore;
-        try { petWin.setIgnoreMouseEvents(ignore, { forward: true }); } catch { /* ignore */ }
+      const transition = mouseIgnoreTransition(petIgnoreState, ignore);
+      if (transition.changed) {
+        petIgnoreState = transition.next;
+        try { petWin.setIgnoreMouseEvents(petIgnoreState, { forward: true }); } catch { /* ignore */ }
         console.log('[Pet] 点击穿透=' + ignore);
       }
-    }, 60);
+    }, 16);
   }
   startPetHoverWatcher();
   ipcMain.on('pet:drag-begin', () => petDragBegin());
@@ -336,13 +444,33 @@ function registerPetIpc() {
 
   ipcMain.on('pet:open-voice-settings', () => openVoiceSettings());
 
+  ipcMain.on('pet:set-motion-mode', (event, mode) => {
+    if (event.sender !== petWin?.webContents) return;
+    if (mode === 'normal' || mode === 'slow' || mode === 'paused') petMotionMode = mode;
+  });
+
   ipcMain.on('pet:show-menu', () => {
     if (!petWin || petWin.isDestroyed()) return;
     const { Menu } = require('electron');
+    const selectMotionMode = (mode) => {
+      petMotionMode = mode;
+      if (petWin && !petWin.isDestroyed()) petWin.webContents.send('pet:motion-mode-selected', mode);
+    };
     Menu.buildFromTemplate([
       { label: '打开聊天窗口', click: () => openChat() },
       { label: '唤醒词设置…', click: () => openVoiceSettings() },
       { label: '回到右下角', click: () => { if (petWin && !petWin.isDestroyed()) { if (petWin.isFullScreen()) petWin.setFullScreen(false); if (petWin.isMaximized()) petWin.unmaximize(); petWin.setSize(300, 400); positionPet(petWin); } } },
+      {
+        label: '动效速度',
+        submenu: [
+          { label: '标准（1×）', type: 'radio', checked: petMotionMode === 'normal', click: () => selectMotionMode('normal') },
+          { label: '慢速（0.5×）', type: 'radio', checked: petMotionMode === 'slow', click: () => selectMotionMode('slow') },
+          { label: '暂停动效', type: 'radio', checked: petMotionMode === 'paused', click: () => selectMotionMode('paused') },
+          { type: 'separator' },
+          { label: '系统“减少动态效果”设置优先', enabled: false },
+        ],
+      },
+      { label: '重载桌宠界面', click: () => reloadPetWindow() },
       { type: 'separator' },
       { label: '退出桌宠', click: () => app.quit() },
     ]).popup({ window: petWin });
@@ -414,21 +542,21 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
-    // 等后端就绪（最多 30s）
-    for (let i = 0; i < 30; i++) {
-      try {
-        const health = await apiJson(`${APP_URL}/health`);
-        if (health && health.status === 'ok') break;
-      } catch { /* retry */ }
-      await sleep(1000);
-    }
+    await ensureBackend();
     registerPetIpc();
     createPetWindow();
+    createPetTray();
     captureTimer = setInterval(pollCaptureOnce, POLL_MS);
     pollCaptureOnce();
     openStartupApps();
   });
 
   app.on('window-all-closed', () => { app.quit(); });
-  app.on('before-quit', () => { if (captureTimer) clearInterval(captureTimer); });
+  app.on('before-quit', () => {
+    if (captureTimer) clearInterval(captureTimer);
+    if (backendChild && backendChild.exitCode === null) {
+      try { backendChild.kill(); } catch { /* ignore */ }
+      backendChild = null;
+    }
+  });
 }

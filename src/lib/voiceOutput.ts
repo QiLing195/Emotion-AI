@@ -7,6 +7,8 @@ import { resolveEmotionTone, browserSpeechParams, type VoiceEmotion, type VoiceS
 export interface SpeakOptions {
   /** 'cosyvoice' 走本地情感 TTS；'browser' 直接用浏览器语音；其它/缺省走服务端 edge-tts */
   provider?: string;
+  /** Edge TTS voice name or browser SpeechSynthesis voiceURI. */
+  voiceId?: string;
   /** 情绪强度 0~1（情感引擎）；服务端据此选温和档/强化档指令与语速 */
   intensity?: number;
   /**
@@ -25,7 +27,7 @@ export interface SpeakOptions {
 let speaking = false;
 let pendingQueue: Array<{
   text: string; emotion?: VoiceEmotion; provider?: string;
-  intensity?: number; voiceState?: VoiceStateSnapshot; voiceStateBefore?: VoiceStateSnapshot;
+  voiceId?: string; intensity?: number; voiceState?: VoiceStateSnapshot; voiceStateBefore?: VoiceStateSnapshot;
 }> = [];
 let audioEl: HTMLAudioElement | null = null;
 
@@ -34,6 +36,7 @@ async function speakViaServer(
   text: string,
   emotion?: VoiceEmotion,
   provider?: string,
+  voiceId?: string,
   intensity?: number,
   voiceState?: VoiceStateSnapshot,
   voiceStateBefore?: VoiceStateSnapshot,
@@ -44,7 +47,7 @@ async function speakViaServer(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
-        voice: 'zh-CN-XiaoxiaoNeural',
+        voice: voiceId || 'zh-CN-XiaoxiaoNeural',
         emotion: emotion ?? 'neutral',
         intensity,
         voiceState,
@@ -83,10 +86,11 @@ async function speakViaServer(
 }
 
 // ── 浏览器 TTS（fallback，用 tone 折算 rate/pitch/volume）──
-function speakViaBrowser(text: string, emotion?: VoiceEmotion): void {
+function speakViaBrowser(text: string, emotion?: VoiceEmotion, voiceId?: string): void {
   const utterance = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices();
-  const voice = voices.find(v => v.lang.startsWith('zh') && /Xiao|Yun|女/.test(v.name))
+  const voice = voices.find(v => voiceId && (v.voiceURI === voiceId || v.name === voiceId))
+    || voices.find(v => v.lang.startsWith('zh') && /Xiao|Yun|女/i.test(v.name))
     || voices.find(v => v.lang.startsWith('zh'))
     || null;
   if (voice) utterance.voice = voice;
@@ -105,7 +109,7 @@ function speakViaBrowser(text: string, emotion?: VoiceEmotion): void {
 function playNext(): void {
   if (pendingQueue.length > 0) {
     const next = pendingQueue.shift()!;
-    void doSpeak(next.text, next.emotion, next.provider, next.intensity, next.voiceState, next.voiceStateBefore);
+    void doSpeak(next.text, next.emotion, next.provider, next.voiceId, next.intensity, next.voiceState, next.voiceStateBefore);
   }
 }
 
@@ -122,6 +126,7 @@ async function doSpeak(
   text: string,
   emotion?: VoiceEmotion,
   provider?: string,
+  voiceId?: string,
   intensity?: number,
   voiceState?: VoiceStateSnapshot,
   voiceStateBefore?: VoiceStateSnapshot,
@@ -131,14 +136,14 @@ async function doSpeak(
 
   // 显式选择浏览器语音 → 直接走本地合成，不请求服务端
   if (provider === 'browser') {
-    speakViaBrowser(text, emotion);
+    speakViaBrowser(text, emotion, voiceId);
     return;
   }
 
   // 服务端（cosyvoice 本地情感 / edge-tts）→ 失败回退浏览器
-  const ok = await speakViaServer(text, emotion, provider, intensity, voiceState, voiceStateBefore);
+  const ok = await speakViaServer(text, emotion, provider, voiceId, intensity, voiceState, voiceStateBefore);
   if (!ok) {
-    speakViaBrowser(text, emotion);
+    speakViaBrowser(text, emotion, voiceId);
   }
 }
 
@@ -156,13 +161,14 @@ export function speakText(
   if (speaking) {
     pendingQueue.push({
       text: clean, emotion, provider: opts?.provider,
+      voiceId: opts?.voiceId,
       intensity: opts?.intensity, voiceState: opts?.voiceState,
       voiceStateBefore: opts?.voiceStateBefore,
     });
     return;
   }
 
-  void doSpeak(clean, emotion, opts?.provider, opts?.intensity, opts?.voiceState, opts?.voiceStateBefore);
+  void doSpeak(clean, emotion, opts?.provider, opts?.voiceId, opts?.intensity, opts?.voiceState, opts?.voiceStateBefore);
 }
 
 export function stopSpeaking(): void {

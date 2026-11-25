@@ -1,15 +1,7 @@
-// 本地规则 NLU 的强度刻度（只读探针，不写任何状态）
-//
-// 用途：`DISABLE_LLM_NLU=true`（省 API）时，用户情绪强度完全由本地词典给出。
-// 本脚本把这把尺子对常见句子的读数打出来 —— 它是「本地规则 NLU 词表偏窄」这条技术债的**证据**，
-// 也是 v1.27 那个坑的前置条件：
-//
-//   实测（2026-09）：这类明确负面的话本地词典只给 **0.04~0.10**，
-//   而 `dialogueStrategy` 的 `HIGH_EMOTION_THRESHOLD = 0.7` 是给 **LLM NLU** 定的量级
-//   ⇒ 一旦关掉 LLM NLU，"他情绪强烈"这条分支**永远进不去**（`empathize`/`accompany` 全不可达）。
-//   也就是说：省 API 与"她能不能看出他情绪强烈"目前是互斥的。
-//
-// 用法: node node_modules/tsx/dist/cli.mjs scripts/probe-local-nlu.ts
+// 本地 NLU 强度刻度探针（只读、不写状态、不调用 API）。
+// 它检查普通/强烈/混合表达是否与 dialogueStrategy 的 0.7 强情绪门限大致对齐。
+// 转述场景不得因原话中的强烈词语而被提升为当前用户的强烈情绪。
+// 用法: npx tsx scripts/probe-local-nlu.ts
 
 import { analyzeUserEmotionLocally } from '../server/services/emotionAnalyzer.js';
 

@@ -138,6 +138,23 @@ export function createEpisodicMemoryStore(): EpisodicMemoryStore {
   };
 }
 
+/** Query embeddings only help recall when at least one active episode has a vector. */
+export function hasActiveEpisodicEmbeddings(store: EpisodicMemoryStore): boolean {
+  return store.episodes.some(ep => !ep.archived && Array.isArray(ep.embedding) && ep.embedding.length > 0);
+}
+
+/** Advance per-turn episode baselines without creating or persisting an episode. */
+export function advanceEpisodeTrackingState(
+  store: EpisodicMemoryStore,
+  emotionState: EmotionState,
+): void {
+  const dominant = getDominantEmotion(emotionState.emotions);
+  store.roundCounter++;
+  store.prevValence = emotionState.taiji.valence;
+  store.prevArousal = emotionState.taiji.arousal;
+  store.prevDominantEmotion = dominant.name;
+}
+
 /**
  * v1.1 自动检测锚点事件 — 从用户消息和情绪状态推断关系转折点。
  * 返回值用作 tryFormEpisode 的 selfPatternTriggered 和 anchorWeightBonus。
@@ -194,13 +211,10 @@ export function tryFormEpisode(
   const valenceDelta = taiji.valence - store.prevValence;
   const arousalDelta = Math.abs(taiji.arousal - store.prevArousal);
 
-  // 更新 tracking state
-  store.roundCounter++;
   const prevValence = store.prevValence;
   const prevDominant = store.prevDominantEmotion;
-  store.prevValence = taiji.valence;
-  store.prevArousal = taiji.arousal;
-  store.prevDominantEmotion = dominant.name;
+  // 更新 tracking state，即使本轮最终没有形成记忆也推进基线。
+  advanceEpisodeTrackingState(store, emotionState);
 
   // 判断是否形成记忆 (v2.1: 降低阈值，捕捉中等重要性事件)
   let shouldForm = false;

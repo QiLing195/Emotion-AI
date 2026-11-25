@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { resolveAppResource } from '../appPaths.js';
 
 export const OCR_TIMEOUT_MS = 25_000;
 export const OCR_MAX_CHARS = 4000;
@@ -14,7 +15,7 @@ export const OCR_MAX_CHARS = 4000;
 export async function runOcr(imagePath: string): Promise<{ ok: boolean; text?: string; error?: string; ms: number }> {
   const t0 = Date.now();
   if (!existsSync(imagePath)) return { ok: false, error: 'image_not_found', ms: Date.now() - t0 };
-  const script = join('scripts', 'ocr-image.ps1');
+  const script = resolveAppResource(join('scripts', 'ocr-image.ps1'));
   if (!existsSync(script)) return { ok: false, error: 'ocr_script_missing', ms: Date.now() - t0 };
   const outTxt = join(tmpdir(), `ocr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`);
   try {

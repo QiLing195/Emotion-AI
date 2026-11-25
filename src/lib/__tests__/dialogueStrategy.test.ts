@@ -6,12 +6,40 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
   selectStrategy, resolveExploreTopics, herNegativeActivation, paramsForStrategy,
-  strategyTuning, DEFAULT_STRATEGY_TUNING, STRATEGY_TUNING_BOUNDS, type StrategyTuning,
+  strategyTuning, DEFAULT_STRATEGY_TUNING, STRATEGY_TUNING_BOUNDS, STRATEGY_PROMPT_SNIPPETS, type StrategyTuning,
 } from '../dialogueStrategy';
 import type { StrategyContext, StrategyType } from '../dialogueStrategy';
 import type { EmotionState, EmotionEvent, UserEmotionAnalysis } from '../emotionEngine';
 import type { ConflictState } from '../conflictManager';
 import type { PatternCandidate } from '../../curiosity/patterns';
+
+describe('中性策略的失望回应保持证据边界', () => {
+  it('未说明失望缘由时不得补写期待落空或失败经过', () => {
+    const disappointment = STRATEGY_PROMPT_SNIPPETS.neutral.match(/### 失望 — 承认落差，别急着翻篇[\s\S]*?(?=\n### |\n## 禁止事项)/u)?.[0] ?? '';
+    expect(disappointment).toContain('只说"失望"时，不推断ta期待了很久、被拒绝/失败');
+    expect(disappointment).toContain('只有ta明确说出期待与结果不符时，才回应"期待落空"');
+  });
+
+  it('孤独原因未知时不应断言没有原因；表白不自动授权角色互惠情绪', () => {
+    const neutral = STRATEGY_PROMPT_SNIPPETS.neutral;
+    const loneliness = neutral.match(/### 孤独 — 陪着，别启蒙[\s\S]*?(?=\n### |\n## 禁止事项)/u)?.[0] ?? '';
+    const affection = neutral.match(/### 爱意 — 接住柔软，别点评[\s\S]*?(?=\n### |\n### 孤独)/u)?.[0] ?? '';
+    expect(loneliness).toContain('不要断言"没什么理由"、"没有原因"');
+    expect(loneliness).toContain('只复述这个原因，不推演后果');
+    expect(affection).toContain('用户对你表达喜欢，不等于你有互惠爱意');
+    expect(affection).toContain('只有本轮 ExpressionPlan 明确允许且情绪匹配时');
+  });
+});
+
+describe('共情提示与角色自我情绪边界', () => {
+  it('把用户情绪共情与角色自己的情绪表达分开，并区分陪伴和求建议', () => {
+    const prompt = STRATEGY_PROMPT_SNIPPETS.empathize;
+    expect(prompt).toContain('共情不等于冒领角色自己的情绪');
+    expect(prompt).toContain('ExpressionPlan');
+    expect(prompt).toContain('没有明确求办法时，先接住感受');
+    expect(prompt).toContain('明确求办法时，先简短承接');
+  });
+});
 
 // ── 测试辅助：构造默认 EmotionState ──
 function makeEmotionState(overrides: Partial<EmotionState> = {}): EmotionState {

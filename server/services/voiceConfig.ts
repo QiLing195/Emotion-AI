@@ -2,10 +2,12 @@
  * 语音唤醒配置（v1.90）：唤醒词可以不改文件、直接在桌宠里改。
  * 读写 scripts/voice-config.json；保存后由 voiceWatch 重启识别进程生效。
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { resolveAppResource, resolveMemoryPath } from '../appPaths.js';
 
-export const VOICE_CONFIG_PATH = join('scripts', 'voice-config.json');
+export const VOICE_CONFIG_PATH = resolveMemoryPath('voice-config.json');
+const LEGACY_VOICE_CONFIG_PATH = resolveAppResource(join('scripts', 'voice-config.json'));
 export const MAX_WAKE_WORDS = 6;
 export const MAX_WAKE_WORD_LEN = 12;
 export const MIN_WAKE_WORDS = 1;
@@ -21,9 +23,10 @@ export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 };
 
 export function loadVoiceConfig(): VoiceConfig {
-  if (!existsSync(VOICE_CONFIG_PATH)) return { ...DEFAULT_VOICE_CONFIG, wakeWords: [...DEFAULT_VOICE_CONFIG.wakeWords] };
+  const configPath = existsSync(VOICE_CONFIG_PATH) ? VOICE_CONFIG_PATH : LEGACY_VOICE_CONFIG_PATH;
+  if (!existsSync(configPath)) return { ...DEFAULT_VOICE_CONFIG, wakeWords: [...DEFAULT_VOICE_CONFIG.wakeWords] };
   try {
-    const raw = JSON.parse(readFileSync(VOICE_CONFIG_PATH, 'utf8')) as Partial<VoiceConfig>;
+    const raw = JSON.parse(readFileSync(configPath, 'utf8')) as Partial<VoiceConfig>;
     const words = Array.isArray(raw.wakeWords)
       ? raw.wakeWords.map(w => String(w).trim()).filter(w => w.length > 0 && w.length <= MAX_WAKE_WORD_LEN)
       : [];
@@ -64,7 +67,7 @@ export function saveVoiceConfig(input: { wakeWords?: unknown; wakeMinConfidence?
   const config: VoiceConfig = { wakeWords: words, wakeMinConfidence: Math.round(conf * 100) / 100 };
   try {
     const dir = dirname(VOICE_CONFIG_PATH);
-    if (dir && !existsSync(dir)) writeFileSync(dir, '', 'utf8');   // 理论上 scripts/ 一定存在
+    if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(VOICE_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf8');
     return { ok: true, config };
   } catch (e) {

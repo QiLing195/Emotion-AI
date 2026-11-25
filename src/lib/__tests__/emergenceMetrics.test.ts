@@ -13,6 +13,8 @@ import {
   buildEmergenceReport,
   autocorrThresholdFor,
   sumEmotionDelta,
+  snapshotEmotionSource,
+  recordEmotionSourceChange,
   STUCK_AUTOCORR_THRESHOLD,
   STUCK_VOLATILITY_THRESHOLD,
   STUCK_FLAT_VOLATILITY,
@@ -86,6 +88,40 @@ describe('sumEmotionDelta — 九情向量 L1 变化', () => {
   it('无变化 → 0；空对象安全', () => {
     expect(sumEmotionDelta({ sad: 0.3 }, { sad: 0.3 })).toBe(0);
     expect(sumEmotionDelta({}, {})).toBe(0);
+  });
+});
+
+describe('recordEmotionSourceChange — 统一记录一次情绪状态变换', () => {
+  it('把效价、唤醒和九情向量的绝对变化都记到同一来源', () => {
+    const before = {
+      taiji: { valence: 0.1, arousal: 0.2, expectation: 0 },
+      emotions: { sad: 0.2, joy: 0.1 },
+    };
+    const after = {
+      taiji: { valence: 0.3, arousal: 0.1, expectation: 0 },
+      emotions: { sad: 0.3, joy: 0.2 },
+    };
+
+    const next = recordEmotionSourceChange(
+      emptyEmergenceStats(),
+      'contagion',
+      snapshotEmotionSource(before),
+      snapshotEmotionSource(after),
+    );
+
+    // |0.2| + |-0.1| + (|0.1| + |0.1|) = 0.5
+    expect(next.contagion).toBeCloseTo(0.5, 10);
+    expect(next.external).toBe(0);
+  });
+
+  it('快照独立于后续状态变更', () => {
+    const state = {
+      taiji: { valence: 0, arousal: 0, expectation: 0 },
+      emotions: { sad: 0.2 },
+    };
+    const snapshot = snapshotEmotionSource(state);
+    state.emotions.sad = 0.8;
+    expect(snapshot.emotions.sad).toBe(0.2);
   });
 });
 

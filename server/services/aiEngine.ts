@@ -1,7 +1,7 @@
 import { INITIAL_EMOTION_STATE } from '../../src/lib/emotionEngine.js';
 import type { EmotionState } from '../../src/lib/emotionEngine.js';
 import { generateAIResponse, generateAIChatResponse } from '../../src/lib/aiProvider.js';
-import type { AISettings } from '../../src/lib/aiProvider.js';
+import type { AISettings, GenerationCallOptions } from '../../src/lib/aiProvider.js';
 import type { GenerationBudget } from '../../src/lib/generationBudget.js';
 import { GenerationBudgetExceededError } from '../../src/lib/generationBudget.js';
 import { firebaseService } from './firebase.js';
@@ -20,6 +20,8 @@ export interface ClientContext {
   recentMessages?: { role: string; content: string; imageUrl?: string }[];
   /** v2.16：整轮生成预算（agent/非 agent/重写共享同一个 deadline） */
   generationBudget?: GenerationBudget;
+  /** 本地调用统计用途；不包含任何输入文本。 */
+  metricStage?: GenerationCallOptions['metricStage'];
 }
 
 export class AIRequestError extends Error {
@@ -74,7 +76,10 @@ export class DefaultAIEngine {
               false,
               aiSettings.temperature ?? 0.7,
               undefined,
-              clientContext.generationBudget ? { budget: clientContext.generationBudget } : {},
+              {
+                ...(clientContext.generationBudget ? { budget: clientContext.generationBudget } : {}),
+                metricStage: clientContext.metricStage ?? 'chat_response',
+              },
             ),
             () => ({ text: '嗯，我在。' }),
           );
@@ -87,7 +92,10 @@ export class DefaultAIEngine {
               userText,
               false,
               aiSettings.temperature ?? 0.7,
-              clientContext.generationBudget ? { budget: clientContext.generationBudget } : {},
+              {
+                ...(clientContext.generationBudget ? { budget: clientContext.generationBudget } : {}),
+                metricStage: clientContext.metricStage ?? 'chat_response',
+              },
             ),
             () => '嗯，我在。',
           );

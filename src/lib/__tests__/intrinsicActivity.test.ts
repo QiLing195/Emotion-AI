@@ -43,6 +43,17 @@ describe('v2.06 内在活动候选接口', () => {
     expect(second.rejected[0].reason).toBe('duplicate');
   });
 
+  it('候选去重会在 expiresAt 到期后重新开放', () => {
+    const seen = new IntrinsicDedup();
+    const first = validateIntrinsicCandidates([cand({ expiresAt: NOW + 5_000 })], { now: NOW, seen });
+    const afterExpiry = validateIntrinsicCandidates(
+      [cand({ expiresAt: NOW + 65_000 })],
+      { now: NOW + 5_000, seen },
+    );
+    expect(first.accepted).toHaveLength(1);
+    expect(afterExpiry.accepted).toHaveLength(1);
+  });
+
   it('低置信度被拒绝', () => {
     const seen = new IntrinsicDedup();
     const r = validateIntrinsicCandidates([cand({ confidence: 0.1 })], { now: NOW, seen });

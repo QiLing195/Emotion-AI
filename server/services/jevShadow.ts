@@ -18,6 +18,7 @@
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { resolveMemoryPath } from '../appPaths.js';
 
 export type JevAction = 'share' | 'wait' | 'ask';
 export type JevConflict = 'her_vs_his' | 'none';
@@ -32,7 +33,7 @@ export const JEV_INNER_LINE_MAX = 20;
 /** 见 v0.2 的标定：实测 p90 1146ms / max 1714ms ⇒ 2000ms 留尾部余量（装置参数，非验收判据） */
 export const JEV_DEFAULT_TIMEOUT_MS = 2000;
 export const JEV_MAX_CANDIDATES = 6;
-export const JEV_DEFAULT_LEDGER = 'memories/jev_shadow.jsonl';
+export const JEV_DEFAULT_LEDGER = resolveMemoryPath('jev_shadow.jsonl');
 
 const REASON_CODE_RE = /^[A-Z][A-Z0-9_]{2,31}$/;
 const INNER_LINE_FORBIDDEN_RE = /[【】「」“”"]/;

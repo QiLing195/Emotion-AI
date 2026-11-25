@@ -66,7 +66,7 @@ export interface Preset extends Persona {
 
 export interface TTSSettings {
   enabled: boolean;
-  provider: 'gemini' | 'openai' | 'elevenlabs' | 'rvc_custom' | 'browser' | 'voxcpm' | 'cosyvoice';
+  provider: 'gemini' | 'openai' | 'elevenlabs' | 'rvc_custom' | 'browser' | 'voxcpm' | 'cosyvoice' | 'edge_tts';
   voiceId: string;
   apiUrl?: string;
   apiKey?: string;
@@ -443,6 +443,10 @@ interface AIBrainState {
 
   // Chat
   chatMessages: ChatMessage[];
+  characterPresence: 'idle' | 'listening' | 'thinking' | 'speaking';
+  setCharacterPresence: (presence: 'idle' | 'listening' | 'thinking' | 'speaking') => void;
+  voiceSessionActive: boolean;
+  setVoiceSessionActive: (active: boolean) => void;
   chatSummary: string;
   userStatus: 'active' | 'busy' | 'away';
   setUserStatus: (status: 'active' | 'busy' | 'away') => void;
@@ -926,6 +930,10 @@ export const useAIBrainStore = create<AIBrainState>()(
 
     // Chat
     chatMessages: INITIAL_CHAT_MESSAGES,
+    characterPresence: 'idle',
+    setCharacterPresence: (characterPresence) => set({ characterPresence }),
+    voiceSessionActive: false,
+    setVoiceSessionActive: (voiceSessionActive) => set({ voiceSessionActive }),
     chatSummary: '',
     userStatus: 'active',
     setUserStatus: (status) => set({ userStatus: status }),

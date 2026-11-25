@@ -381,8 +381,10 @@ export class MemoryGraph {
     }
 
     // ── Phase 2: BFS 传播 ──
-    while (queue.length > 0) {
-      const { nodeId, depth } = queue.shift()!;
+    // 用游标推进队列，避免 Array.shift() 每次都搬移剩余元素。
+    // 图谱有界，但节点接近上限、且多条路径产生较长队列时会减少无谓的 O(n) 搬移。
+    for (let queueIndex = 0; queueIndex < queue.length; queueIndex++) {
+      const { nodeId, depth } = queue[queueIndex];
       if (depth >= cfg.maxDepth) continue;
 
       const currentActivation = visited.get(nodeId)?.activation ?? 0;

@@ -6,8 +6,24 @@ const path = require('node:path');
 const http = require('node:http');
 
 const APP_URL = process.env.PET_APP_URL || 'http://127.0.0.1:3000';
+const APP_ROOT = path.resolve(__dirname, '..');
+const portableData = process.argv.includes('--portable-data');
+const dataRoot = process.env.MEMORIES_DIR || (portableData
+  ? path.join(APP_ROOT, 'data')
+  : path.join(APP_ROOT, 'memories'));
 const electronBin = require('electron');           // npm 包在 node 下 require 会返回二进制路径
-const mainEntry = path.join(__dirname, '..', 'desktop', 'main.cjs');
+const mainEntry = path.join(APP_ROOT, 'desktop', 'main.cjs');
+const compiledServer = path.join(APP_ROOT, 'dist', 'server', 'index.js');
+const serverEntry = [
+  'node_modules/tsx/dist/cli.mjs',
+  fs.existsSync(compiledServer) ? compiledServer : 'server/index.ts',
+];
+const appEnv = {
+  ...process.env,
+  APP_ROOT,
+  MEMORIES_DIR: dataRoot,
+  WEB_DIST_DIR: path.join(APP_ROOT, 'dist'),
+};
 
 function probe(url) {
   return new Promise((resolve) => {
@@ -21,10 +37,10 @@ async function ensureServer() {
   if (await probe(`${APP_URL}/health`)) return null;
   console.log('[pet] 后端没在跑，先启动 server ...');
   const serverLog = fs.openSync(path.join(process.env.TEMP || '.', 'ai-girlfriend-server.log'), 'a');
-  const child = spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'server/index.ts'], {
-    cwd: path.join(__dirname, '..'),
+  const child = spawn(process.execPath, serverEntry, {
+    cwd: APP_ROOT,
     stdio: ['ignore', serverLog, serverLog],
-    env: { ...process.env },
+    env: appEnv,
   });
   for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 1000));
@@ -36,9 +52,9 @@ async function ensureServer() {
 
 (async () => {
   const serverChild = await ensureServer();
-  const env = { ...process.env };
+  const env = { ...appEnv };
   delete env.ELECTRON_RUN_AS_NODE;
-  const pet = spawn(electronBin, [mainEntry], { cwd: path.join(__dirname, '..'), stdio: 'inherit', env });
+  const pet = spawn(electronBin, [mainEntry], { cwd: APP_ROOT, stdio: 'inherit', env });
   pet.on('close', (code) => {
     console.log('[pet] Electron 退出 code=' + code);
     if (serverChild && !serverChild.killed) { try { serverChild.kill(); } catch {} }

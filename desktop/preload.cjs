@@ -22,4 +22,10 @@ contextBridge.exposeInMainWorld('petWindow', {
   openVoiceSettings: () => ipcRenderer.send('pet:open-voice-settings'),
   /** 右键菜单（打开聊天 / 唤醒词设置 / 退出） */
   showMenu: () => ipcRenderer.send('pet:show-menu'),
+  setMotionMode: (mode) => ipcRenderer.send('pet:set-motion-mode', mode),
+  onMotionModeSelected: (callback) => {
+    const listener = (_event, mode) => callback(mode);
+    ipcRenderer.on('pet:motion-mode-selected', listener);
+    return () => ipcRenderer.removeListener('pet:motion-mode-selected', listener);
+  },
 });

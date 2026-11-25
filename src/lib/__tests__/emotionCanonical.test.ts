@@ -55,7 +55,15 @@ describe('canonicalEmotion — 英文与规范键', () => {
 
 describe('canonicalEmotion — 中文标签（LLM 实际输出）', () => {
   it('实测返回的「疲惫、委屈」→ sad', () => {
+    // 由「委屈」决定 sad；身体疲惫本身不再作为 sad 别名。
     expect(canonicalEmotion('疲惫、委屈')).toBe('sad');
+  });
+
+  it('身体疲惫不再被规范化成悲伤', () => {
+    for (const label of ['tired', 'exhausted', 'drained', '疲惫', '累了', '累']) {
+      expect(canonicalEmotion(label), label).toBe('neutral');
+    }
+    expect(canonicalEmotion('心累')).toBe('sad');
   });
 
   it('实测返回的「gratitude and warmth」→ gratitude（含 warmth 仍优先 gratitude）', () => {
@@ -100,6 +108,7 @@ describe('canonicalEmotion — 边界', () => {
 describe('canonicalizeWithLabel', () => {
   it('保留可读标签：正文与键不同时给出 label', () => {
     expect(canonicalizeWithLabel('疲惫、委屈')).toEqual({ emotion: 'sad', label: '疲惫、委屈' });
+    expect(canonicalizeWithLabel('疲惫')).toEqual({ emotion: 'neutral', label: '疲惫' });
     expect(canonicalizeWithLabel('sad')).toEqual({ emotion: 'sad', label: undefined });
     expect(canonicalizeWithLabel('')).toEqual({ emotion: 'neutral', label: undefined });
   });
@@ -144,6 +153,12 @@ describe('回归：LLM 中文标签不再让通路静默失效', () => {
     const out = applyEmotionalContagion(s, '疲惫、委屈', 0.8, 60);
     expect(out.emotions.sad).toBeGreaterThan(s.emotions.sad);
     expect(out).not.toBe(s); // 不再是原对象直返
+  });
+
+  it('传染：单独的身体疲惫不应让她 sad 上升', () => {
+    const s = baseState();
+    expect(applyEmotionalContagion(s, '疲惫', 0.8, 60)).toBe(s);
+    expect(applyEmotionalContagion(s, 'tired', 0.8, 60)).toBe(s);
   });
 
   it('传染：规范键行为不变', () => {

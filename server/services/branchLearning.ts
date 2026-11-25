@@ -18,8 +18,9 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 
-export const BRANCH_LEDGER_DEFAULT = 'memories/branch_learning.json';
+export const BRANCH_LEDGER_DEFAULT = resolveMemoryPath('branch_learning.json');
 export const BRANCH_MIN_SAMPLES = 3;
 export const BRANCH_WEIGHT_MIN = 0.5;
 export const BRANCH_WEIGHT_MAX = 1.5;

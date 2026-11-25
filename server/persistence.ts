@@ -3,7 +3,24 @@
 
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'url';
+import { resolveMemoriesDir } from './appPaths.js';
+
+const require = createRequire(import.meta.url);
+const properLockfile = require('proper-lockfile') as {
+  lock: (
+    file: string,
+    options: {
+      realpath: false;
+      stale: number;
+      update: number;
+      retries: { retries: number; minTimeout: number; maxTimeout: number; factor: number };
+      onCompromised: (error: Error) => void;
+    },
+  ) => Promise<() => Promise<void>>;
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,7 +51,7 @@ import {
 
 // ── 文件路径 ──
 // v2.00：测试/多实例隔离——可用 MEMORIES_DIR 覆盖数据目录（默认仓库 memories/）
-const MEMORIES_DIR = process.env.MEMORIES_DIR ? path.resolve(process.env.MEMORIES_DIR) : path.join(__dirname, '../memories');
+const MEMORIES_DIR = resolveMemoriesDir();
 const EPISODIC_MEMORY_FILE = path.join(MEMORIES_DIR, 'episodic_memory.json');
 const VALUE_SYSTEM_FILE = path.join(MEMORIES_DIR, 'value_system.json');
 const CURIOSITY_STATE_FILE = path.join(MEMORIES_DIR, 'curiosity_state.json');
@@ -42,6 +59,8 @@ const SEMANTIC_MEMORY_FILE = path.join(MEMORIES_DIR, 'semantic_memory.json');
 const SEMANTIC_EMBEDDINGS_FILE = path.join(MEMORIES_DIR, 'semantic_embeddings.json');
 const MEMORY_GRAPH_FILE = path.join(MEMORIES_DIR, 'memory_graph.json');
 const EMOTION_STATE_FILE = path.join(MEMORIES_DIR, 'emotion_state.json');
+/** 双环新写入路径：EmotionState 与去重事件账本在同一份快照中提交。 */
+const DUAL_LOOP_RUNTIME_FILE = path.join(MEMORIES_DIR, 'emotion_runtime_v1.json');
 const RELATIONSHIP_STATE_FILE = path.join(MEMORIES_DIR, 'relationship_state_v2.json');
 const MEMORY_LEDGER_FILE = path.join(MEMORIES_DIR, 'memory_ledger.json');
 /** v1.9 会话状态：上一轮互动时间（孤独/重逢通路依赖它，重启后仍有效） */
@@ -434,6 +453,222 @@ function queueAtomicJsonWrite(file: string, value: unknown): Promise<void> {
 
 export function saveEmotionStateAsync(state: EmotionState): Promise<void> {
   return queueAtomicJsonWrite(EMOTION_STATE_FILE, state);
+}
+
+export type DualLoopCommitResult =
+  | { status: 'applied' | 'duplicate'; state: EmotionState }
+  | { status: 'rejected'; reason: string }
+  | { status: 'update_error' | 'persistence_error'; error: string };
+
+export interface DualLoopEmotionEventCommit {
+  eventId: string;
+  subject: 'user' | 'character';
+  appraisalVersion: string;
+  /** Required only when creating the first dual-loop runtime snapshot. */
+  initialState?: EmotionState;
+  /** Must be pure; it runs inside the per-process transaction queue. */
+  update: (current: EmotionState) => EmotionState;
+  /** Optional privacy-minimized diagnostic record for offline/shadow replay; never raw user text. */
+  shadowTrace?: DualLoopShadowTrace;
+}
+
+export interface DualLoopShadowTrace {
+  source: 'offline-replay';
+  caseId: string;
+  eventSource: 'user_affect_bridge' | 'character_internal_event';
+  demoLocalStateChanged: boolean;
+  userSubject: 'user' | 'third_party' | 'multiple' | 'unknown';
+  affectReportKind: string;
+  emotionHypothesis: string[];
+  inferenceUncertainty: string;
+  userCorrectionApplied: boolean;
+  appraisalDisposition: string;
+  appraisalReason: string;
+  proposedStateDelta: number;
+  roleStateWriteApplied: false;
+}
+
+interface DualLoopRuntimeSnapshotV1 {
+  schemaVersion: 1;
+  state: EmotionState;
+  processedEvents: Array<{
+    key: string;
+    eventId: string;
+    subject: 'user' | 'character';
+    appraisalVersion: string;
+    shadowTrace?: DualLoopShadowTrace;
+  }>;
+}
+
+const dualLoopWriteQueues = new Map<string, Promise<void>>();
+
+async function cleanupOrphanedDualLoopTemps(file: string): Promise<void> {
+  const escapedBaseName = path.basename(file).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const temporaryName = new RegExp(`^${escapedBaseName}\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'i');
+  const entries = await fs.promises.readdir(path.dirname(file), { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !temporaryName.test(entry.name)) continue;
+    await fs.promises.unlink(path.join(path.dirname(file), entry.name));
+  }
+}
+
+function isPersistableEmotionState(value: unknown): value is EmotionState {
+  const state = value as EmotionState | null;
+  return Boolean(state?.taiji && state?.emotions && state?.yinyang && state?.evolution);
+}
+
+const SHADOW_REPORT_KINDS = new Set(['explicit_self_report', 'quoted_or_third_party', 'inferred', 'mixed', 'unknown']);
+const SHADOW_EMOTIONS = new Set(['joy', 'sad', 'anger', 'fear', 'love', 'calm', 'disgust', 'surprise', 'unknown']);
+const SHADOW_UNCERTAINTIES = new Set(['low', 'moderate', 'high', 'unknown']);
+const SHADOW_DISPOSITIONS = new Set(['care_response_candidate', 'ambiguous_affect_context', 'no_reading']);
+const SHADOW_REASONS = new Set([
+  'understanding_not_run', 'user_correction_or_no_affirmed_affect', 'user_correction_affect_retained_shadow_only',
+  'user_correction_removed_affect', 'user_declined_affect_discussion', 'multiple_or_mixed_affect_sources',
+  'cause_evidence_missing_or_unbound', 'not_explicit_user_self_report',
+  'uncertainty_not_low', 'evidence_not_bound_to_current_message', 'role_constitution_unconfirmed',
+  'no_current_concern', 'no_evidence_match_to_current_concern',
+  'explicit_user_affect_and_role_concern_match', 'no_appraisal',
+]);
+
+function isValidDualLoopShadowTrace(value: unknown): value is DualLoopShadowTrace {
+  const trace = value as Partial<DualLoopShadowTrace> | null;
+  return Boolean(trace
+    && trace.source === 'offline-replay'
+    && typeof trace.caseId === 'string' && /^[a-z0-9-]{1,80}$/.test(trace.caseId)
+    && ['user_affect_bridge', 'character_internal_event'].includes(trace.eventSource ?? '')
+    && typeof trace.demoLocalStateChanged === 'boolean'
+    && ['user', 'third_party', 'multiple', 'unknown'].includes(trace.userSubject ?? '')
+    && SHADOW_REPORT_KINDS.has(trace.affectReportKind ?? '')
+    && Array.isArray(trace.emotionHypothesis) && trace.emotionHypothesis.length <= 8
+    && trace.emotionHypothesis.every(item => SHADOW_EMOTIONS.has(item))
+    && SHADOW_UNCERTAINTIES.has(trace.inferenceUncertainty ?? '')
+    && typeof trace.userCorrectionApplied === 'boolean'
+    && SHADOW_DISPOSITIONS.has(trace.appraisalDisposition ?? '')
+    && SHADOW_REASONS.has(trace.appraisalReason ?? '')
+    && trace.proposedStateDelta === 0
+    && trace.roleStateWriteApplied === false);
+}
+
+/**
+ * Apply one dual-loop state update and its idempotency record in one atomic JSON replacement.
+ * This is additive to the legacy emotion_state.json path and is not yet used by production turns.
+ * Uses an in-process queue plus an inter-process lock on the local data file. Multi-host/shared-network
+ * storage still requires verifying filesystem lock semantics or using a database transaction.
+ */
+export function commitDualLoopEmotionEventAsync(
+  input: DualLoopEmotionEventCommit,
+): Promise<DualLoopCommitResult> {
+  const eventId = String(input.eventId ?? '').trim();
+  const appraisalVersion = String(input.appraisalVersion ?? '').trim();
+  if (!eventId || !appraisalVersion || !['user', 'character'].includes(input.subject)) {
+    return Promise.resolve({ status: 'rejected', reason: 'eventId, subject, and appraisalVersion are required' });
+  }
+  if (input.shadowTrace !== undefined && !isValidDualLoopShadowTrace(input.shadowTrace)) {
+    return Promise.resolve({ status: 'rejected', reason: 'shadowTrace contains unsupported or non-minimized fields' });
+  }
+
+  const key = JSON.stringify([eventId, input.subject, appraisalVersion]);
+  const file = DUAL_LOOP_RUNTIME_FILE;
+  const previous = dualLoopWriteQueues.get(file) ?? Promise.resolve();
+  const operation = previous.catch(() => undefined).then(async (): Promise<DualLoopCommitResult> => {
+    const fileLock: { release: (() => Promise<void>) | null } = { release: null };
+    const result = await (async (): Promise<DualLoopCommitResult> => {
+      let temporaryFile: string | null = null;
+      try {
+        await fs.promises.mkdir(MEMORIES_DIR, { recursive: true });
+        let lockCompromisedError: Error | null = null;
+        fileLock.release = await properLockfile.lock(file, {
+          realpath: false,
+          stale: 30_000,
+          update: 10_000,
+          retries: { retries: 240, minTimeout: 10, maxTimeout: 50, factor: 1.2 },
+          onCompromised: error => { lockCompromisedError = error; },
+        });
+        const assertLockHeld = () => {
+          if (lockCompromisedError) throw lockCompromisedError;
+        };
+        // The exclusive file lock guarantees no active transaction owns a matching temp file.
+        // Remove only this transaction's exact naming pattern; a crash before rename leaves one behind.
+        await cleanupOrphanedDualLoopTemps(file);
+        assertLockHeld();
+
+        let snapshot: DualLoopRuntimeSnapshotV1;
+        if (fs.existsSync(file)) {
+          const parsed = JSON.parse(await fs.promises.readFile(file, 'utf-8')) as Partial<DualLoopRuntimeSnapshotV1>;
+          assertLockHeld();
+          if (parsed.schemaVersion !== 1 || !isPersistableEmotionState(parsed.state)
+            || !Array.isArray(parsed.processedEvents)
+            || parsed.processedEvents.some(event => !event || typeof event.key !== 'string'
+              || typeof event.eventId !== 'string'
+              || !['user', 'character'].includes(event.subject)
+              || typeof event.appraisalVersion !== 'string'
+              || (event.shadowTrace !== undefined && !isValidDualLoopShadowTrace(event.shadowTrace)))) {
+            return { status: 'persistence_error', error: 'dual-loop runtime snapshot has an invalid shape' };
+          }
+          snapshot = parsed as DualLoopRuntimeSnapshotV1;
+        } else {
+          if (!isPersistableEmotionState(input.initialState)) {
+            return { status: 'rejected', reason: 'initialState is required for the first event' };
+          }
+          snapshot = { schemaVersion: 1, state: structuredClone(input.initialState), processedEvents: [] };
+        }
+
+        if (snapshot.processedEvents.some(event => event.key === key)) {
+          return { status: 'duplicate', state: structuredClone(snapshot.state) };
+        }
+
+        let nextState: EmotionState;
+        try {
+          assertLockHeld();
+          nextState = input.update(structuredClone(snapshot.state));
+        } catch (error) {
+          return { status: 'update_error', error: error instanceof Error ? error.message : String(error) };
+        }
+        if (!isPersistableEmotionState(nextState)) {
+          return { status: 'update_error', error: 'update returned an invalid EmotionState' };
+        }
+
+        const nextSnapshot: DualLoopRuntimeSnapshotV1 = {
+          schemaVersion: 1,
+          state: nextState,
+          processedEvents: [...snapshot.processedEvents, {
+            key,
+            eventId,
+            subject: input.subject,
+            appraisalVersion,
+          ...(input.shadowTrace ? { shadowTrace: input.shadowTrace } : {}),
+          }],
+        };
+        temporaryFile = `${file}.${process.pid}.${randomUUID()}.tmp`;
+        await fs.promises.writeFile(temporaryFile, JSON.stringify(nextSnapshot, null, 2), 'utf-8');
+        assertLockHeld();
+        await fs.promises.rename(temporaryFile, file);
+        temporaryFile = null;
+        assertLockHeld();
+        return { status: 'applied', state: structuredClone(nextState) };
+      } catch (error) {
+        if (temporaryFile) await fs.promises.unlink(temporaryFile).catch(() => undefined);
+        return { status: 'persistence_error', error: error instanceof Error ? error.message : String(error) };
+      }
+    })();
+
+    if (fileLock.release) {
+      try {
+        await fileLock.release();
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        return { status: 'persistence_error', error: `transaction result=${result.status}; lock release failed: ${detail}` };
+      }
+    }
+    return result;
+  });
+  const queued = operation.then(() => undefined, () => undefined);
+  dualLoopWriteQueues.set(file, queued);
+  void queued.finally(() => {
+    if (dualLoopWriteQueues.get(file) === queued) dualLoopWriteQueues.delete(file);
+  });
+  return operation;
 }
 
 export function saveMemoryLedgerAsync(): Promise<void> {

@@ -57,12 +57,12 @@ const ALIASES: Record<string, CanonicalEmotion> = {
   cheerful: 'joy', delight: 'joy', 开心: 'joy', 高兴: 'joy', 快乐: 'joy', 喜悦: 'joy',
   愉快: 'joy', 兴奋: 'joy', 欢喜: 'joy', 雀跃: 'joy', 满足: 'joy', 幸福: 'joy', 惊喜: 'joy',
 
-  // ── sad（含疲惫/委屈：没有独立规范键，归入负向低落）──
+  // ── sad（疲惫属于身体状态，由 bodyState 单独表达；心累仍是情绪表达）──
   sad: 'sad', sadness: 'sad', unhappy: 'sad', down: 'sad', depressed: 'sad', heartbroken: 'sad',
-  lonely: 'sad', hurt: 'sad', disappointed: 'sad', tired: 'sad', exhausted: 'sad', drained: 'sad',
+  lonely: 'sad', hurt: 'sad', disappointed: 'sad',
   难过: 'sad', 伤心: 'sad', 悲伤: 'sad', 委屈: 'sad', 失落: 'sad', 沮丧: 'sad', 低落: 'sad',
-  心痛: 'sad', 心碎: 'sad', 孤独: 'sad', 寂寞: 'sad', 疲惫: 'sad', 心累: 'sad', 累了: 'sad',
-  累: 'sad', 失望: 'sad', 想哭: 'sad', 苦笑: 'sad',
+  心痛: 'sad', 心碎: 'sad', 孤独: 'sad', 寂寞: 'sad', 心累: 'sad',
+  失望: 'sad', 想哭: 'sad', 苦笑: 'sad',
 
   // ── anger ──
   anger: 'anger', angry: 'anger', mad: 'anger', furious: 'anger', annoyed: 'anger',

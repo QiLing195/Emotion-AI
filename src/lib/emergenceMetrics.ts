@@ -13,6 +13,8 @@
 //
 // 纯逻辑模块：无 io/React 依赖。
 
+import type { EmotionState } from './emotionTypes.js';
+
 export type EmotionSource = 'external' | 'contagion' | 'appraisal' | 'internal' | 'mood' | 'rumination' | 'shadow';
 
 /** 各情绪来源的累计绝对影响（|Δvalence| + |Δarousal| + Σ|Δ九情|） */
@@ -47,6 +49,21 @@ export interface EmergenceReport {
   stuck: boolean;
   /** 人类可读诊断（供日志/前端/调试） */
   note: string;
+}
+
+/** 单个情绪变换前/后的来源快照，用来按统一口径归因其真实状态变化。 */
+export interface EmotionSourceSnapshot {
+  valence: number;
+  arousal: number;
+  emotions: Record<string, number>;
+}
+
+export function snapshotEmotionSource(state: Pick<EmotionState, 'taiji' | 'emotions'>): EmotionSourceSnapshot {
+  return {
+    valence: state.taiji.valence,
+    arousal: state.taiji.arousal,
+    emotions: { ...state.emotions },
+  };
 }
 
 /** 自相关高于此值视为"情绪只会延续上一轮"（并会与窗口长度上限取较小者） */
@@ -143,6 +160,22 @@ export function sumEmotionDelta(
     if (Number.isFinite(a) && Number.isFinite(b)) total += Math.abs(b - a);
   }
   return total;
+}
+
+/** 将一次状态变换按统一口径记到对应来源，避免调用点漏算九情或太极变化。 */
+export function recordEmotionSourceChange(
+  stats: EmergenceStats,
+  source: EmotionSource,
+  before: EmotionSourceSnapshot,
+  after: EmotionSourceSnapshot,
+): EmergenceStats {
+  return accumulateSource(
+    stats,
+    source,
+    after.valence - before.valence,
+    after.arousal - before.arousal,
+    sumEmotionDelta(before.emotions, after.emotions),
+  );
 }
 
 /** 记一轮（turns 是轮数，不是来源数） */

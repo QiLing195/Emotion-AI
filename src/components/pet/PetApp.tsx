@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   PET_SPRITE_KEYS, PET_SPRITE_PATH, PET_SPRITE_FRAME_PATH, PET_MAX_FRAMES, PET_FRAME_FPS,
-  fallbackChain, type PetSpriteState,
+  emotionSpriteForMood, fallbackChain, type PetSpriteState,
 } from './petSprites';
+import { bindPetDragFinishEvents } from './petDragLifecycle';
 
 declare global {
+  type PetHitRect = { x: number; y: number; w: number; h: number; kind?: 'pet' | 'control' };
   interface Window {
     /** desktop/preload.cjs 注入；浏览器里直接跑 /pet 时不存在（要判空） */
     petWindow?: {
@@ -13,7 +15,9 @@ declare global {
     dragMove?: () => void;
     dragEnd?: () => void;
     setIgnoreMouse?: (ignore: boolean) => void;
-    setHitRects?: (rects: Array<{ x: number; y: number; w: number; h: number }>) => void;
+    setHitRects?: (rects: PetHitRect[]) => void;
+      setMotionMode?: (mode: MotionMode) => void;
+      onMotionModeSelected?: (callback: (mode: MotionMode) => void) => () => void;
       getPosition: () => Promise<{ x: number; y: number } | null>;
       openChat: () => void;
       showMenu: () => void;
@@ -27,7 +31,7 @@ declare global {
  * - 透明、**无按钮**：只留她本人（可拖动/可摸/双击挥手），交互靠**语音唤醒**；
  * - 语音：说唤醒词（默认「二丫」）→ 冒泡"嗯？" → 说一句话 → 走 /api/chat → 用**气泡**回话（不出声）；
  * - 桌面图标：她能读你桌面（只读），想打开某个东西时会弹授权卡；
- * - 右键 = 菜单（打开聊天 / 唤醒词设置 / 退出）；Ctrl+Shift+P 聊天；Ctrl+Shift+Q 退出。
+ * - 右键 = 菜单（打开聊天 / 唤醒词设置 / 动效速度 / 退出）；Ctrl+Shift+P 聊天；Ctrl+Shift+Q 退出。
  */
 interface PetState {
   ok: boolean;
@@ -50,8 +54,9 @@ interface VoiceEvent {
 }
 
 type Action =
-  | 'idle' | 'pat' | 'wave' | 'sleep' | 'happy' | 'walk' | 'stretch' | 'talk'
+  | 'idle' | 'pat' | 'wave' | 'sleep' | 'happy' | 'walk' | 'stretch' | 'talk' | 'landing'
   | 'peanut' | 'coffee' | 'reading' | 'sit' | 'shocked';
+type MotionMode = 'normal' | 'slow' | 'paused';
 
 const PET_CSS = `
   @keyframes anyaBreathe { 0%,100% { transform: scale(1,1) } 50% { transform: scale(1.02,0.985) } }
@@ -61,6 +66,8 @@ const PET_CSS = `
   @keyframes anyaSway { 0%,100% { transform: rotate(-2deg) } 50% { transform: rotate(2deg) } }
   @keyframes anyaShiver { 0%,100% { transform: translate(0,0) } 33% { transform: translate(1px,-1px) } 66% { transform: translate(-1px,1px) } }
   @keyframes petSway { 0%,100% { transform: rotate(-2.5deg) } 50% { transform: rotate(2.5deg) } }
+  @keyframes petDragFloat { 0%,100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-4px) rotate(1deg) } }
+  @keyframes petLanding { 0% { transform: translateY(-4px) scale(1,.99) } 55% { transform: translateY(2px) scale(1.02,.96) } 100% { transform: translateY(0) scale(1,1) } }
   @keyframes patPop { 0% { transform: scale(1,1) } 30% { transform: scale(1.1,0.9) } 60% { transform: scale(0.95,1.05) } 100% { transform: scale(1,1) } }
   @keyframes heartUp { 0% { opacity: 0; transform: translate(0,4px) scale(.6) } 25% { opacity: 1 } 100% { opacity: 0; transform: translate(var(--hx,6px),-46px) scale(1.1) } }
   @keyframes zzzUp { 0% { opacity: 0; transform: translate(0,6px) scale(.8) } 30% { opacity: .95 } 100% { opacity: 0; transform: translate(14px,-26px) scale(1.15) } }
@@ -85,9 +92,41 @@ const PET_CSS = `
   .anya-coffee, .anya-reading, .anya-sit, .anya-peanut, .anya-think { animation: anyaBreathe 4.4s ease-in-out infinite; transform-origin: 50% 92%; }
   .anya-blink   { animation: none; }
   .pet-stage { animation: anyaBreathe 3.6s ease-in-out infinite; }
+  .anya-state.dragging, .pet-stage.dragging { animation: petDragFloat .36s ease-in-out infinite; }
+  .anya-state.landing, .pet-stage.landing { animation: petLanding .42s ease-out both; }
   .pet-head-idle { animation: petSway 5s ease-in-out infinite; transform-origin: 50% 100%; }
   .bubble-in { animation: bubbleIn .18s ease-out; }
   .listen-ring { animation: listenRing 2.4s ease-in-out infinite; }
+  .heart-up { animation: heartUp 1.5s ease-out forwards; }
+  .zzz-up { animation: zzzUp 2.4s ease-out infinite; }
+  .sparkle-one, .sparkle-two { animation: sparkle 1.2s ease-out infinite; }
+  .sparkle-two { animation-delay: .3s; }
+  .pet-root.motion-paused *, .pet-root.motion-paused *::before, .pet-root.motion-paused *::after {
+    animation: none !important; transition: none !important; scroll-behavior: auto !important;
+  }
+  .pet-root.motion-slow .anya-idle { animation-duration: 7.6s !important; }
+  .pet-root.motion-slow .anya-happy { animation-duration: 1.8s !important; }
+  .pet-root.motion-slow .anya-wave { animation-duration: 2.2s !important; }
+  .pet-root.motion-slow .anya-pat { animation-duration: 1.1s !important; }
+  .pet-root.motion-slow .anya-walk { animation-duration: 5.2s !important; }
+  .pet-root.motion-slow .anya-sleepy { animation-duration: 10.4s !important; }
+  .pet-root.motion-slow .anya-angry { animation-duration: 1s !important; }
+  .pet-root.motion-slow .anya-shocked { animation-duration: .32s !important; }
+  .pet-root.motion-slow .anya-sad { animation-duration: 12s !important; }
+  .pet-root.motion-slow .anya-talk { animation-duration: 5.2s !important; }
+  .pet-root.motion-slow .anya-coffee, .pet-root.motion-slow .anya-reading,
+  .pet-root.motion-slow .anya-sit, .pet-root.motion-slow .anya-peanut, .pet-root.motion-slow .anya-think { animation-duration: 8.8s !important; }
+  .pet-root.motion-slow .pet-stage { animation-duration: 7.2s !important; }
+  .pet-root.motion-slow .pet-head-idle { animation-duration: 10s !important; }
+  .pet-root.motion-slow .bubble-in { animation-duration: .36s !important; }
+  .pet-root.motion-slow .listen-ring { animation-duration: 4.8s !important; }
+  .pet-root.motion-slow .heart-up { animation-duration: 3s !important; }
+  .pet-root.motion-slow .zzz-up { animation-duration: 4.8s !important; }
+  .pet-root.motion-slow .sparkle-one, .pet-root.motion-slow .sparkle-two { animation-duration: 2.4s !important; }
+  .pet-root.motion-slow .anya-state, .pet-root.motion-slow .anya-img { transition-duration: .32s !important; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
 `;
 
 function resolveSprite(state: PetSpriteState, available: Set<PetSpriteState>): PetSpriteState | null {
@@ -103,12 +142,20 @@ export default function PetApp() {
   const [err, setErr] = useState<string | null>(null);
   const [action, setAction] = useState<Action>('idle');
   const [blink, setBlink] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [motionMode, setMotionMode] = useState<MotionMode>(() => {
+    try {
+      const stored = window.localStorage.getItem('pet.motionMode');
+      return stored === 'slow' || stored === 'paused' ? stored : 'normal';
+    } catch { return 'normal'; }
+  });
   const [hearts, setHearts] = useState<number[]>([]);
   const [zzz, setZzz] = useState(false);
   const [available, setAvailable] = useState<Set<PetSpriteState>>(new Set());
   const [probed, setProbed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const draggingRef = useRef(false);
+  const dragMoveFrameRef = useRef<number | null>(null);
   const captureRef = useRef<{ el: HTMLElement | null; id: number }>({ el: null, id: -1 });
   /** v2.09：拖动统一收尾时移除全局监听 */
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -128,6 +175,8 @@ export default function PetApp() {
   const suppressClick = useRef(0);
   const voiceSeq = useRef(0);
   const busyReply = useRef(false);
+  const motionPaused = reducedMotion || motionMode === 'paused';
+  const motionScale = motionMode === 'slow' ? 2 : 1;
 
   const say = useCallback((text: string, ms = 4500) => {
     setBubble(text);
@@ -136,13 +185,17 @@ export default function PetApp() {
   }, []);
 
   const playAction = useCallback((next: Action, ms = 1200) => {
-    if (actionTimer.current) window.clearTimeout(actionTimer.current);
+    if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
+    actionTimer.current = null;
     setAction(next);
     lastTouch.current = Date.now();
     if (next !== 'sleep') {
-      actionTimer.current = window.setTimeout(() => setAction('idle'), ms);
+      actionTimer.current = window.setTimeout(() => {
+        actionTimer.current = null;
+        setAction(current => current === next ? 'idle' : current);
+      }, ms * motionScale);
     }
-  }, []);
+  }, [motionScale]);
 
   const refresh = useCallback(async () => {
     try {
@@ -175,6 +228,24 @@ export default function PetApp() {
   }, []);
 
   useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncPreference = () => setReducedMotion(query.matches);
+    syncPreference();
+    query.addEventListener('change', syncPreference);
+    return () => query.removeEventListener('change', syncPreference);
+  }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem('pet.motionMode', motionMode); } catch { /* storage may be unavailable */ }
+    window.petWindow?.setMotionMode?.(motionMode);
+  }, [motionMode]);
+
+  useEffect(() => {
+    const unsubscribe = window.petWindow?.onMotionModeSelected?.(mode => setMotionMode(mode));
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
     void refresh();
     const t = window.setInterval(refresh, 4000);
     return () => window.clearInterval(t);
@@ -182,28 +253,49 @@ export default function PetApp() {
 
   // 眨眼
   useEffect(() => {
-    const t = window.setInterval(() => {
-      setBlink(true);
-      window.setTimeout(() => setBlink(false), 150);
-    }, 3600 + Math.random() * 2400);
-    return () => window.clearInterval(t);
-  }, []);
+    if (motionPaused) {
+      setBlink(false);
+      return;
+    }
+    let waitTimer = 0;
+    let closeTimer = 0;
+    let alive = true;
+    const schedule = () => {
+      waitTimer = window.setTimeout(() => {
+        setBlink(true);
+        closeTimer = window.setTimeout(() => {
+          setBlink(false);
+          if (alive) schedule();
+        }, 150);
+      }, (3600 + Math.random() * 2400) * motionScale);
+    };
+    schedule();
+    return () => {
+      alive = false;
+      window.clearTimeout(waitTimer);
+      window.clearTimeout(closeTimer);
+    };
+  }, [motionPaused, motionScale]);
 
+  // /api/pet/state 每 4 秒返回一个新对象；依赖具体字段，避免轮询重置 12–21 秒计时器。
   // 空闲随机小动作（咖啡/读书/吃花生/坐着/散步）
   useEffect(() => {
+    if (motionPaused) return;
     const t = window.setInterval(() => {
+      // 不让装饰动作抢占正在进行的对话、语音唤醒、审批或拖拽。
+      if (bubble.length > 0 || awake || busyReply.current || dragging || dragRef.current.down || s?.pendingApproval) return;
       const low = Boolean(s?.lowPeriod?.active);
       const idleTooLong = Date.now() - lastTouch.current > 25_000;
       if (low && idleTooLong) { setAction('sleep'); setZzz(true); return; }
       if (action !== 'idle' && action !== 'sleep') return;
       setZzz(false);
-      const pool: Action[] = ['idle', 'walk', 'stretch', 'wave', 'peanut', 'coffee', 'reading', 'sit'];
+      const pool: Action[] = ['idle', 'walk', 'stretch', 'peanut', 'coffee', 'reading', 'sit'];
       const pick = pool[Math.floor(Math.random() * pool.length)];
       if (pick === 'idle') { setAction('idle'); return; }
       playAction(pick, pick === 'walk' ? 2600 : 7000 + Math.random() * 6000);
-    }, 12000 + Math.random() * 9000);
+    }, (12000 + Math.random() * 9000) * motionScale);
     return () => window.clearInterval(t);
-  }, [action, s, playAction]);
+  }, [action, s?.lowPeriod?.active, s?.pendingApproval, bubble, awake, dragging, playAction, motionPaused, motionScale]);
 
   useEffect(() => {
     if (s?.pendingApproval) { setZzz(false); }
@@ -216,6 +308,8 @@ export default function PetApp() {
     if (!text.trim() || busyReply.current) return;
     busyReply.current = true;
     setAwake(false);
+    if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
+    actionTimer.current = null;
     setAction('talk');
     try {
       const r = await fetch('/api/chat', {
@@ -230,7 +324,7 @@ export default function PetApp() {
       say('我这边走神了，再说一次？', 3000);
     } finally {
       busyReply.current = false;
-      setAction('idle');
+      setAction(current => current === 'talk' ? 'idle' : current);
     }
   }, [say]);
 
@@ -272,30 +366,33 @@ export default function PetApp() {
   const room = s?.room.active ? s.room.label : null;
   const talking = bubble.length > 0;
   const silence = awake && !talking;
+  const emotionSprite = emotionSpriteForMood(s?.mood.top, s?.mood.delta ?? 0);
   const spriteTarget = useMemo<PetSpriteState>(() => {
-    if (dragging) return 'shocked';
-    if (action === 'shocked') return 'shocked';
+    // Drag pose is an interaction state; preserve the latest expression once released.
+    if (dragging) return 'idle';
     if (s?.pendingApproval) return 'shocked';
+    if (action === 'shocked') return 'shocked';
     if (action === 'pat') return 'happy';
     if (action === 'happy') return 'happy';
     if (action === 'wave') return 'wave';
+    // Conversation and active voice turns take priority over persistent mood and idle activity.
+    if (talking || action === 'talk') return 'talk';
+    if (action === 'sleep') return 'sleepy';
+    if (low) return 'sad';
+    if (emotionSprite) return emotionSprite;
+    // Decorative activity poses never mask an activated emotional expression.
     if (action === 'walk') return 'walk';
     if (action === 'peanut') return 'peanut';
     if (action === 'coffee') return 'coffee';
     if (action === 'reading') return 'reading';
     if (action === 'sit' || action === 'stretch') return 'sit';
-    if (action === 'sleep') return 'sleepy';
-    if (talking) return 'talk';
     const roomLabel = room ?? '';
     if (/咖啡|喝水|茶/.test(roomLabel)) return 'coffee';
     if (/书|读|翻|看/.test(roomLabel)) return 'reading';
     if (/写|本子|划掉|整理|涂鸦/.test(roomLabel)) return 'sit';
-    if (low) return 'sad';
-    const top = s?.mood.top;
-    if ((top === 'anger' || top === 'disgust') && (s?.mood.delta ?? 0) >= 0.1) return 'angry';
     if (blink) return 'blink';
     return 'idle';
-  }, [s, action, room, low, talking, blink, dragging]);
+  }, [s?.pendingApproval, action, room, low, talking, emotionSprite, blink, dragging]);
 
   const resolved = resolveSprite(spriteTarget, available);
   const imageMode = probed && available.size > 0;
@@ -353,11 +450,15 @@ export default function PetApp() {
   }, [activeSprite]);
 
   useEffect(() => {
+    if (motionPaused) {
+      setFrameIdx(0);
+      return;
+    }
     if (frameUrls.length < 2) return;
     const fps = PET_FRAME_FPS[activeSprite] ?? 6;
-    const t = window.setInterval(() => setFrameIdx(i => (i + 1) % frameUrls.length), Math.max(40, Math.round(1000 / fps)));
+    const t = window.setInterval(() => setFrameIdx(i => (i + 1) % frameUrls.length), Math.max(40, Math.round(1000 / fps * motionScale)));
     return () => window.clearInterval(t);
-  }, [frameUrls, activeSprite]);
+  }, [frameUrls, activeSprite, motionPaused, motionScale]);
 
   // ===== 交互：摸 / 拖 / 双击 =====
   const touch = async () => {
@@ -380,7 +481,13 @@ export default function PetApp() {
   // 不再声称"整窗可拖"——窗口忽略鼠标时根节点根本收不到按下事件，那个目标与点击穿透矛盾。
   const finishDrag = (reason: string) => {
     const st = dragRef.current;
+    if (!st.down) return;
     const wasDrag = draggingRef.current || st.moved > 3;
+    if (dragMoveFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragMoveFrameRef.current);
+      dragMoveFrameRef.current = null;
+      if (wasDrag) window.petWindow?.dragMove?.();
+    }
     st.down = false;
     draggingRef.current = false;
     const cleanup = dragCleanupRef.current;
@@ -396,7 +503,7 @@ export default function PetApp() {
     if (wasDrag) {
       setDragging(false);
       suppressClick.current = Date.now();
-      playAction('shocked', 500);
+      playAction('landing', 500);
     }
     if (reason !== 'pointerup' && reason !== 'click') {
       console.log('[Pet] 拖动收尾:', reason);
@@ -404,6 +511,7 @@ export default function PetApp() {
   };
 
   const onPetPointerDown = (e: ReactPointerEvent) => {
+    if (dragRef.current.down) return;
     if (e.button !== 0) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('button, a, input, textarea, select')) return;
@@ -424,32 +532,20 @@ export default function PetApp() {
       st.moved = Math.max(st.moved, screenDelta, clientDelta);
       if (st.moved > 3) {
         if (!draggingRef.current) { draggingRef.current = true; setDragging(true); }
-        window.petWindow?.dragMove?.();
+        if (dragMoveFrameRef.current === null) {
+          dragMoveFrameRef.current = window.requestAnimationFrame(() => {
+            dragMoveFrameRef.current = null;
+            if (dragRef.current.down && draggingRef.current) window.petWindow?.dragMove?.();
+          });
+        }
       }
     };
-    const onEnd = () => finishDrag('pointerup');
-    const onCancel = () => finishDrag('pointercancel');
-    const onLostCapture = () => finishDrag('lostpointercapture');
-    const onBlur = () => finishDrag('window-blur');
-    const onVisibility = () => { if (document.visibilityState === 'hidden') finishDrag('visibility-hidden'); };
-    const onPageHide = () => finishDrag('pagehide');
-
     window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onEnd);
-    window.addEventListener('pointercancel', onCancel);
-    window.addEventListener('lostpointercapture', onLostCapture);
-    window.addEventListener('blur', onBlur);
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onPageHide);
+    const removeFinishEvents = bindPetDragFinishEvents(window, document, finishDrag);
 
     dragCleanupRef.current = () => {
       window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onEnd);
-      window.removeEventListener('pointercancel', onCancel);
-      window.removeEventListener('lostpointercapture', onLostCapture);
-      window.removeEventListener('blur', onBlur);
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onPageHide);
+      removeFinishEvents();
     };
   };
   // 单击：摸她（延迟 260ms 再执行）；双击：挥手并取消单击。
@@ -482,9 +578,18 @@ export default function PetApp() {
   const spriteSrc = frameUrls.length > 1
     ? frameUrls[Math.min(frameIdx, frameUrls.length - 1)]
     : PET_SPRITE_PATH(activeSprite);
+  const blinkSpriteSrc = activeSprite === 'reading'
+    ? '/pet/anya_reading_blink.png'
+    : activeSprite === 'coffee'
+      ? '/pet/anya_coffee_blink.png'
+      : null;
+  const renderedSpriteSrc = blink && !talking && action !== 'talk' && blinkSpriteSrc
+    ? blinkSpriteSrc
+    : spriteSrc;
 
   const headColor = low ? '#8e9bb8' : '#f6c1cf';
   const bodyColor = low ? '#6b7896' : '#f7cbd5';
+  const motionClass = `${dragging ? 'dragging' : ''} ${action === 'landing' ? 'landing' : ''}`.trim();
 
   // v2.09：点击穿透的命中区域 —— 角色按**图片可见像素包围盒**（alpha）上报，
   // 而不是整张 170x212 矩形；按钮/输入按自身矩形。透明像素/空白区域让给桌面。
@@ -533,17 +638,17 @@ export default function PetApp() {
       } catch { return null; }
     };
     const report = () => {
-      const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+      const rects: PetHitRect[] = [];
       document.querySelectorAll<HTMLElement>('button, a, input, textarea, select').forEach((el) => {
         const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+        if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height, kind: 'control' });
       });
       document.querySelectorAll<HTMLElement>('[data-pet-hit]').forEach((el) => {
         const img = el.querySelector<HTMLImageElement>('img.anya-img');
         const visible = img ? imgVisibleBox(img) : null;
-        if (visible) { rects.push(visible); return; }
+        if (visible) { rects.push({ ...visible, kind: 'pet' }); return; }
         const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+        if (r.width > 0 && r.height > 0) rects.push({ x: r.left, y: r.top, w: r.width, h: r.height, kind: 'pet' });
       });
       window.petWindow?.setHitRects?.(rects);
     };
@@ -560,7 +665,7 @@ export default function PetApp() {
 
   return (
     <div
-      className="pet-root relative flex h-screen w-screen flex-col items-center justify-end overflow-hidden"
+      className={`pet-root relative flex h-screen w-screen flex-col items-center justify-end overflow-hidden ${motionPaused ? 'motion-paused' : ''} ${motionMode === 'slow' && !reducedMotion ? 'motion-slow' : ''}`}
       style={{ background: 'transparent', cursor: dragging ? 'grabbing' : 'grab' }}
       onContextMenu={onContextMenu}
       onPointerDown={onPetPointerDown}
@@ -664,14 +769,14 @@ export default function PetApp() {
           <span className="listen-ring pointer-events-none absolute inset-x-3 bottom-3 top-4 rounded-full border border-rose-200/40" />
         )}
         {hearts.map(h => (
-          <span key={h} className="pointer-events-none absolute left-1/2 top-[40px] z-10 text-[15px]"
-                style={{ animation: 'heartUp 1.5s ease-out forwards', ['--hx' as string]: `${(Math.random() * 40 - 20).toFixed(0)}px` }}>💗</span>
+          <span key={h} className="heart-up pointer-events-none absolute left-1/2 top-[40px] z-10 text-[15px]"
+                style={{ ['--hx' as string]: `${(Math.random() * 40 - 20).toFixed(0)}px` }}>💗</span>
         ))}
-        {zzz && <span className="pointer-events-none absolute right-[14px] top-[26px] z-10 text-[13px] font-semibold text-slate-200/80" style={{ animation: 'zzzUp 2.4s ease-out infinite' }}>z</span>}
+        {zzz && <span className="zzz-up pointer-events-none absolute right-[14px] top-[26px] z-10 text-[13px] font-semibold text-slate-200/80">z</span>}
         {(action === 'happy' || action === 'pat') && (
           <>
-            <span className="pointer-events-none absolute left-[10px] top-[18px] z-10 text-[13px]" style={{ animation: 'sparkle 1.2s ease-out infinite' }}>✨</span>
-            <span className="pointer-events-none absolute right-[8px] top-[34px] z-10 text-[12px]" style={{ animation: 'sparkle 1.2s ease-out .3s infinite' }}>✦</span>
+            <span className="sparkle-one pointer-events-none absolute left-[10px] top-[18px] z-10 text-[13px]">✨</span>
+            <span className="sparkle-two pointer-events-none absolute right-[8px] top-[34px] z-10 text-[12px]">✦</span>
           </>
         )}
 
@@ -682,11 +787,11 @@ export default function PetApp() {
           style={{ background: 'transparent', touchAction: 'none' }}
         >
           {imageMode ? (
-            <div className={`anya-state on ${action === 'pat' ? 'anya-pat' : ''}`}>
-              <img src={spriteSrc} alt="anya" className={`anya-img anya-${activeSprite}`} draggable={false} />
+            <div className={`anya-state on ${action === 'pat' ? 'anya-pat' : ''} ${motionClass}`}>
+              <img src={renderedSpriteSrc} alt="anya" className={`anya-img anya-${activeSprite}`} draggable={false} />
             </div>
           ) : (
-            <div className="pet-stage absolute inset-0">
+            <div className={`pet-stage absolute inset-0 ${motionClass}`}>
               <div className="pet-head-idle absolute left-1/2 top-2 h-[92px] w-[92px] -translate-x-1/2 rounded-full"
                    style={{ background: headColor, boxShadow: '0 8px 22px rgba(0,0,0,.35)' }}>
                 <div className="absolute left-[22px] top-[40px] flex gap-[24px]">

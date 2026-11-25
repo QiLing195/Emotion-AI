@@ -13,8 +13,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { resolveAppResource, resolveMemoryPath } from '../appPaths.js';
 
-export const ACTIVITY_LOG_PATH = join('memories', 'activity_log.jsonl');
+export const ACTIVITY_LOG_PATH = resolveMemoryPath('activity_log.jsonl');
 export const ACTIVITY_SAMPLE_MS = 20_000;
 const MAX_READ_LINES = 400;
 
@@ -62,7 +63,12 @@ export function parseActivityLog(text: string): ActivityEntry[] {
 }
 
 /** 读最近 N 条（供她的工具用；去重连续相同标题，避免刷屏） */
-export function readRecentActivity(limit = 10, now = Date.now(), path = ACTIVITY_LOG_PATH): ActivityView {
+export function readRecentActivity(
+  limit = 10,
+  now = Date.now(),
+  path = ACTIVITY_LOG_PATH,
+  deduplicateRepeatedTitles = true,
+): ActivityView {
   if (!activityWatchEnabled()) {
     return { enabled: false, entries: [], note: '活动采样没开（ENABLE_ACTIVITY_WATCH=false），她看不到你在用什么。' };
   }
@@ -78,12 +84,17 @@ export function readRecentActivity(limit = 10, now = Date.now(), path = ACTIVITY
   let lastTitle = '';
   for (const r of rows) {
     const title = redactTitle(r.title);
-    if (!title || title === lastTitle) continue;      // 连续同窗口不重复列
+    if (!title || (deduplicateRepeatedTitles && title === lastTitle)) continue; // 展示可去重；理解可保留采样次数
     lastTitle = title;
+    const sensitiveTitle = title === '[已隐藏：疑似敏感窗口]';
     picked.push({
       title,
-      process: String(r.process ?? '').slice(0, 40),
-      minutesAgo: Math.max(0, Math.round((now - r.ts) / 60_000)),
+      // A redacted title is no longer usable evidence; its process name can
+      // still reveal the sensitive app and can misclassify the placeholder.
+      process: sensitiveTitle ? '' : String(r.process ?? '').slice(0, 40),
+      // Preserve sub-minute spacing from the 20-second sampler. Integer-minute
+      // rounding collapsed distinct windows to the same time and hid their span.
+      minutesAgo: Math.max(0, Math.round(((now - r.ts) / 60_000) * 100) / 100),
       ts: r.ts,
     });
     if (picked.length >= capped) break;
@@ -97,7 +108,7 @@ let sampler: ChildProcess | null = null;
 export function startActivitySampler(opts: { intervalMs?: number; logPath?: string } = {}): boolean {
   if (!activityWatchEnabled()) return false;
   if (sampler && !sampler.killed) return true;
-  const scriptPath = join('scripts', 'activity-sampler.ps1');
+  const scriptPath = resolveAppResource(join('scripts', 'activity-sampler.ps1'));
   if (!existsSync(scriptPath)) { console.warn('[Activity] 采样脚本不存在，跳过'); return false; }
   const interval = Math.max(5000, opts.intervalMs ?? ACTIVITY_SAMPLE_MS);
   try {

@@ -114,6 +114,194 @@
   50% { opacity: 0.65; }
 }
 
+@keyframes anyaProfileIdle {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  42% { transform: translate3d(0, -3px, 0) rotate(0.25deg) scale(1.004); }
+  72% { transform: translate3d(0, -1px, 0) rotate(-0.15deg) scale(1.002); }
+}
+
+.anya-profile-motion {
+  transform-origin: 50% 88%;
+  will-change: transform;
+  transition: filter 700ms ease;
+}
+
+.anya-profile-motion--idle { animation: anyaProfileIdle 5.4s ease-in-out infinite; }
+
+@keyframes anyaProfileListening {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(-2px, -3px, 0) rotate(-0.7deg) scale(1.006); }
+}
+
+.anya-profile-motion--listening {
+  animation: anyaProfileListening 3.8s ease-in-out infinite;
+  filter: saturate(1.035);
+}
+
+@keyframes anyaProfileThinking {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(2px, -2px, 0) rotate(0.65deg) scale(1.003); }
+}
+
+.anya-profile-motion--thinking { animation: anyaProfileThinking 4.6s ease-in-out infinite; }
+
+@keyframes anyaProfileSpeaking {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  28% { transform: translate3d(0, -2px, 0) rotate(-0.25deg) scale(1.003); }
+  58% { transform: translate3d(0, 0, 0) rotate(0.25deg) scale(1); }
+  80% { transform: translate3d(0, -1px, 0) rotate(0deg) scale(1.002); }
+}
+
+.anya-profile-motion--speaking { animation: anyaProfileSpeaking 1.7s ease-in-out infinite; }
+
+.anya-presence-label {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,.8);
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: rgba(255,255,255,.78);
+  color: #8c6170;
+  font-size: 11px;
+  box-shadow: 0 3px 12px rgba(92,57,68,.08);
+  backdrop-filter: blur(8px);
+}
+
+.anya-presence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d49aae;
+}
+
+.anya-presence--thinking .anya-presence-dot,
+.anya-presence--speaking .anya-presence-dot {
+  animation: anyaPresencePulse 1.3s ease-in-out infinite;
+}
+
+@keyframes anyaPresencePulse {
+  0%, 100% { opacity: .55; transform: scale(.85); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anya-profile-motion, .anya-presence-dot { animation: none !important; }
+}
+
+.virtual-bedroom-stage {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 240px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgba(114, 83, 91, .34);
+  border-radius: 24px;
+  background: #332c38;
+  box-shadow: 0 14px 38px rgba(63, 43, 50, .16);
+}
+
+.virtual-bedroom-photo {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 1.1s ease, filter 2.4s ease, transform 12s ease;
+  transform: scale(1.015);
+}
+
+.virtual-bedroom-stage:hover .virtual-bedroom-photo:not(.virtual-bedroom-photo--previous) {
+  transform: scale(1.035);
+}
+
+.virtual-bedroom-photo--previous { opacity: 0; }
+.virtual-bedroom-photo--previous.is-visible { opacity: 1; }
+.virtual-bedroom-photo.is-entering { opacity: 0; }
+.virtual-bedroom-photo:not(.virtual-bedroom-photo--previous):not(.is-entering) { opacity: 1; }
+
+.virtual-bedroom-daylight {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 2.8s ease, background-color 2.8s ease;
+}
+
+.virtual-bedroom--day .virtual-bedroom-daylight {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse at 75% 8%, rgba(255, 244, 204, .26), transparent 34%),
+    linear-gradient(120deg, transparent 53%, rgba(255, 240, 190, .14) 66%, transparent 78%);
+}
+
+.virtual-bedroom--dusk .virtual-bedroom-daylight {
+  opacity: .72;
+  background: linear-gradient(115deg, transparent 42%, rgba(255, 155, 119, .18) 73%, rgba(100, 78, 127, .1));
+}
+
+.virtual-bedroom--night .virtual-bedroom-daylight {
+  opacity: 1;
+  background: rgba(11, 19, 43, .48);
+}
+
+.virtual-bedroom--day[data-weather='cloudy'] .virtual-bedroom-photo { filter: brightness(.94) saturate(.9); }
+.virtual-bedroom--day[data-weather='fog'] .virtual-bedroom-photo { filter: brightness(1.03) saturate(.78); }
+.virtual-bedroom--day[data-weather='rain'] .virtual-bedroom-photo { filter: brightness(.84) saturate(.82); }
+.virtual-bedroom--day[data-weather='snow'] .virtual-bedroom-photo { filter: brightness(1.04) saturate(.84); }
+.virtual-bedroom--day[data-weather='storm'] .virtual-bedroom-photo { filter: brightness(.74) saturate(.72); }
+.virtual-bedroom--night[data-weather='rain'] .virtual-bedroom-photo,
+.virtual-bedroom--night[data-weather='storm'] .virtual-bedroom-photo { filter: brightness(.78) saturate(.78); }
+
+.virtual-bedroom-lamp-glow {
+  position: absolute;
+  z-index: 3;
+  top: 8%;
+  right: -4%;
+  width: 24%;
+  height: 44%;
+  pointer-events: none;
+  opacity: .2;
+  background: radial-gradient(ellipse at 72% 25%, rgba(255, 218, 143, .68), rgba(255, 204, 125, .12) 42%, transparent 72%);
+  transition: opacity 2.6s ease;
+}
+
+.virtual-bedroom--day .virtual-bedroom-lamp-glow { opacity: .05; }
+.virtual-bedroom--dusk .virtual-bedroom-lamp-glow { opacity: .4; }
+.virtual-bedroom--night .virtual-bedroom-lamp-glow { opacity: .95; }
+
+.virtual-bedroom-hotspot {
+  position: absolute;
+  z-index: 5;
+  display: block;
+  border: 0;
+  border-radius: 18px;
+  padding: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.virtual-bedroom-hotspot:disabled { cursor: default; }
+.virtual-bedroom-hotspot:focus-visible { opacity: 1; outline: 2px solid rgba(255, 255, 255, .94); outline-offset: 2px; background: rgba(255, 255, 255, .12); }
+.virtual-bedroom-hotspot--book { left: 75%; top: 53%; width: 18%; height: 19%; }
+.virtual-bedroom-hotspot--plant { left: 68%; top: 23%; width: 13%; height: 17%; }
+.virtual-bedroom-hotspot--mug { left: 86%; top: 60%; width: 10%; height: 17%; }
+.virtual-bedroom-hotspot--bed { left: 4%; top: 40%; width: 37%; height: 50%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .virtual-bedroom-photo, .virtual-bedroom-daylight, .virtual-bedroom-lamp-glow { transition: none !important; animation: none !important; }
+  .virtual-bedroom-photo { transform: none; }
+}
+
 /* ═══════════════════════════════════════════
    Base
    ═══════════════════════════════════════════ */

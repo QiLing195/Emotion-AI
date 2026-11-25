@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { applyEvent, buildEmotionUpdatedPayload } from '../stateReducer';
-import { INITIAL_EMOTION_STATE, INITIAL_TAIJI } from '../emotionEngine';
+import { INITIAL_EMOTION_STATE, INITIAL_TAIJI, processTimeDecay } from '../emotionEngine';
 import { SALIENCE_DEADZONE, SALIENCE_FULL } from '../emotionTypes';
 import type { EmotionEvent, EmotionState } from '../emotionEngine';
 
@@ -134,8 +134,11 @@ describe('从受损状态出发也能自我恢复（不再继续下沉）', () =
     damaged.emotions.disgust = 0.55;
     damaged.emotions.sad = 0.36;
     const out = run(zeroEvent, 10, damaged);
-    // 效价只剩自然衰减（向 0 回升），不再被幽灵误差继续压低
-    expect(out.taiji.valence).toBeGreaterThan(-0.49);
+    // 零事件本身不推进状态；经过时间后的回落由 processTimeDecay 单独负责。
+    expect(out.taiji.valence).toBe(damaged.taiji.valence);
+    expect(out.emotions).toEqual(damaged.emotions);
+    const afterElapsedHour = processTimeDecay(damaged, 1);
+    expect(afterElapsedHour.taiji.valence).toBeGreaterThan(damaged.taiji.valence);
     // 预期在无信号时**保持不变**（修复前会继续被 −expectation 侵蚀；回升需要真实的正面信号）
     expect(out.taiji.expectation).toBeGreaterThanOrEqual(0);
   });

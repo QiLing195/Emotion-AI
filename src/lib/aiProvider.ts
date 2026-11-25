@@ -7,6 +7,7 @@ import {
   raceWithDeadline,
   singleCallBudget,
 } from './generationBudget';
+import { recordAICallMetric, type AICallMetric, type AICallStage } from './aiCallMetrics';
 
 export interface AISettings {
   provider: 'gemini' | 'openai' | 'custom';
@@ -125,6 +126,43 @@ export function clearClientCache(): void {
 export interface GenerationCallOptions {
   /** v2.16：整轮共享预算；不传则按单次调用预算自我约束（后台旁路调用） */
   budget?: GenerationBudget;
+  /** 本地聚合诊断标签；不会保存 Prompt 或消息文本。 */
+  metricStage?: AICallStage;
+}
+
+function reportedUsage(response: any): Pick<AICallMetric, 'promptTokens' | 'completionTokens' | 'totalTokens'> {
+  const usage = response?.usage ?? response?.usageMetadata ?? {};
+  const promptTokens = Number(usage.prompt_tokens ?? usage.promptTokenCount);
+  const completionTokens = Number(usage.completion_tokens ?? usage.candidatesTokenCount);
+  const totalTokens = Number(usage.total_tokens ?? usage.totalTokenCount);
+  const prompt = Number.isFinite(promptTokens) ? promptTokens : null;
+  const completion = Number.isFinite(completionTokens) ? completionTokens : null;
+  const total = Number.isFinite(totalTokens) ? totalTokens
+    : prompt !== null || completion !== null ? (prompt ?? 0) + (completion ?? 0) : null;
+  return { promptTokens: prompt, completionTokens: completion, totalTokens: total };
+}
+
+async function measuredProviderCall<T>(
+  settings: AISettings,
+  stage: AICallStage,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    const response = await fn();
+    recordAICallMetric({
+      at: startedAt, stage, provider: settings.provider, model: settings.model || 'default',
+      durationMs: Date.now() - startedAt, ok: true, ...reportedUsage(response),
+    });
+    return response;
+  } catch (error) {
+    recordAICallMetric({
+      at: startedAt, stage, provider: settings.provider, model: settings.model || 'default',
+      durationMs: Date.now() - startedAt, ok: false,
+      promptTokens: null, completionTokens: null, totalTokens: null,
+    });
+    throw error;
+  }
 }
 
 export async function generateAIResponse(
@@ -139,11 +177,12 @@ export async function generateAIResponse(
     throw new Error('API Key not configured');
   }
   const budget = options.budget ?? singleCallBudget();
+  const metricStage = options.metricStage ?? 'other';
 
   return retryAsync(async (signal?: AbortSignal) => {
     if (settings.provider === 'gemini') {
       const ai = getOrCreateClient(settings) as GoogleGenAI;
-      const response = await (ai.models.generateContent as any)({
+      const response = await measuredProviderCall<any>(settings, metricStage, () => (ai.models.generateContent as any)({
         model: settings.model || 'gemini-3-flash-preview',
         contents: userPrompt,
         config: {
@@ -171,11 +210,11 @@ export async function generateAIResponse(
             }
           ] as any
         }
-      }, { abortSignal: signal } as any);
+      }, { abortSignal: signal } as any));
       return response.text || (isJson ? '{}' : '');
     } else {
       const openai = getOrCreateClient(settings) as OpenAI;
-      const response = await openai.chat.completions.create({
+      const response = await measuredProviderCall<any>(settings, metricStage, () => openai.chat.completions.create({
         model: settings.model || 'gpt-4-turbo',
         messages: [
           { role: 'system', content: systemPrompt },
@@ -187,7 +226,7 @@ export async function generateAIResponse(
         // 0.3→0.5: LLM Judge 自然度 7.3/10, 模板开头仍是最大扣分项
         frequency_penalty: 0.5,
         presence_penalty: 0.5,
-      }, { signal } as any);
+      }, { signal } as any));
       return response.choices[0].message.content || (isJson ? '{}' : '');
     }
   }, 3, 1000, budget);
@@ -195,7 +234,8 @@ export async function generateAIResponse(
 
 export async function generateEmbeddings(
   settings: AISettings,
-  text: string
+  text: string,
+  options: Pick<GenerationCallOptions, 'metricStage'> = {},
 ): Promise<number[]> {
   if (!settings || !settings.apiKey) {
     throw new Error('API Key not configured');
@@ -206,10 +246,10 @@ export async function generateEmbeddings(
     try {
       return await retryAsync(async () => {
         const openai = getOrCreateClient(settings) as OpenAI;
-        const response = await openai.embeddings.create({
+        const response = await measuredProviderCall(settings, options.metricStage ?? 'other', () => openai.embeddings.create({
           model: 'text-embedding-3-small',
           input: text,
-        });
+        }));
         return response.data[0].embedding;
       }, 3, 1000);
     } catch (error: any) {
@@ -224,17 +264,17 @@ export async function generateEmbeddings(
   return retryAsync(async () => {
     if (settings.provider === 'gemini') {
       const ai = getOrCreateClient(settings) as GoogleGenAI;
-      const response = await ai.models.embedContent({
+      const response = await measuredProviderCall(settings, options.metricStage ?? 'other', () => ai.models.embedContent({
         model: 'text-embedding-004',
         contents: text,
-      });
+      }));
       return response.embeddings?.[0]?.values || [];
     } else {
       const openai = getOrCreateClient(settings) as OpenAI;
-      const response = await openai.embeddings.create({
+      const response = await measuredProviderCall(settings, options.metricStage ?? 'other', () => openai.embeddings.create({
         model: 'text-embedding-3-small',
         input: text,
-      });
+      }));
       return response.data[0].embedding;
     }
   }, 3, 1000);
@@ -272,6 +312,7 @@ export async function generateAIChatResponse(
     throw new Error('API Key not configured');
   }
   const budget = options.budget ?? singleCallBudget();
+  const metricStage = options.metricStage ?? 'other';
 
   return retryAsync(async (signal?: AbortSignal) => {
     if (settings.provider === 'gemini') {
@@ -300,11 +341,11 @@ export async function generateAIChatResponse(
         };
       });
 
-      const finalTools = [];
+      const finalTools: any[] = [];
       if (settings.enableWebSearch) finalTools.push({ googleSearch: {} });
       if (tools) finalTools.push(...tools);
 
-      const response = await (ai.models.generateContent as any)({
+      const response = await measuredProviderCall<any>(settings, metricStage, () => (ai.models.generateContent as any)({
         model: settings.model || 'gemini-3-flash-preview',
         contents,
         config: {
@@ -332,7 +373,7 @@ export async function generateAIChatResponse(
             }
           ] as any
         }
-      }, { abortSignal: signal } as any);
+      }, { abortSignal: signal } as any));
       return {
         text: response.text || (isJson ? '{}' : ''),
         functionCalls: response.functionCalls
@@ -365,7 +406,7 @@ export async function generateAIChatResponse(
 
       // v1.72 OpenAI 兼容分支也支持 function calling（此前 tools 被完全忽略）
       const openaiTools = toOpenAITools(tools);
-      const response = await openai.chat.completions.create({
+      const response = await measuredProviderCall<any>(settings, metricStage, () => openai.chat.completions.create({
         model: settings.model || 'gpt-4-turbo',
         messages: [
           { role: 'system', content: systemPrompt },
@@ -375,7 +416,7 @@ export async function generateAIChatResponse(
         response_format: isJson ? { type: "json_object" } : undefined,
         temperature,
         ...(openaiTools ? { tools: openaiTools as any, tool_choice: 'auto' as any } : {}),
-      }, { signal } as any);
+      }, { signal } as any));
       const msg = response.choices[0]?.message as any;
       const toolCalls = Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0
         ? msg.tool_calls.map((tc: any) => {

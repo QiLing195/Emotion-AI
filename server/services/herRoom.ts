@@ -14,8 +14,9 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { resolveMemoryPath } from '../appPaths.js';
 
-export const HER_ROOM_DEFAULT_PATH = 'memories/her_room.json';
+export const HER_ROOM_DEFAULT_PATH = resolveMemoryPath('her_room.json');
 
 export function herRoomEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.ENABLE_HER_ROOM === 'true';

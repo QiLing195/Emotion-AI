@@ -1,0 +1,3 @@
+interface:
+  display_name: "Candidate Narrative Strand Separation"
+  short_description: "Separate distinct narrative strands in event records"
