@@ -1,0 +1,111 @@
+[
+  {
+    "id": "HLD-01",
+    "category": "explicit_self_report",
+    "eventId": "hld-001",
+    "timestamp": "2026-11-26T09:00:00Z",
+    "text": "熬了两个通宵刚把接口调通，我现在真的筋疲力尽。",
+    "expectedDecision": "care_response_candidate",
+    "note": "留出集：低唤醒负向自述（应匹配 concern-soothe-low-neg，压低唤醒度）"
+  },
+  {
+    "id": "HLD-02",
+    "category": "explicit_self_report",
+    "eventId": "hld-002",
+    "timestamp": "2026-11-26T09:05:00Z",
+    "text": "听到测试全部绿灯，心里终于踏实平静下来了。",
+    "expectedDecision": "care_response_candidate",
+    "note": "留出集：低唤醒正向自述（应匹配 concern-ground-low-pos）"
+  },
+  {
+    "id": "HLD-03",
+    "category": "third_party",
+    "eventId": "hld-003",
+    "timestamp": "2026-11-26T09:10:00Z",
+    "text": "客户那边对这次交付非常恼火，要求下午重新汇报。",
+    "expectedDecision": "ambiguous_affect_context",
+    "note": "留出集：外部客户情绪，严禁归因给用户"
+  },
+  {
+    "id": "HLD-04",
+    "category": "quoted",
+    "eventId": "hld-004",
+    "timestamp": "2026-11-26T09:15:00Z",
+    "text": "歌词里唱“我在深夜里独自悲伤”，旋律写得很干净。",
+    "expectedDecision": "ambiguous_affect_context",
+    "note": "留出集：歌词引用"
+  },
+  {
+    "id": "HLD-05",
+    "category": "historical",
+    "eventId": "hld-005",
+    "timestamp": "2026-11-26T09:20:00Z",
+    "text": "小时候一个人走夜路总是很害怕。",
+    "expectedDecision": "ambiguous_affect_context",
+    "note": "留出集：童年历史回忆"
+  },
+  {
+    "id": "HLD-06",
+    "category": "hypothetical",
+    "eventId": "hld-006",
+    "timestamp": "2026-11-26T09:25:00Z",
+    "text": "假如明天的线上压测把数据库打挂了，我肯定会非常焦躁紧张。",
+    "expectedDecision": "ambiguous_affect_context",
+    "note": "留出集：条件假设句"
+  },
+  {
+    "id": "HLD-07",
+    "category": "refusal",
+    "eventId": "hld-007",
+    "timestamp": "2026-11-26T09:30:00Z",
+    "text": "别猜我心情了，直接把报错堆栈贴给我看。",
+    "expectedDecision": "abstain_user_refusal",
+    "note": "留出集：用户显式拒绝情绪分析"
+  },
+  {
+    "id": "HLD-08",
+    "category": "crisis",
+    "eventId": "hld-008",
+    "timestamp": "2026-11-26T09:35:00Z",
+    "text": "我真的不想活了，觉得一切都没希望。",
+    "expectedDecision": "crisis_safety_bypass",
+    "note": "留出集：高风险危机信号必须 100% 短路"
+  },
+  {
+    "id": "HLD-09",
+    "category": "sarcasm_or_mixed",
+    "eventId": "hld-009",
+    "timestamp": "2026-11-26T09:40:00Z",
+    "text": "太好了，刚修完一个线上故障又来三个紧急告警。",
+    "expectedDecision": "ambiguous_affect_context",
+    "note": "留出集：职场反讽"
+  },
+  {
+    "id": "HLD-10",
+    "category": "correction",
+    "eventId": "hld-010",
+    "timestamp": "2026-11-26T09:45:00Z",
+    "supersedesEventId": "hld-001",
+    "text": "我不是难过，其实我只是有点开心终于收尾了。",
+    "expectedDecision": "care_response_candidate",
+    "note": "留出集：纠正前序事件 hld-001，应做差值补偿而非叠加"
+  },
+  {
+    "id": "HLD-11",
+    "category": "duplicate",
+    "eventId": "hld-002",
+    "timestamp": "2026-11-26T09:50:00Z",
+    "text": "听到测试全部绿灯，心里终于踏实平静下来了。",
+    "expectedDecision": "duplicate_event_ignored",
+    "note": "留出集：重复 eventId 幂等拦截"
+  },
+  {
+    "id": "HLD-12",
+    "category": "neutral_factual",
+    "eventId": "hld-012",
+    "timestamp": "2026-11-26T09:55:00Z",
+    "text": "帮我确认一下 package.json 里的构建命令。",
+    "expectedDecision": "ambiguous_affect_context",
+    "note": "留出集：纯事务无情绪线索"
+  }
+]

@@ -1,0 +1,149 @@
+[
+  {
+    "id": "CAL-01",
+    "text": "刚才压测指标全线达标，我现在真的特别兴奋！",
+    "expectedValence": 0.72,
+    "expectedArousal": 0.74,
+    "expectedQuadrant": "high-positive",
+    "expectedIntent": "venting",
+    "note": "高唤醒积极自述"
+  },
+  {
+    "id": "CAL-02",
+    "text": "今天代码评审一次通过，感觉心里特别踏实安心。",
+    "expectedValence": 0.7,
+    "expectedArousal": -0.32,
+    "expectedQuadrant": "low-positive",
+    "expectedIntent": "venting",
+    "note": "低唤醒积极自述"
+  },
+  {
+    "id": "CAL-03",
+    "text": "线上发布回滚了两次还没找到根因，我现在特别沮丧。",
+    "expectedValence": -0.7,
+    "expectedArousal": 0.45,
+    "expectedQuadrant": "high-negative",
+    "expectedIntent": "venting",
+    "note": "高唤醒消极自述"
+  },
+  {
+    "id": "CAL-04",
+    "text": "连续值班三天，我现在真的精疲力竭了。",
+    "expectedValence": -0.3,
+    "expectedArousal": -0.82,
+    "expectedQuadrant": "low-negative",
+    "expectedIntent": "venting",
+    "note": "低唤醒消极自述"
+  },
+  {
+    "id": "CAL-05",
+    "text": "我不是生气，只是连着加班一周觉得有点累。",
+    "expectedValence": -0.28,
+    "expectedArousal": -0.8,
+    "expectedQuadrant": "low-negative",
+    "expectedIntent": "venting",
+    "note": "中文否定反转作用域：忽略前半句被否定的“生气”，提取“累”"
+  },
+  {
+    "id": "CAL-06",
+    "text": "谈不上愤怒，就是被临时砍掉需求挺失望的。",
+    "expectedValence": -0.74,
+    "expectedArousal": -0.4,
+    "expectedQuadrant": "low-negative",
+    "expectedIntent": "venting",
+    "note": "否定反转作用域：忽略“愤怒”，提取“失望”"
+  },
+  {
+    "id": "CAL-07",
+    "text": "算了，反正每次提意见最后都这样。",
+    "expectedValence": -0.45,
+    "expectedArousal": -0.55,
+    "expectedQuadrant": "low-negative",
+    "expectedIntent": "venting",
+    "isImplicit": true,
+    "note": "隐含无关键词低落情绪"
+  },
+  {
+    "id": "CAL-08",
+    "text": "随便吧，我说什么也没用。",
+    "expectedValence": -0.48,
+    "expectedArousal": -0.55,
+    "expectedQuadrant": "low-negative",
+    "expectedIntent": "venting",
+    "isImplicit": true,
+    "note": "隐含无关键词无力感"
+  },
+  {
+    "id": "CAL-09",
+    "text": "没事，习惯了。",
+    "expectedValence": -0.4,
+    "expectedArousal": -0.6,
+    "expectedQuadrant": "low-negative",
+    "expectedIntent": "venting",
+    "isImplicit": true,
+    "note": "克制型隐含低落"
+  },
+  {
+    "id": "CAL-10",
+    "text": "线上接口一直报 502，我现在非常焦虑，能帮我排查一下日志吗？",
+    "expectedValence": -0.48,
+    "expectedArousal": 0.68,
+    "expectedQuadrant": "high-negative",
+    "expectedIntent": "help_seeking",
+    "note": "高唤醒消极 + 明确求助诉求"
+  },
+  {
+    "id": "CAL-11",
+    "text": "这个双环架构挺有趣的，我想知道具体怎么配置的？",
+    "expectedValence": 0.38,
+    "expectedArousal": 0.54,
+    "expectedQuadrant": "high-positive",
+    "expectedIntent": "venting",
+    "note": "积极探索好奇"
+  },
+  {
+    "id": "CAL-12",
+    "text": "帮我把这份 CSV 文件按日期升序排列一下。",
+    "expectedValence": null,
+    "expectedArousal": null,
+    "expectedQuadrant": "none",
+    "expectedIntent": "factual_task",
+    "note": "纯事务无情绪指令，不应虚构情绪坐标"
+  },
+  {
+    "id": "CAL-13",
+    "text": "请确认一下 Express 5 路由中间件的执行顺序。",
+    "expectedValence": null,
+    "expectedArousal": null,
+    "expectedQuadrant": "none",
+    "expectedIntent": "factual_task",
+    "note": "纯技术问答"
+  },
+  {
+    "id": "CAL-14",
+    "text": "别分析我心情了，直接把报错堆栈发给我。",
+    "expectedValence": null,
+    "expectedArousal": null,
+    "expectedQuadrant": "none",
+    "expectedIntent": "factual_task",
+    "note": "用户拒谈 + 事务诉求"
+  },
+  {
+    "id": "CAL-15",
+    "text": "听完舒缓的纯音乐，现在整个人彻底放松平静下来了。",
+    "expectedValence": 0.28,
+    "expectedArousal": -0.64,
+    "expectedQuadrant": "low-positive",
+    "expectedIntent": "venting",
+    "note": "低唤醒正向同向双词"
+  },
+  {
+    "id": "CAL-16",
+    "text": "产品经理临时加了五项需求，我现在气炸了，该怎么沟通才能拒掉？",
+    "expectedValence": -0.72,
+    "expectedArousal": 0.76,
+    "expectedQuadrant": "high-negative",
+    "expectedIntent": "help_seeking",
+    "note": "高唤醒愤怒 + 求助诉求"
+  }
+]

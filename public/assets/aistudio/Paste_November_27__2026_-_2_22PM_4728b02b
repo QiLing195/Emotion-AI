@@ -1,0 +1,1367 @@
+我将以上内容作为 v2 的审查基线，继续推进 **v3 修订版工程方案**。
+
+这次不应该只是把 R01–R12 的建议逐条补进文档，而应该把它们整合成一套真正可以实现、测试和审计的工程协议。尤其要避免一个问题：文档写出了接口和流程，却没有定义状态在并发、失败、重试、删除和重放时究竟如何保持正确。
+
+v3 的核心设计原则确定为：
+
+1. **事件是事实，状态是投影。** 不允许多个轨道直接争抢修改同一份 RuntimeState。
+2. **认知可以异步，状态提交必须受控。** 模型分析完成的先后顺序，不决定事件的因果顺序。
+3. **情绪变化必须有计算依据。** 每次状态变化都能追溯到事件、认知评价、记忆证据和计算规则。
+4. **记忆必须可治理。** 能确认、纠正、撤销、遗忘，并处理派生数据。
+5. **成长必须可评估。** 不以 AI 自己声称成长作为验收依据。
+6. **先保证基础正确，再扩展自主行为。** Strategy Layer、反事实评价和恢复模型纳入架构，但不全部塞进首期实现。
+
+以下先给出 v3 的总体工程方案。需要说明：当前材料是 v2 的审查报告，不是项目源码，因此下面是设计修订，不代表这些机制已经在代码中实现或通过测试。
+
+# **《道·AI 伴侣 v5.0 × Emotion-AI 实验工作台》v3 修订版工程方案**
+
+
+
+设计基线：v2 审查问题 R01–R12
+
+源码实现状态：待审计
+
+
+
+## **1. v3 总体架构**
+
+v3 不再把 A/B/C/D 理解为四个可以各自修改状态的执行模块，而是把它们定位为不同职责的处理轨道。所有状态变化统一经过 Event Log 和 State Coordinator。
+
+\#chatgpt-mermaid-\_r_1jp\_{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;fill:rgb(13, 13, 13);}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#chatgpt-mermaid-\_r_1jp\_ .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_1jp\_ .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_1jp\_ .error-icon{fill:rgb(243, 243, 243);}#chatgpt-mermaid-\_r_1jp\_ .error-text{fill:rgb(13, 13, 13);stroke:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ .edge-thickness-normal{stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .edge-thickness-thick{stroke-width:3.5px;}#chatgpt-mermaid-\_r_1jp\_ .edge-pattern-solid{stroke-dasharray:0;}#chatgpt-mermaid-\_r_1jp\_ .edge-thickness-invisible{stroke-width:0;fill:none;}#chatgpt-mermaid-\_r_1jp\_ .edge-pattern-dashed{stroke-dasharray:3;}#chatgpt-mermaid-\_r_1jp\_ .edge-pattern-dotted{stroke-dasharray:2;}#chatgpt-mermaid-\_r_1jp\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1jp\_ .marker.cross{stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1jp\_ svg{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;}#chatgpt-mermaid-\_r_1jp\_ p{margin:0;}#chatgpt-mermaid-\_r_1jp\_ .label{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ .cluster-label text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ .cluster-label span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ .cluster-label span p{background-color:transparent;}#chatgpt-mermaid-\_r_1jp\_ .label text,#chatgpt-mermaid-\_r_1jp\_ span{fill:rgb(13, 13, 13);color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ .node rect,#chatgpt-mermaid-\_r_1jp\_ .node circle,#chatgpt-mermaid-\_r_1jp\_ .node ellipse,#chatgpt-mermaid-\_r_1jp\_ .node polygon,#chatgpt-mermaid-\_r_1jp\_ .node path{fill:rgb(222, 234, 251);stroke:rgb(83, 154, 248);stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .rough-node .label text,#chatgpt-mermaid-\_r_1jp\_ .node .label text,#chatgpt-mermaid-\_r_1jp\_ .image-shape .label,#chatgpt-mermaid-\_r_1jp\_ .icon-shape .label{text-anchor:middle;}#chatgpt-mermaid-\_r_1jp\_ .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .rough-node .label,#chatgpt-mermaid-\_r_1jp\_ .node .label,#chatgpt-mermaid-\_r_1jp\_ .image-shape .label,#chatgpt-mermaid-\_r_1jp\_ .icon-shape .label{text-align:center;}#chatgpt-mermaid-\_r_1jp\_ .node.clickable{cursor:pointer;}#chatgpt-mermaid-\_r_1jp\_ .root .anchor path{fill:rgb(143, 143, 143)!important;stroke-width:0;stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1jp\_ .arrowheadPath{fill:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1jp\_ .edgePath .path{stroke:rgb(143, 143, 143);stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .flowchart-link{stroke:rgb(143, 143, 143);fill:none;}#chatgpt-mermaid-\_r_1jp\_ .edgeLabel{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_1jp\_ .edgeLabel p{background-color:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1jp\_ .edgeLabel rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1jp\_ .labelBkg{background-color:rgba(252, 252, 252, 0.5);}#chatgpt-mermaid-\_r_1jp\_ .cluster rect{fill:rgb(243, 243, 243);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .cluster text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ .cluster span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:12px;background:rgb(243, 243, 243);border:1px solid rgba(0, 0, 0, 0.1);border-radius:2px;pointer-events:none;z-index:100;}#chatgpt-mermaid-\_r_1jp\_ .flowchartTitleText{text-anchor:middle;font-size:18px;fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_1jp\_ rect.text{fill:none;stroke-width:0;}#chatgpt-mermaid-\_r_1jp\_ .icon-shape,#chatgpt-mermaid-\_r_1jp\_ .image-shape{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_1jp\_ .icon-shape p,#chatgpt-mermaid-\_r_1jp\_ .image-shape p{background-color:rgb(252, 252, 252);padding:2px;}#chatgpt-mermaid-\_r_1jp\_ .icon-shape .label rect,#chatgpt-mermaid-\_r_1jp\_ .image-shape .label rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_1jp\_ .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#chatgpt-mermaid-\_r_1jp\_ .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#chatgpt-mermaid-\_r_1jp\_ .node .neo-node{stroke:rgb(83, 154, 248);}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node rect,#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].cluster rect,#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node polygon{stroke:url(#chatgpt-mermaid-\_r_1jp\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].swimlane.cluster rect{filter:none;}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node path{stroke:url(#chatgpt-mermaid-\_r_1jp\_-gradient);stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node .neo-line path{stroke:rgb(83, 154, 248);filter:none;}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node circle{stroke:url(#chatgpt-mermaid-\_r_1jp\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].node circle .state-start{fill:#000000;}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].icon-shape .icon{fill:url(#chatgpt-mermaid-\_r_1jp\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1jp\_ [data-look="neo"].icon-shape .icon-neo path{stroke:url(#chatgpt-mermaid-\_r_1jp\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_1jp\_ .node text{font-size:14px;font-weight:600;letter-spacing:normal;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_1jp\_ .edgeLabels text{font-size:13px;font-weight:600;letter-spacing:-0.08px;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_1jp\_ .node tspan[font-weight="normal"],#chatgpt-mermaid-\_r_1jp\_ .edgeLabels tspan[font-weight="normal"]{font-weight:600;}#chatgpt-mermaid-\_r_1jp\_ .edgeLabel .label rect{opacity:1;rx:13px;ry:13px;fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .node rect,#chatgpt-mermaid-\_r_1jp\_ .node circle,#chatgpt-mermaid-\_r_1jp\_ .node ellipse,#chatgpt-mermaid-\_r_1jp\_ .node polygon,#chatgpt-mermaid-\_r_1jp\_ .node path{fill:rgb(229, 243, 255);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_1jp\_ .node rect{rx:16px;ry:16px;}#chatgpt-mermaid-\_r_1jp\_ .mermaid-decision .label-container{fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-dasharray:2,2;}#chatgpt-mermaid-\_r_1jp\_ .edgePaths .flowchart-link{stroke:rgb(143, 143, 143);stroke-width:1px;stroke-linecap:round;stroke-linejoin:round;}#chatgpt-mermaid-\_r_1jp\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_1jp\_ :root{--mermaid-font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";}用户输入 / 环境事件Event Ingestion事件接入与标准化Immutable Event Log不可变事件日志State Coordinator状态协调器Runtime Snapshot一致性状态快照A 轨：即时情绪与安全B1：快速记忆召回B2：深度记忆召回C 轨：认知评价与记忆沉淀D 轨：时间演化与离线结算State / Appraisal Proposal状态变更提案Proposal Validator版本、权限、依赖、有效期检查Ordered Commit有序提交Deterministic StateProjection确定性状态投影Memory Governance记忆治理与索引Strategy Layer目标与行为策略Response / Action Gateway输出与行动网关Output Safety Gate输出安全审核Replay & Evaluation重放与评估Observability状态、事件、因果追踪
+
+### **1.1 各模块的责任边界**
+
+| 模块                | 允许做什么            | 不允许做什么             |
+| ----------------- | ---------------- | ------------------ |
+| Event Ingestion   | 标准化输入、分配事件 ID、排序 | 直接修改情绪状态           |
+| A 轨               | 产生即时状态提案、快速安全判断  | 绕过 Coordinator 写状态 |
+| B1/B2             | 检索、排序、提供记忆证据     | 将检索结果直接写成事实        |
+| C 轨               | 认知评价、提出记忆与成长候选   | 直接覆盖最新状态           |
+| D 轨               | 根据时间推进内部状态       | 重复结算已处理时间          |
+| State Coordinator | 版本检查、冲突处理、有序提交   | 自行猜测情绪或认知结果        |
+| State Projection  | 按确定性规则计算新状态      | 调用 LLM 决定数值        |
+| Memory Governance | 记忆确认、纠正、删除、索引治理  | 将 AI 推测直接升级为用户事实   |
+| Strategy Layer    | 选择目标、策略和行动方案     | 绕过权限与安全约束          |
+| Replay            | 重建、比较、评估历史过程     | 恢复已经被要求删除的数据       |
+
+核心约束：**只有 State Projection 能生成正式 RuntimeState。** 其他模块只能产生经过验证的提案或事件。
+
+## **2. R01：重新定义状态提交协议**
+
+这是 v3 最重要的基础修改。
+
+### **2.1 数据结构**
+
+建议将事件、状态快照、提案和提交记录分开。
+
+```
+type EventId = string;
+type TurnId = string;
+type SessionId = string;
+
+interface DomainEvent {
+  eventId: EventId;
+  sessionId: SessionId;
+  turnId: TurnId;
+
+  sequence: number;
+  eventType: string;
+
+  occurredAt: number;
+  recordedAt: number;
+
+  payload: Record<string, unknown>;
+
+  source:
+    | "user"
+    | "system"
+    | "agent"
+    | "scheduler";
+
+  schemaVersion: string;
+}
+
+interface RuntimeSnapshot {
+  sessionId: SessionId;
+
+  version: number;
+  lastAppliedSequence: number;
+
+  state: RuntimeState;
+
+  createdAt: number;
+  projectionVersion: string;
+}
+
+interface StateProposal {
+  proposalId: string;
+  eventId: EventId;
+
+  baseVersion: number;
+  baseSequence: number;
+
+  proposalType:
+    | "commutative"
+    | "recomputable"
+    | "exclusive";
+
+  payload: unknown;
+
+  expiresAt?: number;
+}
+```
+
+注意：`occurredAt` 和 `recordedAt` 不是一回事。前者表示事件发生时间，后者表示系统记录时间。它们不能代替会话内的 `sequence`。
+
+### **2.2 三种提交类型**
+
+| 类型           | 定义          | 处理规则           |
+| ------------ | ----------- | -------------- |
+| Commutative  | 满足交换律的独立操作  | 可以合并，但必须通过规则验证 |
+| Recomputable | 结果依赖旧状态     | 在最新有效状态上重新计算   |
+| Exclusive    | 具有顺序依赖的状态转换 | 按事件序列串行提交      |
+
+这里需要进一步收紧定义：
+
+**不能因为一个变化表现为数值增量，就把它认定为 Commutative。**
+
+例如，`Joy + 0.1` 只有在没有状态相关的互抑、阈值、联动变量、顺序效应时，才可能是可交换操作。如果它会触发 Anger 抑制或关系状态变化，就必须重新计算。
+
+### **2.3 状态提交流程**
+
+```
+1. 接收 DomainEvent
+       ↓
+2. 分配 session sequence
+       ↓
+3. 写入 Event Log
+       ↓
+4. 获取当前 RuntimeSnapshot
+       ↓
+5. 轨道计算 Proposal
+       ↓
+6. Proposal Validator 检查
+       ↓
+7. 检查 baseVersion / baseSequence
+       ↓
+8. 根据 ProposalType 决定处理方式
+       ↓
+   ┌────────────┬─────────────┬────────────┐
+   │ Commutative│ Recomputable│ Exclusive  │
+   │ 验证合并    │ 最新状态重算 │ 串行等待    │
+   └────────────┴─────────────┴────────────┘
+       ↓
+9. State Projection 计算
+       ↓
+10. 原子提交 Snapshot + AppliedEvent
+       ↓
+11. 产生新版本与审计记录
+```
+
+### **2.4 原子性要求**
+
+必须避免以下状态：
+
+- Event Log 已记录，但状态投影丢失。
+- 状态已经更新，但 AppliedEvent 没有记录。
+- 同一个事件重试后重复修改情绪。
+- 两个提交同时读取相同版本，并覆盖彼此的结果。
+
+建议建立：
+
+```
+interface CommitRecord {
+  commitId: string;
+  eventId: string;
+
+  previousVersion: number;
+  newVersion: number;
+
+  sequence: number;
+
+  projectionVersion: string;
+
+  appliedAt: number;
+
+  status:
+    | "committed"
+    | "rejected"
+    | "recomputed";
+}
+```
+
+提交必须具备幂等性：
+
+```
+相同 eventId + 相同 projectionVersion
+                ↓
+       不允许重复产生副作用
+```
+
+如果底层存储不支持事务，就需要通过唯一约束、写入日志、恢复扫描和幂等投影来实现等效保障。不能仅依靠 JavaScript 中的一个锁变量保证跨标签页或多进程安全。
+
+### **2.5 R01 验收条件**
+
+- 两个并发事件不会互相覆盖。
+- 重复提交不会重复修改状态。
+- 非交换操作不会被当作普通增量合并。
+- 服务中断后能够从 Event Log 恢复投影。
+- 每个状态版本能够定位对应事件序列。
+- 任意状态变化可以还原其来源与计算版本。
+
+## **3. R02：A 轨并发控制**
+
+A 轨需要保证即时性，但即时性不等于允许绕过顺序控制。
+
+### **3.1 一轮对话与多个事件**
+
+一个 turn 可以产生多个事件：
+
+```
+turn_001
+ ├── user_message_received
+ ├── input_risk_assessed
+ ├── fast_emotion_proposed
+ ├── memory_retrieval_started
+ ├── assistant_response_generated
+ └── appraisal_completed
+```
+
+每个事件都有独立 `eventId`，但归属于同一个 `turnId`。
+
+### **3.2 会话事件序列**
+
+建议以 Session Event Sequencer 管理顺序：
+
+```
+interface SessionSequence {
+  sessionId: string;
+  nextSequence: number;
+  lastCommittedSequence: number;
+}
+```
+
+处理规则：
+
+1. 输入事件进入会话队列。
+2. Sequencer 分配单调递增的 sequence。
+3. A 轨读取最新已提交快照。
+4. A 轨生成 Proposal。
+5. Coordinator 检查该 Proposal 对应的事件顺序。
+6. 如果期间有前置事件提交，则重新计算依赖当前状态的部分。
+7. 提交成功后更新 `lastCommittedSequence`。
+
+**关键设计：分析可以并行，正式状态投影必须遵守确定的因果顺序。**
+
+### **3.3 A 轨延迟与降级**
+
+A 轨应设定响应预算，而不是无限等待：
+
+- 快速情绪计算超时：采用安全默认状态或保持当前状态。
+- 状态提交冲突：短暂重试，之后排队或降级。
+- 记忆检索失败：允许不带记忆继续回复。
+- 安全检查失败：不得因为追求低延迟而跳过必要审核。
+
+A 轨降级不能伪造一个已经成功提交的状态版本。
+
+## **4. R03–R04：两仪 A/B/R 动力学**
+
+v3 必须把公式、边界和验证分开处理。不能先声称稳定，再通过 `clamp` 把数值限制在 0–1。
+
+### **4.1 两仪状态定义**
+
+暂时保留：
+
+- A：正向激活维度。
+- B：负向激活维度。
+- R：调节与恢复能力。
+
+这里的 A/B/R 是工程模型变量，不直接等同于人类完整情绪机制。
+
+### **4.2 一个可实验的初始模型**
+
+先将每一阶段拆开：
+
+**第一阶段：基础衰减**
+
+\\[ A_d=A_t e^{-\lambda_A\Delta t} \\]
+
+\\[ B_d=B_t e^{-\lambda_B\Delta t} \\]
+
+**第二阶段：事件输入**
+
+\\[ A_1=A_d+G_A(E_t,R_t) \\]
+
+\\[ B_1=B_d+G_B(E_t,R_t) \\]
+
+其中 \\(G_A,G_B\\) 是事件增益函数，不能直接假设所有事件都只影响一个维度。
+
+**第三阶段：过载抑制**
+
+\\[ S=A_1+B_1 \\]
+
+\\[ X=\beta\max(0,S-1) \\]
+
+\\[ A_2=A_1-X\frac{A_1}{S+\epsilon} \\]
+
+\\[ B_2=B_1-X\frac{B_1}{S+\epsilon} \\]
+
+**第四阶段：R 调节**
+
+先使用一个待验证的形式：
+
+\\[ R\_{t+1}= \operatorname{clip} \left( R_t+ \rho(1-R_t) -\gamma R_t\cdot H(A_2,B_2,E_t), 0,1 \right) \\]
+
+其中：
+
+- \\(\rho\\)：恢复速度。
+- \\(\gamma\\)：压力抑制强度。
+- \\(H\\)：压力负荷函数。
+- `clip`：数值边界约束。
+
+**第五阶段：最终状态**
+
+\\[ A\_{t+1}=\operatorname{clip}(A_2,0,1) \\]
+
+\\[ B\_{t+1}=\operatorname{clip}(B_2,0,1) \\]
+
+以上是一个用于建立仿真和测试的候选模型，并非已经证明符合心理学或已经证明稳定的最终公式。
+
+### **4.3 必须补充的数学验证**
+
+| 验证项目  | 具体问题           |
+| ----- | -------------- |
+| 非负性   | A/B/R 是否可能小于 0 |
+| 有界性   | 是否始终处于预定范围     |
+| 平衡点   | 无新事件时是否存在稳定平衡  |
+| 局部稳定性 | 平衡点附近的扰动是否衰减   |
+| 周期振荡  | 是否存在长期周期行为     |
+| 参数敏感性 | 参数微调是否导致行为突变   |
+| 极端事件  | 连续强刺激后是否永久卡死   |
+| 恢复性   | 压力消失后是否回归正常范围  |
+
+还要特别注意：上述过载公式只适用于 \\(A_1,B_1\\) 非负且定义一致的阶段。正式实现之前必须对 \\(\beta\\)、\\(\epsilon\\)、输入范围和能量损失作完整约束。
+
+### **4.4 R 的职责边界**
+
+R 不应成为一个笼统的“理智值”。
+
+建议将它定位为调节能力状态，并将恢复模型的其他参数独立保存：
+
+```
+interface RegulationState {
+  regulation: number;
+  recoveryRate: number;
+  resilience: number;
+  stressLoad: number;
+  adaptation: number;
+}
+```
+
+其中 `regulation` 是即时状态；`recoveryRate`、`resilience` 等属于更慢的个体参数或学习参数。
+
+这也为后续 Recovery Model 留出了空间。
+
+## **5. R05：三层情绪因果计算**
+
+v3 应当将三层情绪作为不同的状态子系统，而不是三个互不关联的字段集合。
+
+### **5.1 三层职责**
+
+| 层级      | 作用               | 示例                                                         |
+| ------- | ---------------- | ---------------------------------------------------------- |
+| L1 基础情绪 | 对事件的基础情绪反应       | Joy、Anger、Sadness、Fear、Disgust                             |
+| L2 认知情绪 | 对事件意义、自我评价和预期的反应 | Shame、Guilt、Confusion、Despair                              |
+| L3 关系情绪 | 对关系状态和互动历史的反应    | Attachment、AffinityEstimate、RelationshipConfidence、Longing |
+
+### **5.2 统一计算顺序**
+
+```
+Event
+  ↓
+Evidence Collection
+  ↓
+Appraisal
+  ↓
+L1 Basic Emotion
+  ↓
+L2 Cognitive Emotion
+  ↓
+L3 Relationship Emotion
+  ↓
+Cross-layer Modulation
+  ↓
+Final Emotion Snapshot
+```
+
+这里规定默认顺序，但不是说三层之间只能单向影响。跨层反馈必须作为显式的第二阶段计算，避免同一轮内无约束地循环更新。
+
+### **5.3 接口设计**
+
+```
+interface EmotionInput {
+  event: DomainEvent;
+  appraisal: AppraisalResult;
+  memories: MemoryEvidence[];
+  previousState: EmotionState;
+}
+
+interface EmotionLayerResult {
+  nextState: Record<string, number>;
+  deltas: Record<string, number>;
+  provenance: EmotionProvenance[];
+}
+
+interface EmotionProvenance {
+  emotionKey: string;
+  sourceEventId: string;
+
+  appraisalId?: string;
+  evidenceIds: string[];
+
+  ruleId: string;
+  ruleVersion: string;
+
+  previousValue: number;
+  nextValue: number;
+
+  confidence: number;
+}
+```
+
+每个情绪值变化必须有来源记录。
+
+### **5.4 示例：用户表达不满**
+
+```
+用户表达不满
+      ↓
+识别：明确负面反馈
+      ↓
+认知评价：
+  目标一致性：负向
+  责任归因：可能与自身行为有关
+  用户意图：未知
+  可控性：部分可控
+      ↓
+L1：
+  Sadness 可能上升
+  Fear 可能上升
+  Anger 不应自动上升
+      ↓
+L2：
+  Guilt 可能上升
+  Confusion 取决于反馈是否清晰
+      ↓
+L3：
+  RelationshipConfidence 可能变化
+  Attachment 不应因单次批评直接发生剧烈变化
+      ↓
+记录情绪来源和置信度
+```
+
+这只是规则示例，不能将其作为所有不满事件的固定情绪映射。
+
+## **6. R06：认知评价模型**
+
+### **6.1 AppraisalResult**
+
+```
+type PerceivedIntent =
+  | "benevolent"
+  | "neutral"
+  | "hostile"
+  | "unknown";
+
+interface AppraisalResult {
+  appraisalId: string;
+  eventId: string;
+
+  goalCongruence: number;
+
+  causalAgency: {
+    self: number;
+    user: number;
+    environment: number;
+  };
+
+  perceivedIntent: PerceivedIntent;
+
+  fairness: number;
+  controllability: number;
+
+  confidence: number;
+
+  evidence: string[];
+  alternatives?: AppraisalHypothesis[];
+}
+
+interface AppraisalHypothesis {
+  hypothesisId: string;
+  explanation: string;
+
+  evidenceFor: string[];
+  evidenceAgainst: string[];
+
+  confidence: number;
+}
+```
+
+### **6.2 反事实评价机制**
+
+反事实评价不是强制每轮生成多个猜测，而是条件触发。
+
+适用情况：
+
+- 用户意图不明确。
+- 事件存在多个合理解释。
+- 情绪影响较大。
+- 关系判断可能被误导。
+- 记忆与当前事件存在冲突。
+
+流程：
+
+```
+Observed Event
+      ↓
+Single Hypothesis Sufficient?
+      │
+  ┌───┴───┐
+  Yes     No
+   │       │
+普通评价  多假设生成
+           ↓
+        证据比较
+           ↓
+        置信度评估
+           ↓
+        保留 Unknown
+           ↓
+        综合评价
+```
+
+特别要求：模型推测的用户意图不能被写成用户明确表达过的事实。
+
+## **7. R07：L3 输出安全机制**
+
+v3 必须区分输入安全、内部状态安全、记忆安全和输出安全。
+
+### **7.1 输出审核模式**
+
+| 模式       | 处理方式          | 适用场景       |
+| -------- | ------------- | ---------- |
+| Strict   | 完整生成、审核、再发送   | 高风险内容、敏感操作 |
+| Buffered | 按句子或短文本块审核后发送 | 普通对话       |
+| Fast     | 低风险内容快速放行     | 寒暄、简单信息    |
+
+不能把已经发出的流式内容视为可以撤回。
+
+### **7.2 安全审核结果**
+
+```
+interface SafetyDecision {
+  decisionId: string;
+
+  contentId: string;
+  policyVersion: string;
+  detectorVersion: string;
+
+  riskLevel:
+    | "low"
+    | "medium"
+    | "high"
+    | "critical";
+
+  findings: SafetyFinding[];
+
+  action:
+    | "allow"
+    | "buffer"
+    | "rewrite"
+    | "block"
+    | "require_confirmation";
+
+  reviewedAt: number;
+}
+
+interface SafetyFinding {
+  category: string;
+  evidence: string;
+  confidence: number;
+}
+```
+
+### **7.3 审核范围**
+
+- 危险行为引导。
+- 情感操纵、勒索和依赖强化。
+- 与用户明确边界冲突。
+- 身份设定漂移。
+- 虚构用户历史。
+- 将 AI 推测冒充事实。
+- 未经授权的记忆写入。
+- 未授权工具调用。
+- 对用户已撤销的授权继续执行。
+
+### **7.4 安全优先级**
+
+安全策略不能被人格、情绪、目标或用户关系状态覆盖。
+
+建议建立不可被 Agent 修改的策略层：
+
+```
+Owner / User Policy
+       ↓
+Safety Policy
+       ↓
+Permission Check
+       ↓
+Agent Strategy
+       ↓
+Action Gateway
+```
+
+AI 可以提出行为建议，但不能自行修改自己的权限边界。
+
+## **8. R08–R09：记忆证据与真正遗忘**
+
+这是决定长期数字生命是否可信的核心模块。
+
+### **8.1 记忆分层**
+
+```
+Raw Event
+   ↓
+Memory Evidence
+   ↓
+Memory Interpretation
+   ↓
+Confirmed Memory
+   ↓
+Long-term Cognitive Pattern
+   ↓
+Personality / Relationship Influence
+```
+
+每一层都应当能够追溯上游来源。
+
+### **8.2 数据结构**
+
+```
+interface MemoryEvidence {
+  evidenceId: string;
+  sourceEventId: string;
+
+  sourceType:
+    | "user_explicit"
+    | "conversation_observation"
+    | "system_event"
+    | "ai_inference";
+
+  rawContentRef: string;
+
+  observedAt: number;
+}
+
+interface MemoryInterpretation {
+  interpretationId: string;
+
+  evidenceIds: string[];
+
+  content: string;
+  confidence: number;
+
+  status:
+    | "unconfirmed"
+    | "confirmed"
+    | "rejected"
+    | "superseded";
+
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface MemoryRecord {
+  memoryId: string;
+
+  interpretationId: string;
+
+  importance: number;
+  emotionalWeight: number;
+
+  validity: number;
+
+  privacyLevel: string;
+
+  lifecycle:
+    | "candidate"
+    | "active"
+    | "superseded"
+    | "deleted";
+}
+```
+
+用户明确表达的事实与 AI 推断必须采用不同的确认规则。
+
+### **8.3 记忆召回**
+
+初始召回模型：
+
+\\[ Score(m,q,t)= w_rR+w_iI+w_eE+w_cC+w_tT \\]
+
+其中：
+
+- \\(R\\)：当前问题相关性。
+- \\(I\\)：记忆重要性。
+- \\(E\\)：情绪关联度。
+- \\(C\\)：证据可信度。
+- \\(T\\)：时间相关性。
+
+但是，召回分数不能直接决定记忆是否可用。
+
+正式流程应为：
+
+```
+候选记忆检索
+     ↓
+隐私权限过滤
+     ↓
+删除状态过滤
+     ↓
+冲突与过期过滤
+     ↓
+相关性排序
+     ↓
+Token 预算控制
+     ↓
+返回 Memory Evidence
+```
+
+### **8.4 遗忘协议**
+
+建议将删除设计为独立的 Memory Governance 操作。
+
+```
+interface ForgetRequest {
+  requestId: string;
+
+  targetMemoryIds: string[];
+
+  scope:
+    | "memory_only"
+    | "memory_and_derivatives"
+    | "all_related_data";
+
+  requestedAt: number;
+
+  status:
+    | "pending"
+    | "processing"
+    | "completed"
+    | "failed";
+}
+```
+
+执行流程：
+
+```
+Forget Request
+      ↓
+识别目标记忆
+      ↓
+构建依赖关系图
+      ↓
+定位所有派生数据
+      ↓
+执行删除或失效处理
+      ↓
+处理向量索引与缓存
+      ↓
+处理人格、关系和成长派生项
+      ↓
+处理备份和实验快照
+      ↓
+验证不可检索
+      ↓
+返回删除结果
+```
+
+需要特别注意三个不同目标：
+
+1. **不再使用**：删除后不再参与正常召回。
+2. **不可恢复**：删除内容不能通过普通历史版本恢复。
+3. **彻底删除**：按系统实际存储和备份能力处理所有副本。
+
+如果数据已经进入外部服务、备份或第三方模型上下文，就必须明确系统能够控制到什么程度，不能承诺自己无法完成的彻底删除。
+
+审计日志只保留完成治理所必需的最小信息，不应在删除审计记录里再次保存被要求遗忘的内容。
+
+## **9. R10：B2 / C / D 生命周期管理**
+
+### **9.1 B1：快速召回**
+
+B1 负责当前轮即时上下文。
+
+性能目标建议：
+
+- P50：30ms 以内。
+- P95：根据目标设备和数据量设定。
+- 超时：降级，不阻塞对话。
+
+这些数值必须通过真实设备测试后再冻结。
+
+```
+interface RetrievalMetrics {
+  latencyMs: number;
+  timeout: boolean;
+
+  resultCount: number;
+
+  indexVersion: string;
+
+  fallbackUsed: boolean;
+}
+```
+
+### **9.2 B2：深度召回**
+
+每次深度召回都必须绑定上下文：
+
+```
+interface RetrievalContext {
+  retrievalId: string;
+
+  turnId: string;
+
+  snapshotVersion: number;
+  memoryIndexVersion: string;
+
+  retrievedAt: number;
+  expiresAt: number;
+}
+```
+
+B2 结果返回时必须重新验证：
+
+- 当前记忆是否还有效。
+- 是否被新记忆取代。
+- 是否已经被用户删除。
+- 是否仍然适用于当前对话。
+- 是否与最新状态产生冲突。
+
+过期结果只能保留为历史分析材料，不能直接覆盖当前 RuntimeState。
+
+### **9.3 C 轨任务管理**
+
+```
+interface AppraisalJob {
+  jobId: string;
+  turnId: string;
+
+  dependsOn: string[];
+
+  status:
+    | "queued"
+    | "running"
+    | "waiting"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "expired";
+
+  inputSnapshotVersion: number;
+  inputMemoryVersion: string;
+
+  createdAt: number;
+  expiresAt: number;
+
+  cancelledAt?: number;
+
+  retryCount: number;
+  maxRetries: number;
+}
+```
+
+任务必须具备：
+
+- 依赖管理。
+- 取消机制。
+- 过期机制。
+- 有限重试。
+- 幂等执行。
+- 结果版本验证。
+
+例如，用户删除某一轮对话时，与该轮有关的 C 轨任务需要检查是否继续执行。如果任务依赖已经失效的记忆证据，就必须取消或重新构建输入。
+
+### **9.4 D 轨时间系统**
+
+将时间分成两个概念：
+
+| 时间               | 用途         |
+| ---------------- | ---------- |
+| Wall Clock       | 现实世界时间     |
+| Simulation Clock | 数字生命内部模拟时间 |
+
+```
+interface TimeSettlement {
+  settlementId: string;
+
+  fromTime: number;
+  toTime: number;
+
+  source:
+    | "real_elapsed"
+    | "manual_simulation"
+    | "recovery";
+
+  settlementVersion: number;
+
+  appliedAt: number;
+}
+```
+
+D 轨必须具备：
+
+- 已结算时间记录。
+- 防重复结算。
+- 系统时钟回拨检测。
+- 时区变化处理。
+- 休眠恢复机制。
+- 手动模拟时间与真实时间隔离。
+- 多设备时间冲突处理。
+
+特别是：`lastSettledAtMs` 不能单独承担所有时间一致性职责。
+
+## **10. R11：Replay 与实验可复现机制**
+
+v3 将 Replay 分成三个层级。
+
+### **10.1 Replay 三种模式**
+
+| 模式                | 固定内容         | 用途          |
+| ----------------- | ------------ | ----------- |
+| State Replay      | 固定事件、规则和初始状态 | 检查确定性状态演化   |
+| Appraisal Replay  | 固定模型输出和认知提案  | 检查情绪计算与提交逻辑 |
+| End-to-End Replay | 固定尽可能多的环境输入  | 比较整体系统行为    |
+
+端到端重放不应承诺严格确定性，因为外部模型和服务可能发生变化。
+
+### **10.2 实验快照**
+
+```
+interface ExperimentSnapshot {
+  experimentId: string;
+
+  engine: {
+    version: string;
+    commitId: string;
+    projectionVersion: string;
+  };
+
+  parameters: Record<string, unknown>;
+
+  model: {
+    provider: string;
+    modelId: string;
+    modelVersion?: string;
+    inferenceConfig: Record<string, unknown>;
+  };
+
+  promptVersion: string;
+
+  memorySnapshotId: string;
+  memoryIndexVersion: string;
+
+  clockSnapshot: Record<string, unknown>;
+
+  eventSequence: string[];
+
+  randomSeed?: number;
+
+  externalResults: Record<string, unknown>;
+
+  createdAt: number;
+}
+```
+
+敏感数据不能因为 Replay 需要复现就绕过记忆删除规则。实验快照必须具备数据治理策略和删除依赖。
+
+### **10.3 行为评估集**
+
+建议从系统测试和情感行为测试两个方向建立基准。
+
+| 维度    | 评估目标            |
+| ----- | --------------- |
+| 情绪一致性 | 情绪反应是否与事件相符     |
+| 人格一致性 | 是否出现无依据的人格突变    |
+| 情绪连续性 | 是否能保持合理的情绪状态连续性 |
+| 记忆准确性 | 是否错误引用用户历史      |
+| 关系边界  | 是否尊重用户明确表达的边界   |
+| 表达一致性 | 表达是否符合内在状态      |
+| 认知纠错  | 是否能发现和修正误解      |
+| 成长有效性 | 长期变化是否改善实际行为    |
+
+每个维度都应有独立的测试样本、评分规则、基线版本和回归门槛。
+
+**特别要求：模型自评只能作为辅助证据，不能作为唯一成长指标。**
+
+## **11. Strategy Layer：从情绪模拟到行为选择**
+
+这部分建议在 v3 中定义接口，但不要阻塞前面的基础引擎建设。
+
+### **11.1 结构**
+
+```
+Perception
+    ↓
+Appraisal
+    ↓
+Emotion State
+    ↓
+Relationship State
+    ↓
+Personality Constraints
+    ↓
+Goal Evaluation
+    ↓
+Strategy Selection
+    ↓
+Response / Action
+    ↓
+Outcome Observation
+    ↓
+Reflection & Learning
+```
+
+### **11.2 行为策略接口**
+
+```
+interface StrategyCandidate {
+  strategyId: string;
+
+  goal: string;
+
+  action:
+    | "comfort"
+    | "ask"
+    | "listen"
+    | "share_memory"
+    | "stay_silent"
+    | "other";
+
+  expectedOutcome: string;
+
+  estimatedRisk: number;
+  estimatedUtility: number;
+
+  confidence: number;
+}
+
+interface StrategyDecision {
+  decisionId: string;
+
+  candidates: StrategyCandidate[];
+
+  selectedStrategyId: string;
+
+  constraintsApplied: string[];
+
+  requiresConfirmation: boolean;
+
+  createdAt: number;
+}
+```
+
+### **11.3 策略选择的约束**
+
+策略选择不能简单地采用：
+
+\\[ Strategy=\arg\max Utility \\]
+
+因为最高效用的行为不一定是最合适的行为。
+
+至少要考虑：
+
+- 用户明确表达的偏好。
+- 当前关系边界。
+- 人格稳定性。
+- 行为风险。
+- 用户授权。
+- 当前目标。
+- 历史策略效果。
+- 当前情绪与调节能力。
+
+策略系统的首要目标不是让 AI 更主动，而是让 AI 的主动行为有明确的目标、边界和可解释依据。
+
+## **12. R12：源码审计与工程证据**
+
+v3 必须建立一个正式的审计证据体系。
+
+### **12.1 每项审计结论都需要证据**
+
+```
+interface AuditFinding {
+  findingId: string;
+
+  title: string;
+  severity: "P0" | "P1" | "P2" | "P3";
+
+  sourceFile?: string;
+  lineRange?: [number, number];
+
+  codeReference?: string;
+  testReference?: string;
+
+  evidence: string[];
+
+  confidence:
+    | "confirmed"
+    | "probable"
+    | "unverified";
+
+  auditStatus:
+    | "open"
+    | "fixed"
+    | "verified"
+    | "accepted";
+}
+```
+
+### **12.2 证据等级**
+
+| 等级 | 定义          | 能否作为已实现结论  |
+| -- | ----------- | ---------- |
+| E0 | 方案文档描述      | 否          |
+| E1 | 找到源码实现      | 只能说明存在实现   |
+| E2 | 单元测试通过      | 可以说明局部行为通过 |
+| E3 | 集成测试通过      | 可以说明模块交互通过 |
+| E4 | 回归测试与实际环境验证 | 可以支持工程验收   |
+
+例如，文档写了“具备幂等性”，但只有函数名或接口定义，只能算 E0/E1。必须提供重复提交测试和实际执行结果，才有资格将其标记为已验证。
+
+### **12.3 持久化 Adapter 分离**
+
+```
+Persistence
+    │
+    ├── LegacyEmotionAIAdapter
+    │       └── Existing Firestore
+    │
+    └── DaoLifePersistence
+            ├── IndexedDBAdapter
+            └── JsonBackupAdapter
+
+未来扩展：
+    └── DaoLifeCloudAdapter
+            └── New Firestore Collections
+```
+
+不能用一个模糊的 `FirestoreAdapter` 混合新旧数据职责。
+
+目标是保护现有 Firestore 数据与安全规则，并通过回归测试验证，而不是在没有完整审计的情况下承诺 100% 零破坏。
+
+# **13. v3 实施路线：分阶段交付**
+
+我建议将原来的 M0–M4 保留，但进一步明确每个阶段的交付物和进入下一阶段的条件。
+
+**M0：基线冻结与源码审计**
+
+第一优先级
+
+- 盘点当前 Emotion-AI 源码。
+- 冻结现有功能和数据结构。
+- 建立测试基线。
+- 建立安全输出基础机制。
+- 建立 Audit Finding 清单。
+
+**交付物：** 源码地图、依赖关系图、测试报告、风险清单、Git 基线。
+
+**M1：状态协调与事件系统**
+
+- Event Log。
+- Session Sequencer。
+- State Coordinator。
+- RuntimeSnapshot。
+- Proposal Validator。
+- State Projection。
+- 幂等提交与恢复。
+
+**验收：** 并发、重复提交、乱序、崩溃恢复测试通过。
+
+**M2：情绪动力学与四轨运行**
+
+- 两仪 A/B/R 数学模型。
+- 三层情绪计算。
+- Appraisal Engine。
+- B1/B2。
+- C 轨任务队列。
+- D 轨时间结算。
+
+**验收：** 状态变化有因果记录，动力学通过参数仿真，异步任务不会污染新状态。
+
+**M3：记忆治理与长期成长**
+
+- Memory Evidence。
+- Memory Interpretation。
+- Memory Governance。
+- 遗忘和派生数据失效。
+- Recovery Model。
+- 人格与关系状态更新。
+- 输出安全完善。
+
+**验收：** 记忆可以溯源、纠错和遗忘；长期变化可以通过独立评估验证。
+
+**M4：Replay 与实验工作台**
+
+- State Replay。
+- Appraisal Replay。
+- End-to-End Replay。
+- 实验快照。
+- Timeline。
+- Emotion Provenance Viewer。
+- 参数实验和对比评估。
+
+**验收：** 可以重复运行确定性实验，定位状态变化来源，比较不同参数与规则版本。
+
+## **14. v3 的最终验收门槛**
+
+这里把 R01–R12 从文档修订项升级成工程验收项。
+
+| 编号  | 验收目标                 | 阻断级别 |
+| --- | -------------------- | ---- |
+| R01 | 状态提交、Rebase、原子性与恢复正确 | P0   |
+| R02 | A 轨并发与事件顺序正确         | P0   |
+| R03 | A/B 过载公式自洽           | P0   |
+| R04 | R 动力学定义及稳定性验证        | P0   |
+| R05 | 三层情绪计算因果完整           | P0   |
+| R06 | 认知评价维度与不确定性正确        | P1   |
+| R07 | 输出安全不依赖不可撤回的流式阻断     | P0   |
+| R08 | 记忆证据与解释分离            | P0   |
+| R09 | 删除、派生数据和 Replay 治理完整 | P0   |
+| R10 | B2/C/D 生命周期正确        | P1   |
+| R11 | Replay 实验输入完整冻结      | P1   |
+| R12 | 源码审计、测试与验收证据完整       | P0   |
+
+这里有一个重要区别：
+
+- **设计完成**：协议、接口和流程已确定。
+- **实现完成**：对应源码已编写。
+- **验证完成**：测试与实际环境证据支持预期行为。
+
+三者不能混为一个完成状态。
+
+## **15. 我建议再增加三个 v3.1 级能力**
+
+这些不是 R01–R12 的阻断项，但从整个项目的长期方向看非常重要。
+
+### **15.1 不确定性传播机制**
+
+目前认知评价有 confidence，但不能只在一个字段里保存置信度。
+
+例如：
+
+```
+用户没有回复
+    ↓
+可能是忙碌（0.55）
+可能是不想聊天（0.20）
+可能是忘记了（0.15）
+未知其他原因（0.10）
+    ↓
+认知评价
+    ↓
+情绪变化
+```
+
+情绪变化也应该受到证据置信度约束。
+
+不能因为 AI 对一个事件产生了 0.3 的置信度，就把它当成确定事实写入长期记忆。
+
+建议未来加入：
+
+- Evidence Confidence。
+- Appraisal Confidence。
+- Memory Confidence。
+- Prediction Confidence。
+- Decision Confidence。
+
+并定义它们之间的传播规则。
+
+### **15.2 人格与情绪分离**
+
+我认为这是这个项目必须长期坚持的原则。
+
+人格不应等于当前情绪的平均值。
+
+例如：
+
+一个角色今天很悲伤，不代表它的人格变得悲观。
+
+建议将状态分成：
+
+| 状态类型    | 变化速度      |
+| ------- | --------- |
+| 即时情绪    | 快         |
+| 认知情绪    | 中         |
+| 关系状态    | 中慢        |
+| 人格特征    | 慢         |
+| 核心价值与边界 | 极慢，且受严格约束 |
+
+人格更新应该通过长期重复证据，而不是单次事件。
+
+### **15.3 成长不能等同于参数变化**
+
+例如，AI 的 Resilience 从 0.5 变成 0.7，不代表它真的更有韧性。
+
+真正的成长需要观察：
+
+- 同类事件下的行为是否改善。
+- 是否减少重复认知错误。
+- 是否能更准确理解用户。
+- 是否更稳定地遵守关系边界。
+- 是否能够根据过去的失败调整策略。
+
+因此建议把成长定义为：
+
+\\[ Growth = \Delta BehaviorQuality + \Delta CognitiveAccuracy + \Delta Adaptation \\]
+
+这只是概念框架，正式指标需要建立测试集和独立评价规则。
+
+# **16. 最终工程判断**
+
+我对 v3 的建议是：**先冻结架构边界，再开始源码整合，不要同时开发所有功能。**
+
+尤其要防止三个错误：
+
+1. 把 LLM 的推断直接当成状态事实。
+2. 把情绪数值变化直接当成人格成长。
+3. 把状态被限制在 0–1 直接当成动力学稳定。
+
+这三个错误一旦进入底层架构，后续即使增加大量记忆、人格、情感和行为模块，也只是在一个不可靠的状态系统上继续叠加功能。
+
+## **下一步：正式进入工程编制**
+
+我建议按下面顺序开展：
+
+1. **v3-00：工程架构总规范**
+
+   冻结模块边界、数据流、事件协议、状态所有权和接口规范。
+2. **v3-01：State Coordinator 与 Event Log 技术设计**
+
+   把 R01、R02 变成可编码的状态提交协议，定义并发、恢复、幂等和异常处理。
+3. **v3-02：Emotion Dynamics 数学规范**
+
+   完整定义 A/B/R、三层情绪、认知评价、参数边界和仿真验证。
+4. **v3-03：Memory Governance 技术规范**
+
+   完成证据链、记忆生命周期、遗忘、派生数据和 Replay 数据治理。
+5. **v3-04：四轨 Runtime 与 Strategy Layer**
+
+   定义 B1/B2/C/D 的任务生命周期、行为策略接口和安全网关。
+6. **v3-05：Replay、实验工作台与测试规范**
+
+   完成实验快照、评估集、可观测性和阶段验收。
+
+**我的建议是先做 v3-00 和 v3-01，不要马上写情绪算法代码。** 因为状态协调协议一旦设计错误，后面的情绪、记忆和人格系统都会受到影响。
+
+另外，正式编制时需要同时维护一份“设计要求—源码文件—测试用例—验收证据”追踪矩阵。这样最终得到的就不只是架构文档，而是一套能持续开发、审计和验证的工程体系。

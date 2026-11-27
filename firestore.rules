@@ -1,0 +1,606 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==================== Reusable Hardened Primitives ====================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function parentUserExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.userId == request.auth.uid;
+    }
+
+    function isCoord(val) {
+      return (val is int || val is float) && val >= -1 && val <= 1;
+    }
+
+    function isUnitFloat(val) {
+      return (val is int || val is float) && val >= 0 && val <= 1;
+    }
+
+    function isValidTraitMap(m) {
+      return m is map &&
+        m.keys().hasAll(['directness', 'empathyGranularity', 'proactiveCheckIn', 'restraint']) &&
+        m.keys().hasOnly(['directness', 'empathyGranularity', 'proactiveCheckIn', 'restraint']) &&
+        isUnitFloat(m.directness) &&
+        isUnitFloat(m.empathyGranularity) &&
+        isUnitFloat(m.proactiveCheckIn) &&
+        isUnitFloat(m.restraint);
+    }
+
+    function isValidTraitDeltasMap(m) {
+      return m is map &&
+        m.keys().hasOnly(['directness', 'empathyGranularity', 'proactiveCheckIn', 'restraint']) &&
+        (!('directness' in m) || isCoord(m.directness)) &&
+        (!('empathyGranularity' in m) || isCoord(m.empathyGranularity)) &&
+        (!('proactiveCheckIn' in m) || isCoord(m.proactiveCheckIn)) &&
+        (!('restraint' in m) || isCoord(m.restraint));
+    }
+
+    function isValidPatternCountsMap(m) {
+      return m is map &&
+        m.keys().hasOnly(['verified_venting']) &&
+        (!('verified_venting' in m) || (m.verified_venting is int && m.verified_venting >= 0 && m.verified_venting <= 10000));
+    }
+
+    function isValidPreferenceKey(k) {
+      return k in ['solution_first', 'low_emotional_probing', 'gentle_pacing', 'concise_direct'];
+    }
+
+    // ==================== Validation Blueprints ====================
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['userId', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.userId is string &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userId == userId &&
+        data.displayName is string &&
+        data.displayName.size() >= 1 &&
+        data.displayName.size() <= 80 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAnnotation(data, userId) {
+      return data.keys().hasAll([
+          'userId',
+          'utterance',
+          'context',
+          'valence',
+          'arousal',
+          'primaryLabel',
+          'quadrant',
+          'displayTime',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'utterance',
+          'context',
+          'valence',
+          'arousal',
+          'primaryLabel',
+          'quadrant',
+          'displayTime',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userId == userId &&
+        data.utterance is string &&
+        data.utterance.size() >= 1 &&
+        data.utterance.size() <= 1000 &&
+        data.context is string &&
+        data.context.size() >= 1 &&
+        data.context.size() <= 64 &&
+        isCoord(data.valence) &&
+        isCoord(data.arousal) &&
+        data.primaryLabel is string &&
+        data.primaryLabel.size() >= 1 &&
+        data.primaryLabel.size() <= 40 &&
+        data.quadrant is string &&
+        data.quadrant.size() <= 24 &&
+        data.quadrant in ['high-positive', 'low-positive', 'high-negative', 'low-negative'] &&
+        data.displayTime is string &&
+        data.displayTime.size() >= 1 &&
+        data.displayTime.size() <= 32 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDynamicConcern(data, userId) {
+      return data.keys().hasAll([
+          'userId',
+          'topicKeywords',
+          'targetValenceDirection',
+          'targetArousalDirection',
+          'weight',
+          'sourceEventId',
+          'expiresAt',
+          'origin',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'topicKeywords',
+          'targetValenceDirection',
+          'targetArousalDirection',
+          'weight',
+          'sourceEventId',
+          'expiresAt',
+          'origin',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userId == userId &&
+        data.topicKeywords is list &&
+        data.topicKeywords.size() >= 1 &&
+        data.topicKeywords.size() <= 6 &&
+        data.topicKeywords[0] is string &&
+        data.topicKeywords[0].size() >= 1 &&
+        data.topicKeywords[0].size() <= 32 &&
+        data.targetValenceDirection in [-1, 0, 1] &&
+        data.targetArousalDirection in [-1, 0, 1] &&
+        isUnitFloat(data.weight) &&
+        data.sourceEventId is string &&
+        data.sourceEventId.size() >= 1 &&
+        data.sourceEventId.size() <= 64 &&
+        data.expiresAt is string &&
+        data.expiresAt.size() >= 1 &&
+        data.expiresAt.size() <= 40 &&
+        data.origin is string &&
+        data.origin.size() <= 16 &&
+        data.origin == 'dynamic' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPersonaProfileState(data, userId) {
+      return data.keys().hasAll([
+          'userId',
+          'baselineTraits',
+          'traits',
+          'maxTraitDrift',
+          'patternCounts',
+          'lastSyncIso',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'baselineTraits',
+          'traits',
+          'maxTraitDrift',
+          'patternCounts',
+          'lastSyncIso',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userId == userId &&
+        isValidTraitMap(data.baselineTraits) &&
+        isValidTraitMap(data.traits) &&
+        (data.maxTraitDrift is int || data.maxTraitDrift is float) &&
+        data.maxTraitDrift >= 0 &&
+        data.maxTraitDrift <= 0.5 &&
+        isValidPatternCountsMap(data.patternCounts) &&
+        data.lastSyncIso is string &&
+        data.lastSyncIso.size() >= 1 &&
+        data.lastSyncIso.size() <= 40 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPersonaPreference(data, userId, prefKey) {
+      return data.keys().hasAll([
+          'userId',
+          'key',
+          'scope',
+          'label',
+          'description',
+          'confidence',
+          'evidenceCount',
+          'evidenceIds',
+          'locked',
+          'updatedAtIso',
+          'expiresAtIso',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'key',
+          'scope',
+          'label',
+          'description',
+          'confidence',
+          'evidenceCount',
+          'evidenceIds',
+          'locked',
+          'updatedAtIso',
+          'expiresAtIso',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userId == userId &&
+        data.key is string &&
+        data.key.size() <= 32 &&
+        isValidPreferenceKey(data.key) &&
+        data.key == prefKey &&
+        data.scope is string &&
+        data.scope.size() <= 32 &&
+        data.scope in ['task_and_help', 'venting_and_support', 'global'] &&
+        data.label is string &&
+        data.label.size() >= 1 &&
+        data.label.size() <= 64 &&
+        data.description is string &&
+        data.description.size() >= 1 &&
+        data.description.size() <= 200 &&
+        isUnitFloat(data.confidence) &&
+        data.evidenceCount is int &&
+        data.evidenceCount >= 1 &&
+        data.evidenceCount <= 1000 &&
+        data.evidenceIds is list &&
+        data.evidenceIds.size() >= 1 &&
+        data.evidenceIds.size() <= 12 &&
+        data.evidenceIds[0] is string &&
+        data.evidenceIds[0].size() >= 1 &&
+        data.evidenceIds[0].size() <= 64 &&
+        data.locked is bool &&
+        data.updatedAtIso is string &&
+        data.updatedAtIso.size() >= 1 &&
+        data.updatedAtIso.size() <= 40 &&
+        data.expiresAtIso is string &&
+        data.expiresAtIso.size() <= 40 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPersonaGrowthLog(data, userId) {
+      return data.keys().hasAll([
+          'userId',
+          'timestampIso',
+          'eventId',
+          'triggerKind',
+          'summary',
+          'evidenceIds',
+          'traitDeltas',
+          'preferenceKey',
+          'createdPreference',
+          'reverted',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'timestampIso',
+          'eventId',
+          'triggerKind',
+          'summary',
+          'evidenceIds',
+          'traitDeltas',
+          'preferenceKey',
+          'createdPreference',
+          'reverted',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userId == userId &&
+        data.timestampIso is string &&
+        data.timestampIso.size() >= 1 &&
+        data.timestampIso.size() <= 40 &&
+        data.eventId is string &&
+        data.eventId.size() >= 1 &&
+        data.eventId.size() <= 64 &&
+        data.triggerKind is string &&
+        data.triggerKind.size() <= 32 &&
+        data.triggerKind in [
+          'refusal_feedback',
+          'correction_feedback',
+          'explicit_preference',
+          'pattern_consolidation',
+          'reflection_consolidation',
+          'homeostatic_decay'
+        ] &&
+        data.summary is string &&
+        data.summary.size() >= 1 &&
+        data.summary.size() <= 300 &&
+        data.evidenceIds is list &&
+        data.evidenceIds.size() <= 12 &&
+        (data.evidenceIds.size() == 0 || (data.evidenceIds[0] is string && data.evidenceIds[0].size() >= 1 && data.evidenceIds[0].size() <= 64)) &&
+        isValidTraitDeltasMap(data.traitDeltas) &&
+        data.preferenceKey is string &&
+        data.preferenceKey.size() <= 32 &&
+        (data.preferenceKey == '' || isValidPreferenceKey(data.preferenceKey)) &&
+        data.createdPreference is bool &&
+        data.reverted is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // ==================== Collection Rules ====================
+
+    // 1. User Profile (Owner-only, PII isolated, no list)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow create: if isVerifiedOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+      allow delete: if isVerifiedOwner(userId) && isValidId(userId);
+
+      // 2. Annotations Subcollection
+      match /annotations/{annotationId} {
+        allow get: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(annotationId) &&
+          parentUserExists(userId);
+        allow list: if isSignedIn() &&
+          userId == request.auth.uid &&
+          resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(annotationId) &&
+          isValidAnnotation(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(annotationId) &&
+          isValidAnnotation(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'utterance',
+            'context',
+            'valence',
+            'arousal',
+            'primaryLabel',
+            'quadrant',
+            'displayTime',
+            'updatedAt'
+          ]) &&
+          parentUserExists(userId);
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(annotationId) &&
+          parentUserExists(userId);
+      }
+
+      // 3. Dynamic Concerns Subcollection
+      match /dynamicConcerns/{concernId} {
+        allow get: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(concernId) &&
+          parentUserExists(userId);
+        allow list: if isSignedIn() &&
+          userId == request.auth.uid &&
+          resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(concernId) &&
+          isValidDynamicConcern(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(concernId) &&
+          isValidDynamicConcern(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'topicKeywords',
+            'targetValenceDirection',
+            'targetArousalDirection',
+            'weight',
+            'sourceEventId',
+            'expiresAt',
+            'updatedAt'
+          ]) &&
+          parentUserExists(userId);
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(concernId) &&
+          parentUserExists(userId);
+      }
+
+      // 4. Persona Profile State (Single known doc 'current', no list)
+      match /personaStates/{stateId} {
+        allow get: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(stateId) &&
+          stateId == 'current' &&
+          parentUserExists(userId);
+        allow list: if false;
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(stateId) &&
+          stateId == 'current' &&
+          isValidPersonaProfileState(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(stateId) &&
+          stateId == 'current' &&
+          isValidPersonaProfileState(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            // Action: Sync traits & pattern counts
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'traits',
+              'patternCounts',
+              'lastSyncIso',
+              'updatedAt'
+            ]) ||
+            // Action: Full baseline reset
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'baselineTraits',
+              'traits',
+              'maxTraitDrift',
+              'patternCounts',
+              'lastSyncIso',
+              'updatedAt'
+            ])
+          ) &&
+          parentUserExists(userId);
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(stateId) &&
+          stateId == 'current' &&
+          parentUserExists(userId);
+      }
+
+      // 5. Persona Preferences Subcollection
+      match /personaPreferences/{prefKey} {
+        allow get: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(prefKey) &&
+          isValidPreferenceKey(prefKey) &&
+          parentUserExists(userId);
+        allow list: if isSignedIn() &&
+          userId == request.auth.uid &&
+          resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(prefKey) &&
+          isValidPersonaPreference(incoming(), userId, prefKey) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(prefKey) &&
+          isValidPersonaPreference(incoming(), userId, prefKey) &&
+          incoming().userId == existing().userId &&
+          incoming().key == existing().key &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            // Action: Toggle lock & expiry
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'locked',
+              'expiresAtIso',
+              'updatedAtIso',
+              'updatedAt'
+            ]) ||
+            // Action: Reinforce preference from new evidence
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'scope',
+              'label',
+              'description',
+              'confidence',
+              'evidenceCount',
+              'evidenceIds',
+              'locked',
+              'updatedAtIso',
+              'expiresAtIso',
+              'updatedAt'
+            ])
+          ) &&
+          parentUserExists(userId);
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(prefKey) &&
+          isValidPreferenceKey(prefKey) &&
+          parentUserExists(userId);
+      }
+
+      // 6. Persona Growth Logs Subcollection (Terminal state locking on reverted == true)
+      match /personaLogs/{logId} {
+        allow get: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          parentUserExists(userId);
+        allow list: if isSignedIn() &&
+          userId == request.auth.uid &&
+          resource.data.userId == request.auth.uid;
+        allow create: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          isValidPersonaGrowthLog(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+        allow update: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          isValidPersonaGrowthLog(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          // Terminal State Lock: once reverted == true, no subsequent updates are permitted
+          existing().reverted == false &&
+          incoming().reverted == true &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['reverted', 'updatedAt']) &&
+          parentUserExists(userId);
+        allow delete: if isVerifiedOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          parentUserExists(userId);
+      }
+    }
+  }
+}

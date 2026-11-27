@@ -1,0 +1,449 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Root workspace profile document anchoring a signed-in user's isolated Emotion-AI data.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name shown in the sidebar.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": ["userId", "displayName", "createdAt", "updatedAt"]
+    },
+    "Annotation": {
+      "title": "Annotation",
+      "description": "A user's Russell circumplex emotion annotation record.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "utterance": {
+          "type": "string",
+          "description": "Annotated user utterance or observation note.",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "context": {
+          "type": "string",
+          "description": "Source context category.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "valence": {
+          "type": "number",
+          "description": "Circumplex valence coordinate in [-1, 1]."
+        },
+        "arousal": {
+          "type": "number",
+          "description": "Circumplex arousal coordinate in [-1, 1]."
+        },
+        "primaryLabel": {
+          "type": "string",
+          "description": "Primary Chinese emotion label.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "quadrant": {
+          "type": "string",
+          "description": "Circumplex quadrant identifier.",
+          "enum": ["high-positive", "low-positive", "high-negative", "low-negative"]
+        },
+        "displayTime": {
+          "type": "string",
+          "description": "Formatted local display timestamp (YYYY-MM-DD HH:mm).",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the annotation was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the annotation was last updated."
+        }
+      },
+      "required": [
+        "userId",
+        "utterance",
+        "context",
+        "valence",
+        "arousal",
+        "primaryLabel",
+        "quadrant",
+        "displayTime",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DynamicConcern": {
+      "title": "DynamicConcern",
+      "description": "A temporary 24-hour TTL dynamic concern learned in the Dual-Loop Lab.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "topicKeywords": {
+          "type": "array",
+          "description": "Bounded list (1-6) of Chinese topic keywords."
+        },
+        "targetValenceDirection": {
+          "type": "number",
+          "description": "Target valence direction (-1, 0, or 1).",
+          "enum": [-1, 0, 1]
+        },
+        "targetArousalDirection": {
+          "type": "number",
+          "description": "Target arousal direction (-1, 0, or 1).",
+          "enum": [-1, 0, 1]
+        },
+        "weight": {
+          "type": "number",
+          "description": "Appraisal weight in [0, 1]."
+        },
+        "sourceEventId": {
+          "type": "string",
+          "description": "Originating event ID.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "ISO-8601 expiration timestamp.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "origin": {
+          "type": "string",
+          "description": "Origin tag, restricted to dynamic.",
+          "enum": ["dynamic"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated."
+        }
+      },
+      "required": [
+        "userId",
+        "topicKeywords",
+        "targetValenceDirection",
+        "targetArousalDirection",
+        "weight",
+        "sourceEventId",
+        "expiresAt",
+        "origin",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PersonaProfileState": {
+      "title": "PersonaProfileState",
+      "description": "Slow-layer bounded persona traits and pattern counters for a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "baselineTraits": {
+          "type": "object",
+          "description": "Immutable baseline trait vector map (directness, empathyGranularity, proactiveCheckIn, restraint)."
+        },
+        "traits": {
+          "type": "object",
+          "description": "Current bounded trait vector map (directness, empathyGranularity, proactiveCheckIn, restraint)."
+        },
+        "maxTraitDrift": {
+          "type": "number",
+          "description": "Maximum allowed drift from baseline in [0, 0.5]."
+        },
+        "patternCounts": {
+          "type": "object",
+          "description": "Bounded map (max 16 keys) tracking cross-turn repeated feedback counts."
+        },
+        "lastSyncIso": {
+          "type": "string",
+          "description": "ISO-8601 timestamp of the latest persona update.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated."
+        }
+      },
+      "required": [
+        "userId",
+        "baselineTraits",
+        "traits",
+        "maxTraitDrift",
+        "patternCounts",
+        "lastSyncIso",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PersonaPreference": {
+      "title": "PersonaPreference",
+      "description": "Mid-layer context-scoped relationship preference learned from user interactions.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "key": {
+          "type": "string",
+          "description": "Allowlisted preference key.",
+          "enum": [
+            "solution_first",
+            "low_emotional_probing",
+            "gentle_pacing",
+            "concise_direct"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "description": "Intent scope where this preference applies.",
+          "enum": ["task_and_help", "venting_and_support", "global"]
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable Chinese label.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "description": {
+          "type": "string",
+          "description": "Preference description.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Confidence score in [0, 1]."
+        },
+        "evidenceCount": {
+          "type": "number",
+          "description": "Number of verified evidence items (1-1000)."
+        },
+        "evidenceIds": {
+          "type": "array",
+          "description": "Bounded list (1-12) of source evidence IDs."
+        },
+        "locked": {
+          "type": "boolean",
+          "description": "Whether the user locked this preference against decay or overwrite."
+        },
+        "updatedAtIso": {
+          "type": "string",
+          "description": "ISO-8601 timestamp when preference was updated.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "expiresAtIso": {
+          "type": "string",
+          "description": "ISO-8601 expiration timestamp or empty string if locked/non-expiring.",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated."
+        }
+      },
+      "required": [
+        "userId",
+        "key",
+        "scope",
+        "label",
+        "description",
+        "confidence",
+        "evidenceCount",
+        "evidenceIds",
+        "locked",
+        "updatedAtIso",
+        "expiresAtIso",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PersonaGrowthLog": {
+      "title": "PersonaGrowthLog",
+      "description": "Auditable and revertible persona growth changelog entry.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "timestampIso": {
+          "type": "string",
+          "description": "ISO-8601 event timestamp.",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "eventId": {
+          "type": "string",
+          "description": "Source turn or reflection event ID.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "triggerKind": {
+          "type": "string",
+          "description": "Growth trigger classification.",
+          "enum": [
+            "refusal_feedback",
+            "correction_feedback",
+            "explicit_preference",
+            "pattern_consolidation",
+            "reflection_consolidation",
+            "homeostatic_decay"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable change summary.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "evidenceIds": {
+          "type": "array",
+          "description": "Bounded list (0-12) of source evidence IDs."
+        },
+        "traitDeltas": {
+          "type": "object",
+          "description": "Map of bounded trait deltas (keys subset of directness, empathyGranularity, proactiveCheckIn, restraint)."
+        },
+        "preferenceKey": {
+          "type": "string",
+          "description": "Affected preference key or empty string if none.",
+          "enum": [
+            "",
+            "solution_first",
+            "low_emotional_probing",
+            "gentle_pacing",
+            "concise_direct"
+          ]
+        },
+        "createdPreference": {
+          "type": "boolean",
+          "description": "Whether this log entry newly created the associated preference."
+        },
+        "reverted": {
+          "type": "boolean",
+          "description": "Terminal lock state indicating whether this entry has been reverted."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated."
+        }
+      },
+      "required": [
+        "userId",
+        "timestampIso",
+        "eventId",
+        "triggerKind",
+        "summary",
+        "evidenceIds",
+        "traitDeltas",
+        "preferenceKey",
+        "createdPreference",
+        "reverted",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only root workspace profile document."
+    },
+    "/users/{userId}/annotations/{annotationId}": {
+      "schema": { "$ref": "#/entities/Annotation" },
+      "description": "Owner-only emotion annotation records."
+    },
+    "/users/{userId}/dynamicConcerns/{concernId}": {
+      "schema": { "$ref": "#/entities/DynamicConcern" },
+      "description": "Owner-only temporary dynamic concern records."
+    },
+    "/users/{userId}/personaStates/{stateId}": {
+      "schema": { "$ref": "#/entities/PersonaProfileState" },
+      "description": "Owner-only bounded persona trait state (single document id 'current')."
+    },
+    "/users/{userId}/personaPreferences/{prefKey}": {
+      "schema": { "$ref": "#/entities/PersonaPreference" },
+      "description": "Owner-only context-scoped relationship preferences."
+    },
+    "/users/{userId}/personaLogs/{logId}": {
+      "schema": { "$ref": "#/entities/PersonaGrowthLog" },
+      "description": "Owner-only auditable persona growth changelog entries with terminal revert locking."
+    }
+  }
+}

@@ -1,0 +1,1310 @@
+# **V3.1-00《总体架构与系统边界规范》**
+
+
+
+架构决策已确认
+
+规范草案 V0.1
+
+
+
+本规范以现有 v3 的 R01–R12 修订基线为强制继承条件，在此基础上纳入心理学分析、用户个人数据、Android 生活助手能力，以及 Mika 手机操作能力。
+
+本次确认的两项决策将作为 V3.1 的固定架构输入：
+
+| 决策项       | 已确认方案                     | 架构含义                                            |
+| --------- | ------------------------- | ----------------------------------------------- |
+| Mika 产品关系 | **B：深度合并为一个 Android App** | 用户只面对一个 Android 应用；Mika 的手机操作能力融入统一应用，但内部保持模块隔离 |
+| 手机数据采集    | **A：分级、按需采集**             | 不默认全面收集；按数据敏感度、用途、触发条件和授权范围采集                   |
+
+这里有一个重要的工程解释：**深度合并不等于把 Mika 的代码、权限和运行状态全部混成一个模块。** 我们合并产品入口、用户体验、账户与授权体系，同时保留 Mika 执行运行时的独立边界。这样既能实现一个 App，又能避免后续升级 Mika 或替换执行引擎时牵动整个情感系统。
+
+本文件首先冻结总体架构、系统职责、数据边界和模块间契约。具体源码迁移、Mika 内部改造、数据库字段及 API 细节，留到后续专项规范，不在本文件中假设已经完成。
+
+# **1. 文档目的与约束**
+
+## **1.1 建设目标**
+
+V3.1 不是单纯增加一个心理学分析模块，也不是把手机自动化能力接入聊天界面。
+
+它需要形成一个具有以下能力的系统：
+
+1. **角色自身成长**：角色具有独立的情绪、人格、记忆和关系状态，能够通过持续交互形成变化。
+2. **用户理解**：能够综合用户明确表达、生活记录和授权数据，逐步形成有证据支撑的用户理解。
+3. **心理学辅助分析**：通过独立的心理学分析角色提出假设，辅助理解用户，而不直接决定角色人格和情绪。
+4. **个人生活数据管理**：通过 Android 原生数据接口和用户授权的数据源，形成统一、可追溯的数据层。
+5. **手机任务执行**：将 Mika 的手机操作能力整合进统一 Android App，执行用户明确授权的手机任务。
+6. **可验证的长期运行**：所有关键状态变化、记忆写入、心理假设、任务执行和权限变化都能够审计、评估和追溯。
+
+## **1.2 强制继承的 v3 基线**
+
+R01–R12 不属于可选优化项，而是 V3.1 的工程约束。
+
+| 编号  | v3 修订基线           | V3.1 中的继承要求                       |
+| --- | ----------------- | --------------------------------- |
+| R01 | 状态提交、Rebase、事件顺序  | 统一状态提交机制，禁止模块直接覆盖共享状态             |
+| R02 | A-track 并发与事件因果顺序 | 区分 turnId、eventId，不能用任务完成时间替代因果顺序 |
+| R03 | A/B 过载计算          | 同一阶段内计算超量，禁止混用不同阶段状态              |
+| R04 | R 动力学稳定性          | 参数边界、恢复机制、稳定性仿真和敏感性测试             |
+| R05 | 三层情绪因果变换          | 基础情绪、认知情绪、关系情绪分层，明确变换顺序和来源        |
+| R06 | Appraisal 归因机制    | 区分因果责任、行为主体、意图和证据置信度              |
+| R07 | 流式输出安全            | 严格、缓冲、快速输出模式；已发送内容不可撤回            |
+| R08 | 记忆证据分层            | 原始事件、AI 解释、长期记忆必须分开               |
+| R09 | 完整遗忘机制            | 删除派生记忆、索引、缓存、快照等，避免 Replay 复活     |
+| R10 | B1/B2/C/D 生命周期    | 过期、依赖、取消、时钟及时区变化必须明确处理            |
+| R11 | Replay 可复现实验      | 冻结代码、参数、模型、Prompt、记忆、时钟、事件顺序等     |
+| R12 | 源码审计证据            | 关键结论必须有源码路径、行号、测试和 Git 版本依据       |
+
+**继承原则：** V3.1 新模块不得绕过上述机制。例如心理分析模块不能直接写长期记忆，Mika 不能绕过统一权限系统执行操作，Android 数据适配器不能直接修改角色状态。
+
+# **2. 总体架构**
+
+## **2.1 系统整体结构**
+
+[What Is A Mobile AI Agent? The 2026 Guide](https://images.openai.com/static-rsc-4/87yAYGcyKSNmwlmuYueFRslK5RMXCjSrnZbZCuZerXM9ldBiqCxNL9XhkrM9raKXUPGqTcjARPksjzPqMWICXg_x_flkUhRheyfTkZtElneDx-VIzagIaEI_mtgyFlgYpUVhWINXUSO53h6vdaqEKv6A1W_18VG9jzsXHzeFEjE?purpose=inline)
+
+[aidenai.io](https://aidenai.io/blog/what-is-a-mobile-ai-agent-the-2026-guide/?utm_source=chatgpt.com)
+
+下面是本项目需要实现的逻辑架构。图中模块是逻辑职责边界，不代表必须部署成独立服务。
+
+\#chatgpt-mermaid-\_r_264\_{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;fill:rgb(13, 13, 13);}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#chatgpt-mermaid-\_r_264\_ .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_264\_ .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_264\_ .error-icon{fill:rgb(243, 243, 243);}#chatgpt-mermaid-\_r_264\_ .error-text{fill:rgb(13, 13, 13);stroke:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ .edge-thickness-normal{stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .edge-thickness-thick{stroke-width:3.5px;}#chatgpt-mermaid-\_r_264\_ .edge-pattern-solid{stroke-dasharray:0;}#chatgpt-mermaid-\_r_264\_ .edge-thickness-invisible{stroke-width:0;fill:none;}#chatgpt-mermaid-\_r_264\_ .edge-pattern-dashed{stroke-dasharray:3;}#chatgpt-mermaid-\_r_264\_ .edge-pattern-dotted{stroke-dasharray:2;}#chatgpt-mermaid-\_r_264\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_264\_ .marker.cross{stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_264\_ svg{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;}#chatgpt-mermaid-\_r_264\_ p{margin:0;}#chatgpt-mermaid-\_r_264\_ .label{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ .cluster-label text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ .cluster-label span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ .cluster-label span p{background-color:transparent;}#chatgpt-mermaid-\_r_264\_ .label text,#chatgpt-mermaid-\_r_264\_ span{fill:rgb(13, 13, 13);color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ .node rect,#chatgpt-mermaid-\_r_264\_ .node circle,#chatgpt-mermaid-\_r_264\_ .node ellipse,#chatgpt-mermaid-\_r_264\_ .node polygon,#chatgpt-mermaid-\_r_264\_ .node path{fill:rgb(222, 234, 251);stroke:rgb(83, 154, 248);stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .rough-node .label text,#chatgpt-mermaid-\_r_264\_ .node .label text,#chatgpt-mermaid-\_r_264\_ .image-shape .label,#chatgpt-mermaid-\_r_264\_ .icon-shape .label{text-anchor:middle;}#chatgpt-mermaid-\_r_264\_ .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .rough-node .label,#chatgpt-mermaid-\_r_264\_ .node .label,#chatgpt-mermaid-\_r_264\_ .image-shape .label,#chatgpt-mermaid-\_r_264\_ .icon-shape .label{text-align:center;}#chatgpt-mermaid-\_r_264\_ .node.clickable{cursor:pointer;}#chatgpt-mermaid-\_r_264\_ .root .anchor path{fill:rgb(143, 143, 143)!important;stroke-width:0;stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_264\_ .arrowheadPath{fill:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_264\_ .edgePath .path{stroke:rgb(143, 143, 143);stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .flowchart-link{stroke:rgb(143, 143, 143);fill:none;}#chatgpt-mermaid-\_r_264\_ .edgeLabel{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_264\_ .edgeLabel p{background-color:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_264\_ .edgeLabel rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_264\_ .labelBkg{background-color:rgba(252, 252, 252, 0.5);}#chatgpt-mermaid-\_r_264\_ .cluster rect{fill:rgb(243, 243, 243);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .cluster text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ .cluster span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:12px;background:rgb(243, 243, 243);border:1px solid rgba(0, 0, 0, 0.1);border-radius:2px;pointer-events:none;z-index:100;}#chatgpt-mermaid-\_r_264\_ .flowchartTitleText{text-anchor:middle;font-size:18px;fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_264\_ rect.text{fill:none;stroke-width:0;}#chatgpt-mermaid-\_r_264\_ .icon-shape,#chatgpt-mermaid-\_r_264\_ .image-shape{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_264\_ .icon-shape p,#chatgpt-mermaid-\_r_264\_ .image-shape p{background-color:rgb(252, 252, 252);padding:2px;}#chatgpt-mermaid-\_r_264\_ .icon-shape .label rect,#chatgpt-mermaid-\_r_264\_ .image-shape .label rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_264\_ .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#chatgpt-mermaid-\_r_264\_ .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#chatgpt-mermaid-\_r_264\_ .node .neo-node{stroke:rgb(83, 154, 248);}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node rect,#chatgpt-mermaid-\_r_264\_ [data-look="neo"].cluster rect,#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node polygon{stroke:url(#chatgpt-mermaid-\_r_264\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].swimlane.cluster rect{filter:none;}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node path{stroke:url(#chatgpt-mermaid-\_r_264\_-gradient);stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node .neo-line path{stroke:rgb(83, 154, 248);filter:none;}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node circle{stroke:url(#chatgpt-mermaid-\_r_264\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].node circle .state-start{fill:#000000;}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].icon-shape .icon{fill:url(#chatgpt-mermaid-\_r_264\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_264\_ [data-look="neo"].icon-shape .icon-neo path{stroke:url(#chatgpt-mermaid-\_r_264\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_264\_ .node text{font-size:14px;font-weight:600;letter-spacing:normal;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_264\_ .edgeLabels text{font-size:13px;font-weight:600;letter-spacing:-0.08px;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_264\_ .node tspan[font-weight="normal"],#chatgpt-mermaid-\_r_264\_ .edgeLabels tspan[font-weight="normal"]{font-weight:600;}#chatgpt-mermaid-\_r_264\_ .edgeLabel .label rect{opacity:1;rx:13px;ry:13px;fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .node rect,#chatgpt-mermaid-\_r_264\_ .node circle,#chatgpt-mermaid-\_r_264\_ .node ellipse,#chatgpt-mermaid-\_r_264\_ .node polygon,#chatgpt-mermaid-\_r_264\_ .node path{fill:rgb(229, 243, 255);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_264\_ .node rect{rx:16px;ry:16px;}#chatgpt-mermaid-\_r_264\_ .mermaid-decision .label-container{fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-dasharray:2,2;}#chatgpt-mermaid-\_r_264\_ .edgePaths .flowchart-link{stroke:rgb(143, 143, 143);stroke-width:1px;stroke-linecap:round;stroke-linejoin:round;}#chatgpt-mermaid-\_r_264\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_264\_ :root{--mermaid-font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";}Emotion-AI Character个人 AI 服务端统一 Android AppCharacter State CoordinatorEmotion DynamicsRelationship StateCharacter PersonalityCharacter Growth EngineAPI GatewayConsent & Policy EngineImmutable Event LogPersonal Data HubMemory GovernanceUser Profile & HypothesesUser Understanding EnginePsychological AnalystStrategy LayerOutput & Action SafetyGate统一交互层聊天 / 语音 / 生活助手 / 角色Data Collection Manager数据采集与授权管理Native Data AdaptersHealth Connect / 日历 /使用情况Mika Integrated Runtime手机操作 / App 自动化本地安全层加密 / 缓存 / 离线队列用户
+
+图中的双向关系需要进一步解释：
+
+- 用户数据流向服务端，不代表服务端可以任意调用手机权限。
+- 心理分析结果流向用户理解引擎，不代表心理分析结果自动成为用户事实。
+- 用户理解结果可以影响角色的认知输入，但不能直接覆盖角色人格、情绪和关系状态。
+- 角色的情绪与关系变化必须由角色自身的状态演化机制产生。
+
+## **2.2 四个核心系统**
+
+V3.1 的系统边界划分为四个核心系统。
+
+| 系统                      | 核心职责                       | 不允许承担的职责          |
+| ----------------------- | -------------------------- | ----------------- |
+| Android 统一客户端           | 用户交互、数据授权、手机数据适配、Mika 执行入口 | 直接决定心理结论和角色长期状态   |
+| Personal AI Server      | 数据治理、记忆、用户理解、心理分析、策略协调     | 无授权地读取手机数据        |
+| Emotion-AI Character    | 角色人格、情绪、关系和成长              | 直接把心理假设当成角色事实     |
+| Mika Integrated Runtime | 受授权的手机操作与任务执行              | 全面扫描手机并自行建立用户心理档案 |
+
+这四个系统可以在部署上逐步演进，但职责边界必须从第一版就建立。
+
+# **3. Android 统一 App 设计**
+
+## **3.1 产品层决策**
+
+最终用户只需要安装和使用一个 Android App。
+
+App 内部包含五个主要功能入口：
+
+1. 情感角色：聊天、语音、关系互动、角色成长。
+2. 生活助手：日程、提醒、目标、生活记录。
+3. 个人数据：数据源管理、授权、采集历史、个人信息。
+4. 手机操作：通过 Mika 执行用户授权的手机任务。
+5. 实验与设置：角色状态、记忆管理、数据治理、实验模式和审计信息。
+
+这些入口是产品层的划分，不代表五套独立的后台系统。
+
+## **3.2 Android 模块建议**
+
+建议采用 Kotlin + Jetpack Compose 的统一 Android 工程，模块划分如下：
+
+```
+android-app/
+│
+├── app/
+│   ├── MainActivity
+│   ├── Navigation
+│   └── AppComposition
+│
+├── core/
+│   ├── common/
+│   ├── network/
+│   ├── database/
+│   ├── security/
+│   ├── event/
+│   └── permissions/
+│
+├── feature/
+│   ├── character/
+│   ├── life_assistant/
+│   ├── personal_data/
+│   ├── memory/
+│   ├── phone_agent/
+│   └── experiment/
+│
+├── data/
+│   ├── health_connect/
+│   ├── calendar/
+│   ├── app_usage/
+│   ├── location/
+│   └── manual_input/
+│
+├── mika/
+│   ├── adapter/
+│   ├── runtime/
+│   ├── task_gateway/
+│   └── permission_bridge/
+│
+└── integration/
+    ├── server_api/
+    ├── event_sync/
+    └── sync_scheduler/
+```
+
+### **Mika 深度合并的具体方式**
+
+我建议采用：
+
+**统一 App + Mika 独立 Android Library/Feature Module + 统一任务 Gateway。**
+
+不建议直接将 Mika 的代码复制到 `app/` 中，也不建议让 Mika 的 Agent Loop 直接接管整个应用。
+
+原因：
+
+- Mika 负责手机任务执行，不负责角色成长。
+- 角色 Agent 和 Mika Agent 的任务目标、工具权限、生命周期不同。
+- Mika 的 UI 自动化需要独立的运行状态、错误处理和权限管理。
+- 后续 Mika 上游更新时，需要能够比较、合并和回归测试。
+- 手机操作不能成为角色 Agent 的隐式工具调用通道。
+
+**合并的是产品体验和统一权限管理，不是无边界地合并运行时。**
+
+## **3.3 Mika 与原生数据能力的边界**
+
+这是 V3.1 最重要的 Android 工程边界之一。
+
+| 能力                | 主要实现方式                             | 是否由 Mika 承担 |
+| ----------------- | ---------------------------------- | ----------- |
+| Health Connect 数据 | Android 原生 API                     | 否           |
+| 日历                | Android Calendar Provider / 用户授权接口 | 否           |
+| App 使用时长          | Android UsageStatsManager          | 否           |
+| 位置                | Android Location API               | 否           |
+| 手动生活记录            | App 原生 UI                          | 否           |
+| 操作其他 App          | Mika Runtime                       | 是           |
+| 点击、输入、滚动          | Mika Runtime                       | 是           |
+| 用户指定的 App 页面操作    | Mika Runtime                       | 是           |
+| 读取指定页面内容          | Mika Runtime，受任务范围限制               | 可承担         |
+| 全面扫描所有 App 内容     | 禁止默认实现                             | 否           |
+
+这里不能混淆两个概念：
+
+- **数据采集**：为了形成用户生活记录和理解模型，读取结构化数据。
+- **手机操作**：为了完成用户明确要求的任务，模拟用户在手机上的操作。
+
+例如，用户希望系统了解自己的运动情况，应该优先通过 Health Connect 获取授权数据，而不是让 Mika 打开运动 App、读取屏幕，再将截图作为长期数据来源。
+
+# **4. 手机数据采集与授权规范**
+
+## **4.1 核心原则：分级、按需采集**
+
+用户已经确认采用 A 方案。它不是简单的“用户允许就可以收集”，而是需要将数据采集拆成多个独立决策：
+
+1. 是否允许读取数据？
+2. 是否允许上传到个人 AI 服务端？
+3. 是否允许进行行为分析？
+4. 是否允许用于心理学推断？
+5. 是否允许形成长期记忆？
+6. 是否允许用于角色互动？
+
+这六项权限不能默认绑定。
+
+例如，用户可以允许系统读取睡眠数据并在本地展示，但不允许上传、不允许进行心理分析，也不允许将其用于角色互动。
+
+## **4.2 数据分级**
+
+| 级别 | 数据类别    | 典型数据               | 默认策略             |
+| -- | ------- | ------------------ | ---------------- |
+| D0 | 用户主动提供  | 日记、对话、语音输入、明确偏好    | 用户主动提交后处理        |
+| D1 | 基础生活数据  | 日历、提醒、目标、任务、生活记录   | 按功能授权，按需读取       |
+| D2 | 健康与运动数据 | 步数、睡眠、运动、体重、身高     | 单独授权，限定用途        |
+| D3 | 设备行为数据  | App 使用时长、使用频率、屏幕活动 | 默认关闭，单项授权        |
+| D4 | 环境与位置数据 | 位置、轨迹、活动地点         | 高敏感，按需采集         |
+| D5 | 社交与通信数据 | 联系人、通话记录、短信、消息内容   | 默认不采集，暂不纳入自动采集范围 |
+
+这里需要强调：D0–D5 是本项目的工程敏感度分级，不是 Android 官方权限等级，也不是对数据法律属性的判断。实际权限仍需要根据 Android API 和适用法律分别确定。
+
+## **4.3 采集模式**
+
+每一个数据源必须明确支持哪些采集模式：
+
+| 模式              | 含义         | 示例          |
+| --------------- | ---------- | ----------- |
+| Manual          | 用户主动提交     | 写日记、上传文件    |
+| On-demand       | 用户或任务触发时读取 | 用户询问本周运动情况  |
+| Scheduled       | 用户授权后的定期采集 | 每晚汇总当日步数    |
+| Event-triggered | 特定事件触发     | 日历事件结束后生成记录 |
+
+Scheduled 和 Event-triggered 不能因为用户授权某个数据源就自动启用，必须另外获得相应的采集模式授权。
+
+## **4.4 权限模型**
+
+建议建立统一的 `DataConsent` 结构。
+
+```
+interface DataConsent {
+  consentId: string;
+  userId: string;
+
+  sourceId: string;
+  dataCategory: string;
+
+  purpose: string[];
+
+  collectionMode:
+    | "manual"
+    | "on_demand"
+    | "scheduled"
+    | "event_triggered";
+
+  permissions: {
+    allowRead: boolean;
+    allowUpload: boolean;
+    allowAnalysis: boolean;
+    allowPsychologicalInference: boolean;
+    allowLongTermMemory: boolean;
+    allowCharacterUse: boolean;
+  };
+
+  retentionPolicy: {
+    rawDataRetentionDays?: number;
+    derivedDataRetentionDays?: number;
+  };
+
+  grantedAt: string;
+  revokedAt?: string;
+
+  consentVersion: number;
+}
+```
+
+这只是规范层的数据契约草案，实际实现还需要考虑权限版本、授权范围变更、设备级授权、撤销传播和数据删除任务。
+
+### **权限判断顺序**
+
+每一次数据读取、分析或记忆写入，都必须通过统一权限检查：
+
+```
+收到数据请求
+    ↓
+识别数据源与数据类别
+    ↓
+检查用户授权状态
+    ↓
+检查本次用途是否在授权范围内
+    ↓
+检查采集模式是否允许
+    ↓
+检查数据范围和时间范围
+    ↓
+检查是否需要再次确认
+    ↓
+执行读取或拒绝
+    ↓
+记录审计事件
+```
+
+如果用户撤销了心理推断权限，系统不能继续使用已经采集的数据生成新的心理假设，除非该数据另有合法且明确的处理授权。
+
+撤销某一项授权也不能只修改 UI 开关，而必须向对应的数据处理任务、缓存、后台计划和相关执行入口传播。
+
+## **4.5 按需采集示例**
+
+用户问：
+
+> 我最近为什么总是没有精神？
+
+系统不能立刻扫描手机全部数据。
+
+正确流程：
+
+```
+用户提出问题
+    ↓
+识别可能需要的数据
+    ↓
+检查已有授权和数据完整性
+    ↓
+识别缺失数据
+    ↓
+向用户说明需要哪些数据及用途
+    ↓
+用户授权或拒绝
+    ↓
+采集必要数据
+    ↓
+形成客观观察
+    ↓
+分析可能原因
+    ↓
+给出有不确定性说明的反馈
+```
+
+例如，可以先利用用户主动表达和已有的睡眠记录；如果运动数据没有授权，就不能因为“可能有帮助”而自动读取。
+
+# **5. 用户理解系统与心理学专家角色**
+
+这是本次架构调整的核心。心理学应该增强系统理解用户的能力，但不能接管角色的成长。
+
+## **5.1 三个不同对象必须分离**
+
+```
+UserProfile
+    用户是什么样的人（系统对用户的理解）
+
+CharacterPersonality
+    AI 角色是什么样的人（角色自身的人格）
+
+RelationshipState
+    AI 与用户之间形成了什么关系（关系状态）
+```
+
+另外，角色当前的情绪也必须独立存在：
+
+```
+CharacterEmotion
+    角色此刻的情绪状态
+```
+
+这四种状态不能合并成一个“用户与角色心理状态”。
+
+例如：
+
+用户长期表现出较强的独立性，不意味着角色必须变得疏远；用户近期情绪低落，也不意味着角色必须持续表现得悲伤。
+
+角色如何回应，仍然应该由角色自身的情绪、人格、关系状态、情境评价和策略共同决定。
+
+## **5.2 心理学专家角色**
+
+新增独立角色：
+
+**Psychological Analyst（心理学分析专家）**
+
+它的定位不是心理医生，也不是直接给用户下诊断的工具，而是一个以心理学理论为分析框架的研究型 Agent。
+
+职责：
+
+- 对用户行为和表达提出心理学解释假设。
+- 区分情绪状态、认知模式、行为习惯和长期人格倾向。
+- 提供多个可能解释，而不是只给一个结论。
+- 检查证据是否充分。
+- 查找反例和矛盾证据。
+- 评估假设适用的时间范围。
+- 提醒 User Understanding Engine 哪些推断不应进入长期记忆。
+
+### **心理学知识体系**
+
+建议先纳入以下理论方向：
+
+| 理论领域   | 主要用途            | 不能直接推出的结论       |
+| ------ | --------------- | --------------- |
+| 大五人格   | 分析长期人格倾向        | 不能凭一次行为判定人格     |
+| 情绪心理学  | 理解情绪诱因和变化       | 不能仅凭文本确定真实情绪    |
+| 认知心理学  | 理解注意、记忆、解释和判断模式 | 不能把一次认知偏差当作稳定特征 |
+| 社会心理学  | 理解社会关系和情境影响     | 不能仅凭社交频率推断关系质量  |
+| 自我决定理论 | 理解自主、胜任、关系等动机   | 不能把理论需求当成用户自述事实 |
+| 发展心理学  | 理解长期变化和阶段性发展    | 不能将阶段模型机械套用到个体  |
+
+心理学知识应该成为分析工具，而不是给模型一套固定的用户分类标签。
+
+## **5.3 心理学专家不能直接影响角色成长**
+
+建议设置三个运行阶段：
+
+阶段 1 · Shadow Mode
+
+**影子分析模式**
+
+心理学专家可以独立分析用户，但结果不进入角色生成上下文，不改变角色状态。主要用于验证分析质量。
+
+阶段 2 · Advisory Mode
+
+**建议模式**
+
+心理学专家将经过证据检查的分析建议交给 User Understanding Engine，由后者决定是否作为有限上下文提供给角色。
+
+阶段 3 · Experimental Mode
+
+**实验模式**
+
+在用户明确同意的实验中，比较不同心理学建议对理解准确度、回应质量和角色成长的影响。
+
+这里的关键不是心理学专家永远不能影响角色，而是它不能拥有直接修改角色状态的权限。
+
+## **5.4 用户理解的五层结构**
+
+| 层级 | 名称                        | 含义         | 例子            |
+| -- | ------------------------- | ---------- | ------------- |
+| U0 | Explicit Profile          | 用户明确表达的事实  | 用户明确说自己喜欢独处   |
+| U1 | Behavioral Observation    | 客观行为观察     | 最近三周周末较少外出    |
+| U2 | Cognitive Pattern         | 认知模式假设     | 可能倾向于独立解决问题   |
+| U3 | Personality Hypothesis    | 长期人格倾向假设   | 可能具有较高的独立性    |
+| U4 | Psychological Formulation | 特定情境下的心理解释 | 近期可能因为压力而减少社交 |
+
+U4 不应被永久固化为人格事实。
+
+每条心理假设都应当具有证据和生命周期。
+
+建议的统一结构：
+
+```
+interface PsychologicalHypothesis {
+  hypothesisId: string;
+
+  subject: string;
+  domain: string;
+
+  statement: string;
+
+  supportingEvidence: string[];
+  contradictingEvidence: string[];
+
+  alternativeExplanations: string[];
+
+  confidence: number;
+  confidenceMethod: string;
+
+  validity: {
+    startAt: string;
+    expiresAt?: string;
+  };
+
+  status:
+    | "candidate"
+    | "under_review"
+    | "user_confirmed"
+    | "rejected"
+    | "expired";
+
+  provenance: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+`confidence` 不能被解释为模型真实可靠的概率。后续需要用有标注的数据集进行校准，区分模型主观置信度与实测准确率。
+
+# **6. 用户数据到角色成长的数据通路**
+
+本项目需要同时存在两条独立闭环。
+
+## **6.1 用户理解闭环**
+
+\#chatgpt-mermaid-\_r_27h\_{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;fill:rgb(13, 13, 13);}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#chatgpt-mermaid-\_r_27h\_ .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_27h\_ .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_27h\_ .error-icon{fill:rgb(243, 243, 243);}#chatgpt-mermaid-\_r_27h\_ .error-text{fill:rgb(13, 13, 13);stroke:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ .edge-thickness-normal{stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .edge-thickness-thick{stroke-width:3.5px;}#chatgpt-mermaid-\_r_27h\_ .edge-pattern-solid{stroke-dasharray:0;}#chatgpt-mermaid-\_r_27h\_ .edge-thickness-invisible{stroke-width:0;fill:none;}#chatgpt-mermaid-\_r_27h\_ .edge-pattern-dashed{stroke-dasharray:3;}#chatgpt-mermaid-\_r_27h\_ .edge-pattern-dotted{stroke-dasharray:2;}#chatgpt-mermaid-\_r_27h\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27h\_ .marker.cross{stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27h\_ svg{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;}#chatgpt-mermaid-\_r_27h\_ p{margin:0;}#chatgpt-mermaid-\_r_27h\_ .label{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ .cluster-label text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ .cluster-label span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ .cluster-label span p{background-color:transparent;}#chatgpt-mermaid-\_r_27h\_ .label text,#chatgpt-mermaid-\_r_27h\_ span{fill:rgb(13, 13, 13);color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ .node rect,#chatgpt-mermaid-\_r_27h\_ .node circle,#chatgpt-mermaid-\_r_27h\_ .node ellipse,#chatgpt-mermaid-\_r_27h\_ .node polygon,#chatgpt-mermaid-\_r_27h\_ .node path{fill:rgb(222, 234, 251);stroke:rgb(83, 154, 248);stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .rough-node .label text,#chatgpt-mermaid-\_r_27h\_ .node .label text,#chatgpt-mermaid-\_r_27h\_ .image-shape .label,#chatgpt-mermaid-\_r_27h\_ .icon-shape .label{text-anchor:middle;}#chatgpt-mermaid-\_r_27h\_ .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .rough-node .label,#chatgpt-mermaid-\_r_27h\_ .node .label,#chatgpt-mermaid-\_r_27h\_ .image-shape .label,#chatgpt-mermaid-\_r_27h\_ .icon-shape .label{text-align:center;}#chatgpt-mermaid-\_r_27h\_ .node.clickable{cursor:pointer;}#chatgpt-mermaid-\_r_27h\_ .root .anchor path{fill:rgb(143, 143, 143)!important;stroke-width:0;stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27h\_ .arrowheadPath{fill:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27h\_ .edgePath .path{stroke:rgb(143, 143, 143);stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .flowchart-link{stroke:rgb(143, 143, 143);fill:none;}#chatgpt-mermaid-\_r_27h\_ .edgeLabel{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_27h\_ .edgeLabel p{background-color:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_27h\_ .edgeLabel rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_27h\_ .labelBkg{background-color:rgba(252, 252, 252, 0.5);}#chatgpt-mermaid-\_r_27h\_ .cluster rect{fill:rgb(243, 243, 243);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .cluster text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ .cluster span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:12px;background:rgb(243, 243, 243);border:1px solid rgba(0, 0, 0, 0.1);border-radius:2px;pointer-events:none;z-index:100;}#chatgpt-mermaid-\_r_27h\_ .flowchartTitleText{text-anchor:middle;font-size:18px;fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27h\_ rect.text{fill:none;stroke-width:0;}#chatgpt-mermaid-\_r_27h\_ .icon-shape,#chatgpt-mermaid-\_r_27h\_ .image-shape{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_27h\_ .icon-shape p,#chatgpt-mermaid-\_r_27h\_ .image-shape p{background-color:rgb(252, 252, 252);padding:2px;}#chatgpt-mermaid-\_r_27h\_ .icon-shape .label rect,#chatgpt-mermaid-\_r_27h\_ .image-shape .label rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_27h\_ .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#chatgpt-mermaid-\_r_27h\_ .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#chatgpt-mermaid-\_r_27h\_ .node .neo-node{stroke:rgb(83, 154, 248);}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node rect,#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].cluster rect,#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node polygon{stroke:url(#chatgpt-mermaid-\_r_27h\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].swimlane.cluster rect{filter:none;}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node path{stroke:url(#chatgpt-mermaid-\_r_27h\_-gradient);stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node .neo-line path{stroke:rgb(83, 154, 248);filter:none;}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node circle{stroke:url(#chatgpt-mermaid-\_r_27h\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].node circle .state-start{fill:#000000;}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].icon-shape .icon{fill:url(#chatgpt-mermaid-\_r_27h\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27h\_ [data-look="neo"].icon-shape .icon-neo path{stroke:url(#chatgpt-mermaid-\_r_27h\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27h\_ .node text{font-size:14px;font-weight:600;letter-spacing:normal;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_27h\_ .edgeLabels text{font-size:13px;font-weight:600;letter-spacing:-0.08px;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_27h\_ .node tspan[font-weight="normal"],#chatgpt-mermaid-\_r_27h\_ .edgeLabels tspan[font-weight="normal"]{font-weight:600;}#chatgpt-mermaid-\_r_27h\_ .edgeLabel .label rect{opacity:1;rx:13px;ry:13px;fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .node rect,#chatgpt-mermaid-\_r_27h\_ .node circle,#chatgpt-mermaid-\_r_27h\_ .node ellipse,#chatgpt-mermaid-\_r_27h\_ .node polygon,#chatgpt-mermaid-\_r_27h\_ .node path{fill:rgb(229, 243, 255);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_27h\_ .node rect{rx:16px;ry:16px;}#chatgpt-mermaid-\_r_27h\_ .mermaid-decision .label-container{fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-dasharray:2,2;}#chatgpt-mermaid-\_r_27h\_ .edgePaths .flowchart-link{stroke:rgb(143, 143, 143);stroke-width:1px;stroke-linecap:round;stroke-linejoin:round;}#chatgpt-mermaid-\_r_27h\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27h\_ :root{--mermaid-font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";}数据采集客观观察模式发现心理学分析提出用户理解假设证据与反例检查用户反馈 / 进一步观察确认 / 修正 / 拒绝 / 过期新证据假设过期
+
+这个循环的目标是不断提高对用户的理解准确度，而不是不断增加用户画像的字段数量。
+
+## **6.2 角色成长闭环**
+
+\#chatgpt-mermaid-\_r_27o\_{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;fill:rgb(13, 13, 13);}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#chatgpt-mermaid-\_r_27o\_ .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_27o\_ .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#chatgpt-mermaid-\_r_27o\_ .error-icon{fill:rgb(243, 243, 243);}#chatgpt-mermaid-\_r_27o\_ .error-text{fill:rgb(13, 13, 13);stroke:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ .edge-thickness-normal{stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .edge-thickness-thick{stroke-width:3.5px;}#chatgpt-mermaid-\_r_27o\_ .edge-pattern-solid{stroke-dasharray:0;}#chatgpt-mermaid-\_r_27o\_ .edge-thickness-invisible{stroke-width:0;fill:none;}#chatgpt-mermaid-\_r_27o\_ .edge-pattern-dashed{stroke-dasharray:3;}#chatgpt-mermaid-\_r_27o\_ .edge-pattern-dotted{stroke-dasharray:2;}#chatgpt-mermaid-\_r_27o\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27o\_ .marker.cross{stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27o\_ svg{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:16px;}#chatgpt-mermaid-\_r_27o\_ p{margin:0;}#chatgpt-mermaid-\_r_27o\_ .label{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ .cluster-label text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ .cluster-label span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ .cluster-label span p{background-color:transparent;}#chatgpt-mermaid-\_r_27o\_ .label text,#chatgpt-mermaid-\_r_27o\_ span{fill:rgb(13, 13, 13);color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ .node rect,#chatgpt-mermaid-\_r_27o\_ .node circle,#chatgpt-mermaid-\_r_27o\_ .node ellipse,#chatgpt-mermaid-\_r_27o\_ .node polygon,#chatgpt-mermaid-\_r_27o\_ .node path{fill:rgb(222, 234, 251);stroke:rgb(83, 154, 248);stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .rough-node .label text,#chatgpt-mermaid-\_r_27o\_ .node .label text,#chatgpt-mermaid-\_r_27o\_ .image-shape .label,#chatgpt-mermaid-\_r_27o\_ .icon-shape .label{text-anchor:middle;}#chatgpt-mermaid-\_r_27o\_ .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .rough-node .label,#chatgpt-mermaid-\_r_27o\_ .node .label,#chatgpt-mermaid-\_r_27o\_ .image-shape .label,#chatgpt-mermaid-\_r_27o\_ .icon-shape .label{text-align:center;}#chatgpt-mermaid-\_r_27o\_ .node.clickable{cursor:pointer;}#chatgpt-mermaid-\_r_27o\_ .root .anchor path{fill:rgb(143, 143, 143)!important;stroke-width:0;stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27o\_ .arrowheadPath{fill:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27o\_ .edgePath .path{stroke:rgb(143, 143, 143);stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .flowchart-link{stroke:rgb(143, 143, 143);fill:none;}#chatgpt-mermaid-\_r_27o\_ .edgeLabel{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_27o\_ .edgeLabel p{background-color:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_27o\_ .edgeLabel rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_27o\_ .labelBkg{background-color:rgba(252, 252, 252, 0.5);}#chatgpt-mermaid-\_r_27o\_ .cluster rect{fill:rgb(243, 243, 243);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .cluster text{fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ .cluster span{color:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";font-size:12px;background:rgb(243, 243, 243);border:1px solid rgba(0, 0, 0, 0.1);border-radius:2px;pointer-events:none;z-index:100;}#chatgpt-mermaid-\_r_27o\_ .flowchartTitleText{text-anchor:middle;font-size:18px;fill:rgb(13, 13, 13);}#chatgpt-mermaid-\_r_27o\_ rect.text{fill:none;stroke-width:0;}#chatgpt-mermaid-\_r_27o\_ .icon-shape,#chatgpt-mermaid-\_r_27o\_ .image-shape{background-color:rgb(252, 252, 252);text-align:center;}#chatgpt-mermaid-\_r_27o\_ .icon-shape p,#chatgpt-mermaid-\_r_27o\_ .image-shape p{background-color:rgb(252, 252, 252);padding:2px;}#chatgpt-mermaid-\_r_27o\_ .icon-shape .label rect,#chatgpt-mermaid-\_r_27o\_ .image-shape .label rect{opacity:0.5;background-color:rgb(252, 252, 252);fill:rgb(252, 252, 252);}#chatgpt-mermaid-\_r_27o\_ .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#chatgpt-mermaid-\_r_27o\_ .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#chatgpt-mermaid-\_r_27o\_ .node .neo-node{stroke:rgb(83, 154, 248);}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node rect,#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].cluster rect,#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node polygon{stroke:url(#chatgpt-mermaid-\_r_27o\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].swimlane.cluster rect{filter:none;}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node path{stroke:url(#chatgpt-mermaid-\_r_27o\_-gradient);stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node .neo-line path{stroke:rgb(83, 154, 248);filter:none;}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node circle{stroke:url(#chatgpt-mermaid-\_r_27o\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].node circle .state-start{fill:#000000;}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].icon-shape .icon{fill:url(#chatgpt-mermaid-\_r_27o\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27o\_ [data-look="neo"].icon-shape .icon-neo path{stroke:url(#chatgpt-mermaid-\_r_27o\_-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#chatgpt-mermaid-\_r_27o\_ .node text{font-size:14px;font-weight:600;letter-spacing:normal;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_27o\_ .edgeLabels text{font-size:13px;font-weight:600;letter-spacing:-0.08px;fill:rgb(0, 79, 153);}#chatgpt-mermaid-\_r_27o\_ .node tspan[font-weight="normal"],#chatgpt-mermaid-\_r_27o\_ .edgeLabels tspan[font-weight="normal"]{font-weight:600;}#chatgpt-mermaid-\_r_27o\_ .edgeLabel .label rect{opacity:1;rx:13px;ry:13px;fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .node rect,#chatgpt-mermaid-\_r_27o\_ .node circle,#chatgpt-mermaid-\_r_27o\_ .node ellipse,#chatgpt-mermaid-\_r_27o\_ .node polygon,#chatgpt-mermaid-\_r_27o\_ .node path{fill:rgb(229, 243, 255);stroke:rgba(0, 0, 0, 0.1);stroke-width:1px;}#chatgpt-mermaid-\_r_27o\_ .node rect{rx:16px;ry:16px;}#chatgpt-mermaid-\_r_27o\_ .mermaid-decision .label-container{fill:rgb(245, 250, 255);stroke:rgb(206, 219, 229);stroke-dasharray:2,2;}#chatgpt-mermaid-\_r_27o\_ .edgePaths .flowchart-link{stroke:rgb(143, 143, 143);stroke-width:1px;stroke-linecap:round;stroke-linejoin:round;}#chatgpt-mermaid-\_r_27o\_ .marker{fill:rgb(143, 143, 143);stroke:rgb(143, 143, 143);}#chatgpt-mermaid-\_r_27o\_ :root{--mermaid-font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";}用户输入与情境角色感知情境评价 Appraisal角色情绪变化关系状态变化人格与策略约束角色回应 / 行动交互结果角色反思与成长
+
+注意：这张图是逻辑过程图。具体情绪状态更新、关系状态更新和人格变化，仍然要服从 v3 的 R01–R06 数学与状态约束。
+
+## **6.3 两个闭环之间的连接**
+
+允许的数据传递：
+
+- 用户明确表达的偏好。
+- 经过证据验证的长期观察。
+- 有效期内的用户理解假设。
+- 当前情境中的必要背景。
+- 用户明确要求角色记住的信息。
+
+不允许的直接传递：
+
+- 未验证的心理诊断式结论。
+- 单次行为推断出的稳定人格标签。
+- 模型自行编造的用户历史。
+- 已撤销授权的数据。
+- 已被用户纠正或删除的旧假设。
+
+因此，必须建立一个中间组件：
+
+**User Understanding Engine（用户理解引擎）**
+
+它负责将心理学专家和个人数据系统产生的信息，转化为角色可以安全使用的上下文。
+
+# **7. Personal Data Hub 与记忆系统边界**
+
+## **7.1 为什么要独立建立 Personal Data Hub**
+
+不能让所有数据直接进入记忆系统。
+
+例如：
+
+用户昨天晚上 2 点睡觉，是一个客观记录。
+
+用户最近经常晚睡，是一个行为模式。
+
+用户最近可能承受较大压力，是一个解释假设。
+
+用户长期具有较高压力敏感性，是一个更高层级的心理假设。
+
+它们不应该被存成同一种记忆。
+
+建议数据分层：
+
+| 数据层         | 保存内容        | 是否可以自动写入  |
+| ----------- | ----------- | --------- |
+| Raw Event   | 原始数据与事件     | 授权范围内可以   |
+| Observation | 统计、整理后的客观观察 | 满足规则后可以   |
+| Pattern     | 跨事件模式       | 可以生成候选项   |
+| Hypothesis  | 用户理解和心理解释   | 不能自动确认为事实 |
+| Memory      | 长期可用的记忆     | 按记忆治理规则决定 |
+| Insight     | 对用户长期变化的洞察  | 需要证据与有效期  |
+
+## **7.2 与 Obsidian 的关系**
+
+Obsidian 继续作为用户可管理的知识与记忆出口，不作为所有原始数据的唯一数据库。
+
+建议分区：
+
+```
+Obsidian Vault/
+│
+├── 00-Inbox/
+│   └── 用户主动输入与待处理内容
+│
+├── 01-Raw/
+│   └── 经授权导出的原始记录
+│
+├── 02-Observation/
+│   └── 客观行为观察
+│
+├── 03-Cognitive/
+│   └── 认知模式与候选假设
+│
+├── 04-Memory/
+│   └── 经治理的长期记忆
+│
+├── 05-Character/
+│   └── 角色可用的互动记忆
+│
+└── 06-Experiment/
+    └── 实验记录与评估报告
+```
+
+需要保留原来的数据所有权原则：
+
+- 用户拥有原始个人数据。
+- AI 产生的推断必须保留来源和推断身份。
+- 用户可以查看、修改、拒绝和删除相关内容。
+- Obsidian 导出不能绕过数据授权。
+- 敏感健康和心理数据默认保留在受控数据库中，不自动导出。
+
+## **7.3 记忆与数据删除**
+
+R08、R09 必须在 V3.1 中扩展到个人数据和心理假设。
+
+删除一个用户事实时，必须检查：
+
+- 原始数据；
+- 派生观察；
+- 相关模式；
+- 心理假设；
+- 长期记忆；
+- 角色上下文缓存；
+- 搜索索引和向量索引；
+- 快照和 Replay 数据；
+- Obsidian 同步副本；
+- 尚未执行的后台任务。
+
+不能只删除一个数据库行就宣称删除完成。
+
+同时要区分：
+
+1. 用户撤销未来采集授权；
+2. 用户要求删除已经收集的数据；
+3. 用户纠正一个错误推断；
+4. 用户要求角色不再使用某个信息。
+
+这四种操作的影响范围不同，需要不同的状态转换和审计事件。
+
+# **8. 服务端总体架构与运行职责**
+
+## **8.1 服务端模块**
+
+建议沿用个人本地服务器架构：Windows/WSL2 环境开发联调，后续迁移独立 Linux 服务器。不要在 V3.1 阶段提前拆成大量微服务。
+
+建议采用模块化单体作为初期部署形态：
+
+```
+personal-ai-server/
+│
+├── gateway/
+│   ├── api/
+│   ├── authentication/
+│   └── request_router/
+│
+├── governance/
+│   ├── consent/
+│   ├── policy/
+│   ├── safety/
+│   └── audit/
+│
+├── event/
+│   ├── event_log/
+│   ├── event_dispatcher/
+│   └── projection/
+│
+├── personal_data/
+│   ├── ingestion/
+│   ├── normalization/
+│   ├── observation/
+│   └── retention/
+│
+├── memory/
+│   ├── memory_store/
+│   ├── memory_retrieval/
+│   ├── memory_governance/
+│   └── forgetting/
+│
+├── psychology/
+│   ├── analyst/
+│   ├── hypothesis/
+│   ├── evidence/
+│   └── evaluation/
+│
+├── user_understanding/
+│   ├── profile/
+│   ├── context_builder/
+│   └── correction/
+│
+├── character/
+│   ├── state_coordinator/
+│   ├── emotion/
+│   ├── appraisal/
+│   ├── relationship/
+│   ├── personality/
+│   └── growth/
+│
+├── agent_runtime/
+│   ├── orchestration/
+│   ├── task_registry/
+│   ├── tool_gateway/
+│   └── mika_gateway/
+│
+├── evaluation/
+│   ├── test_corpus/
+│   ├── metrics/
+│   └── replay/
+│
+└── providers/
+    ├── llm/
+    ├── embedding/
+    ├── stt/
+    └── tts/
+```
+
+## **8.2 模块通信原则**
+
+初期允许模块在同一个服务进程内调用，但必须通过明确的接口交互。
+
+例如：
+
+- `PsychologicalAnalyst` 不能直接调用 `CharacterStateRepository`。
+- `MikaGateway` 不能直接调用 `MemoryRepository`。
+- `PersonalDataHub` 不能直接更新角色情绪。
+- `CharacterGrowthEngine` 不能直接读取原始健康数据库。
+- `MemoryGovernance` 必须负责长期记忆写入和删除。
+
+未来如果需要拆成独立服务，只需要替换模块调用方式，不应该改变业务契约。
+
+## **8.3 统一 Agent 调度**
+
+本项目至少存在三类 Agent：
+
+| Agent                 | 主要职责           | 执行权限        |
+| --------------------- | -------------- | ----------- |
+| Character Agent       | 情感交互和角色成长      | 角色状态范围内     |
+| Psychological Analyst | 用户心理分析和假设生成    | 只读证据、生成分析结果 |
+| Life Assistant Agent  | 生活管理、目标和用户授权任务 | 受任务与权限约束    |
+
+Mika Runtime 是手机任务执行引擎，不应默认被视为第四个拥有独立决策权的用户代理。
+
+建议由统一 Agent Orchestrator 管理任务注册、上下文、调用和结果回收。
+
+# **9. 统一事件与状态管理**
+
+R01、R02 是 V3.1 的基础设施要求。引入手机数据、心理分析和 Mika 后，事件数量、并发程度和状态来源都会增加，必须进一步明确。
+
+## **9.1 统一事件模型**
+
+建议事件采用如下公共结构：
+
+```
+interface SystemEvent {
+  eventId: string;
+  eventType: string;
+
+  userId: string;
+  sessionId?: string;
+
+  turnId?: string;
+  taskId?: string;
+  parentEventId?: string;
+
+  source: {
+    module: string;
+    deviceId?: string;
+    agentId?: string;
+  };
+
+  occurredAt: string;
+  receivedAt: string;
+
+  sequence?: number;
+
+  payload: unknown;
+
+  provenance: {
+    sourceId?: string;
+    consentId?: string;
+    evidenceIds?: string[];
+  };
+
+  schemaVersion: string;
+}
+```
+
+必须区分：
+
+- `eventId`：事件唯一标识。
+- `turnId`：一次用户交互轮次。
+- `taskId`：一个可独立执行、跟踪和取消的任务。
+- `parentEventId`：因果关系。
+- `sequence`：事件日志中的提交顺序。
+- `occurredAt`：事件实际发生时间。
+- `receivedAt`：系统收到事件的时间。
+
+不能简单按照 `occurredAt` 或 `receivedAt` 排序来推断因果关系。
+
+## **9.2 状态写入规则**
+
+所有重要状态都需要由 State Coordinator 管理。
+
+| 状态类型  | 写入原则        | 典型例子          |
+| ----- | ----------- | ------------- |
+| 可交换状态 | 满足条件时可合并    | 某些独立统计量       |
+| 可重算状态 | 可以通过事件重新生成  | 行为统计、聚合观察     |
+| 排他状态  | 必须串行或进行冲突检查 | 角色人格版本、关系状态提交 |
+| 受治理状态 | 必须经过授权与规则检查 | 长期记忆、心理假设确认   |
+
+一个模块不能仅凭拿到旧状态快照，就直接覆盖新的状态。
+
+发生冲突时，必须支持版本检查、Rebase 或拒绝提交。
+
+## **9.3 事件与副作用分离**
+
+例如，用户要求 Mika 创建一个提醒：
+
+```
+用户请求
+    ↓
+Task Registry 创建任务
+    ↓
+权限与风险检查
+    ↓
+Mika 执行任务
+    ↓
+Mika 返回执行结果
+    ↓
+结果校验
+    ↓
+提交 Task 状态
+    ↓
+记录 Event
+    ↓
+更新生活记录
+```
+
+不能在 Mika 尚未完成任务时，就把任务状态提交为成功。
+
+对于具有副作用的操作，必须设计幂等键、重复执行检测和不确定结果处理。
+
+如果执行超时，但手机端可能已经创建成功，系统不能直接重试并创建第二个提醒；应先查询任务结果或进行副作用核验。
+
+## **9.4 Replay 扩展**
+
+R11 在 V3.1 中需要覆盖新系统。
+
+Replay 除原有字段外，还需要冻结：
+
+- 手机数据采集的输入快照；
+- 数据授权版本；
+- 个人数据脱敏与归一化版本；
+- 心理学知识库版本；
+- 用户理解假设版本；
+- Mika 任务输入、工具结果和执行状态；
+- Android 系统版本与相关 API 行为；
+- 角色实际获得的用户上下文。
+
+涉及真实手机副作用的 Replay 必须默认使用 Mock 或沙箱，不能通过回放重新发送短信、创建日历事项或执行其他真实操作。
+
+还需要区分：
+
+- **Deterministic Replay**：对确定性状态处理进行严格重放。
+- **End-to-end Replay**：对模型、外部工具和异步任务进行受控复现实验。
+
+后者不能因为使用相同 Prompt 就宣称完全确定性。
+
+# **10. Mika 手机操作任务安全规范**
+
+## **10.1 Mika 在统一 App 中的定位**
+
+Mika 作为手机操作执行模块，不是用户数据的总入口。
+
+它可以接收经过授权的手机任务，例如：
+
+- 打开用户指定的 App；
+- 在指定 App 中查找某条信息；
+- 按用户要求填写内容；
+- 创建提醒或执行其他明确的低风险操作；
+- 将任务执行结果返回服务端。
+
+它不能因为已经获得 Accessibility 或其他系统权限，就自动拥有读取所有手机内容并上传的权力。
+
+## **10.2 任务权限模型**
+
+建议每个 Mika 任务都有明确的任务契约：
+
+```
+interface MikaTaskContract {
+  taskId: string;
+
+  intent: string;
+
+  targetApps: string[];
+
+  allowedActions: string[];
+
+  allowedDataScopes: string[];
+
+  riskLevel:
+    | "low"
+    | "medium"
+    | "high"
+    | "critical";
+
+  approval: {
+    required: boolean;
+    approvalId?: string;
+  };
+
+  execution: {
+    timeoutMs: number;
+    maxRetries: number;
+    idempotencyKey: string;
+  };
+
+  outputSchema?: unknown;
+
+  createdAt: string;
+  expiresAt?: string;
+}
+```
+
+注意：`targetApps`、`allowedActions` 和 `allowedDataScopes` 都必须是可校验的限制条件，而不是给 Agent 的自然语言建议。
+
+## **10.3 风险与授权矩阵**
+
+| 风险等级     | 示例                   | 执行策略                  |
+| -------- | -------------------- | --------------------- |
+| Low      | 打开 App、查看用户指定页面      | 授权范围内可直接执行            |
+| Medium   | 创建提醒、修改日历、填写草稿       | 检查任务授权，必要时二次确认        |
+| High     | 发送消息、删除重要内容、修改关键账户信息 | 明确用户确认后执行             |
+| Critical | 支付、转账、不可逆敏感操作        | V3.1 默认不开放 Agent 自主执行 |
+
+这里的风险等级不是简单由 Mika 自己判断。由统一 Policy Engine 决定，Mika 只执行经过授权的任务。
+
+## **10.4 统一任务状态**
+
+```
+CREATED
+   ↓
+VALIDATING
+   ↓
+WAITING_APPROVAL
+   ↓
+QUEUED
+   ↓
+RUNNING
+   ↓
+VERIFYING
+   ↓
+COMPLETED
+```
+
+异常分支：
+
+```
+FAILED
+CANCELLED
+EXPIRED
+BLOCKED
+WAITING_USER_INPUT
+UNKNOWN_RESULT
+```
+
+其中 `UNKNOWN_RESULT` 非常重要。
+
+例如，手机操作已经提交，但服务端网络中断，无法确认执行结果。这种状态不能直接认定失败，否则可能造成重复副作用。
+
+## **10.5 Mika 与统一 App 权限的一致性**
+
+统一 App 的权限管理需要同时约束：
+
+- 原生 Android 数据适配器；
+- Mika 任务；
+- 服务端数据分析；
+- 长期记忆写入；
+- 心理分析；
+- 角色上下文使用。
+
+如果用户撤销了某个 App 的数据读取授权，Mika 也不能通过打开该 App 的页面，继续以另一条路径采集相同数据。
+
+这是一个必须纳入回归测试的权限一致性要求。
+
+# **11. 安全、隐私和故障边界**
+
+## **11.1 数据安全边界**
+
+建议划分为四个信任区域：
+
+| 区域         | 包含内容                | 信任原则                    |
+| ---------- | ------------------- | ----------------------- |
+| T0 用户设备    | 原始数据、授权、Mika 操作环境   | 最接近数据源，仍需防止恶意 App 和本地泄露 |
+| T1 个人服务端   | 数据库、事件、记忆、分析结果      | 用户控制的可信计算环境             |
+| T2 外部模型提供商 | LLM、Embedding、语音模型等 | 只传递必要且经过策略检查的数据         |
+| T3 外部应用与网站 | Mika 操作目标、第三方服务     | 默认不可信，页面内容不能成为系统指令      |
+
+特别需要防止：
+
+1. App 页面中的 Prompt Injection。
+2. 外部网页诱导 Agent 读取无关个人数据。
+3. 第三方 App 内容诱导 Mika 执行额外操作。
+4. 心理学专家把模型推断伪装成用户事实。
+5. 角色为了保持人格连续性而继续使用已经过期或删除的信息。
+6. 不同 Agent 共享过多上下文，导致权限边界失效。
+
+## **11.2 外部模型的数据传输**
+
+本项目采用模型供应商可替换的设计。
+
+统一 Provider Interface：
+
+```
+interface ModelProvider {
+  generate(input: ModelInput): Promise<ModelOutput>;
+}
+
+interface ModelInput {
+  messages: unknown[];
+  context: unknown[];
+
+  dataClassification: string[];
+
+  allowedPurposes: string[];
+
+  modelConfig: {
+    provider: string;
+    model: string;
+  };
+}
+```
+
+在调用外部模型前，应先执行数据最小化：
+
+- 不传递无关原始数据。
+- 不默认上传完整个人生活历史。
+- 不把原始通讯录、短信或位置轨迹放进普通聊天上下文。
+- 仅在用途明确且授权允许时传递必要的派生信息。
+- 记录实际发送的数据类别、用途和模型版本。
+
+## **11.3 断网与故障降级**
+
+系统必须能够在以下场景下保持安全：
+
+| 故障         | 降级策略                   |
+| ---------- | ---------------------- |
+| 手机离线       | 本地保存允许缓存的任务与事件，联网后同步   |
+| 服务端离线      | 不启动需要远程决策的任务，允许本地基础功能  |
+| Mika 失败    | 返回失败或未知状态，不伪造成功        |
+| 数据源失效      | 标记数据缺失，不用推断补齐          |
+| 心理学专家不可用   | 不影响角色正常交互              |
+| 外部 LLM 不可用 | 按 Provider 策略切换或进入受限模式 |
+| 权限状态不确定    | 拒绝读取和敏感操作              |
+| 状态提交冲突     | Rebase、重算或拒绝提交         |
+
+核心原则：
+
+**安全能力不可用时，系统应该降低自主性，而不是扩大权限或绕过治理。**
+
+# **12. V3.1 模块建设清单与实施顺序**
+
+## **12.1 新增任务编号**
+
+现有 R01–R12 保持不变，不重新编号，不通过新模块修改原有基线的含义。
+
+在此基础上增加：
+
+| 编号  | 模块                        | 主要交付物                          | 依赖          |
+| --- | ------------------------- | ------------------------------ | ----------- |
+| R13 | Personal Data Hub         | 个人数据统一接入、归一化、观察层               | R01、R02、R08 |
+| R14 | Consent Manager           | 分级授权、用途约束、撤销传播                 | R13         |
+| R15 | Mika Integration          | Mika Android 模块集成、统一任务 Gateway | R14、R10     |
+| R16 | Data Provenance           | 数据来源、处理过程和推断链路                 | R08、R11     |
+| R17 | Psychological Analyst     | 心理学分析 Agent、证据与反例机制            | R13、R16     |
+| R18 | User Profile Model        | 用户分层画像、假设生命周期                  | R16、R17     |
+| R19 | User Understanding Engine | 用户理解、纠正、上下文输出                  | R17、R18     |
+| R20 | Character Isolation       | 用户画像与角色人格、情绪、关系隔离              | R01、R05、R19 |
+| R21 | Unified Android Shell     | 单 App 导航、统一账户和交互入口             | R15         |
+| R22 | Unified Task Gateway      | 任务注册、授权、执行、验证与审计               | R10、R15     |
+| R23 | Data Deletion Propagation | 原始数据与派生数据删除传播                  | R09、R13、R16 |
+| R24 | Evaluation Workbench      | 用户理解、角色成长和系统行为评估               | R11、R17、R19 |
+
+其中 R21、R22 是 Mika 深度合并后的新增工程工作，R23 是用户数据规模扩大后必须补充的遗忘能力，R24 则负责验证新增模块是否真正提高了系统质量。
+
+## **12.2 推荐实施阶段**
+
+1. **M0：架构冻结与现有 v3 基线审计**
+   - 冻结 R01–R12。
+   - 明确模块职责和数据边界。
+   - 盘点现有代码、状态模型、数据库、API。
+   - 检查 Mika 项目版本、许可证、依赖和 Android 模块结构。
+   - 形成架构差异清单。
+
+   当前阶段
+2. **M1：统一 Android App 与数据治理基础**
+   - 统一 Android App 工程结构。
+   - 建立 Consent Manager。
+   - 建立 Personal Data Hub。
+   - 接入手动记录、日历和 Health Connect。
+   - 建立数据来源与审计记录。
+
+   验收：没有授权的数据不能读取；撤销授权后，后台任务不能继续读取。
+3. **M2：Mika 深度集成**
+   - 将 Mika 相关能力整合为独立模块。
+   - 统一 App 导航、任务入口和状态展示。
+   - 建立 Mika Adapter 与 Task Gateway。
+   - 统一权限、取消、超时、重试和结果验证。
+   - 完成手机端与服务端的任务同步。
+
+   验收：Mika 能够在统一 App 内完成受控任务，且不能绕过统一授权。
+4. **M3：心理学分析系统**
+   - 建立心理学知识体系。
+   - 建立 Psychological Analyst。
+   - 建立证据、反例和假设生命周期。
+   - 运行 Shadow Mode。
+   - 建立心理分析测试集。
+
+   验收：能够区分客观观察、可能解释和稳定人格假设；不能把无证据推断自动确认为事实。
+5. **M4：User Understanding Engine**
+   - 建立 U0–U4 用户理解模型。
+   - 建立多来源证据合并。
+   - 建立用户纠正、拒绝和过期机制。
+   - 建立上下文输出控制。
+   - 建立画像修正传播机制。
+
+   验收：用户纠正错误画像后，旧假设及其派生结果不会继续影响后续判断。
+6. **M5：与 Emotion-AI Character 有限整合**
+   - 接入经过治理的用户理解信息。
+   - 保持角色人格独立。
+   - 保持情绪和关系状态独立演化。
+   - 建立 Advisory Mode。
+   - 验证角色长期成长是否受到错误画像污染。
+
+   验收：心理分析可以改善角色理解，但不能直接覆盖角色状态。
+7. **M6：长期实验与评估**
+   - 建立用户理解评估。
+   - 建立角色成长评估。
+   - 建立对照实验。
+   - 建立 Replay。
+   - 建立长期运行和回归测试。
+
+   验收：通过可重复的实验数据证明系统改进，而不是依靠模型自己声称理解得更准确。
+
+# **13. 评估体系：如何知道系统是否真的变好了**
+
+这里我想额外强调一点：V3.1 不能只评估功能有没有实现，还必须评估系统是否真正理解了用户，以及角色是否仍然保持自然的成长过程。
+
+建议把评估分成三个独立方向。
+
+## **13.1 用户理解质量**
+
+| 指标                         | 评估内容               |
+| -------------------------- | ------------------ |
+| Emotion Accuracy           | 对用户情绪的判断是否正确       |
+| Intent Accuracy            | 是否理解用户真正想表达的内容     |
+| Context Accuracy           | 是否正确理解上下文          |
+| Need Recognition           | 是否识别用户实际需要         |
+| Personality Calibration    | 人格假设是否与长期证据相符      |
+| Attribution Error          | 是否错误归因用户行为         |
+| Over-inference Rate        | 无证据过度推断的比例         |
+| Profile Correction Latency | 用户纠正后旧假设失效并完成修正的速度 |
+
+其中 `Over-inference Rate` 应该成为核心安全指标之一。
+
+一个系统即使能够给出很多深刻的心理分析，如果经常把普通行为解释成复杂心理问题，也不能认为它真正理解了用户。
+
+## **13.2 角色自然成长质量**
+
+| 指标                         | 评估内容            |
+| -------------------------- | --------------- |
+| Personality Consistency    | 角色是否保持人格连续性     |
+| Emotional Continuity       | 情绪变化是否符合此前经历    |
+| Relationship Continuity    | 关系发展是否有真实过程     |
+| Growth Authenticity        | 成长是否来自实际交互经验    |
+| Adaptability               | 能否适应用户变化        |
+| Non-Deterministic Response | 是否避免每次都套用固定心理模型 |
+| Profile Contamination      | 用户画像是否不当污染角色人格  |
+
+特别是最后一项。
+
+我们要防止一种情况：
+
+> 心理学专家判断用户是某种人格，角色从此开始按照这种人格模板回应用户。
+
+这会让角色失去自身成长，也会让系统陷入自我强化的循环。
+
+## **13.3 长期系统质量**
+
+- Memory Reliability：记忆可靠性。
+- Data Provenance Completeness：数据来源完整度。
+- Consent Enforcement Rate：授权执行正确率。
+- Revocation Propagation Latency：授权撤销传播时间。
+- False Profile Persistence：错误画像持续存在的比例。
+- Task Execution Success：手机任务执行成功率。
+- Side-effect Duplication Rate：重复副作用发生率。
+- Replay Coverage：关键状态变化可重放覆盖率。
+
+这些指标应该分别统计，不能把所有指标合并成一个“AI 智能程度分数”。
+
+# **14. 本规范的冻结边界**
+
+本文件确定了系统的总体架构，但有些内容不应该在没有源码审计和实验验证之前直接冻结。
+
+| 项目        | 本文件的决定                  | 后续仍需完成               |
+| --------- | ----------------------- | -------------------- |
+| Mika 集成方式 | 单 App、独立模块、统一 Gateway   | 具体源码迁移与依赖处理          |
+| 数据采集      | 分级、按需、用途分离授权            | 各 Android API 的权限和限制 |
+| 心理学专家     | 独立 Agent、Shadow Mode 起步 | 知识库结构、Prompt、评估集     |
+| 用户画像      | U0–U4 分层                | 字段、算法、生命周期参数         |
+| 角色隔离      | 用户理解不能直接覆盖角色状态          | 具体上下文接口和状态校验         |
+| 数据治理      | 原始数据、观察、假设、记忆分离         | 数据库 Schema 和删除事务     |
+| 事件管理      | 继承 R01/R02              | 事件 Schema、并发和提交实现    |
+| Replay    | 继承 R11 并扩展输入范围          | Mock、快照和外部结果冻结方案     |
+
+**特别说明：** 目前这份规范是基于既有架构决策形成的设计文件，不等同于已经完成 Mika 源码迁移或现有 v3 源码审计。M0 必须实际检查代码，才能确认哪些模块可以复用、哪些接口需要重构。
+
+# **15. 我认为还需要额外增加的三个设计约束**
+
+这三个问题如果现在不考虑，后续很容易形成架构债务。
+
+## **15.1 用户心理画像必须允许“不知道”**
+
+系统不能被迫对每个用户特征都给出判断。
+
+例如：
+
+```
+用户最近很少主动联系朋友
+```
+
+可能的解释包括：
+
+- 工作繁忙；
+- 暂时想独处；
+- 社交关系发生变化；
+- 身体状态不佳；
+- 个人习惯；
+- 其他未知原因。
+
+系统应允许结果是：
+
+```
+当前证据不足，无法判断原因。
+```
+
+不能为了让角色显得聪明而强行推断。
+
+## **15.2 用户理解必须有时间有效性**
+
+人格、偏好、情绪和生活状态的变化速度不同。
+
+例如：
+
+- 当前情绪可能几分钟内变化。
+- 某种生活习惯可能持续数周。
+- 偏好可能持续数月或更久。
+- 人格倾向需要长期、多场景证据。
+
+因此不能所有用户画像都使用同一套过期策略。
+
+每个假设应当有自己的有效期、复核条件和失效规则。
+
+## **15.3 角色需要保留自己的观察，而不是只接受用户画像**
+
+角色应该能够形成自己的互动经验：
+
+```
+用户理解系统：
+用户可能倾向于独立解决问题。
+
+角色自身经验：
+用户在过去几次遇到困难时，
+有时希望获得建议，有时只是希望有人倾听。
+```
+
+这两个信息可以相互参考，但不能强行合并。
+
+角色可以基于真实交互修正自己的回应策略，但不能把某个心理学假设当成必须遵循的行为指令。
+
+# **16. V3.1-00 最终架构决策记录**
+
+## **Architecture Decision Record**
+
+文档编号：V3.1-00
+
+决策已确认
+
+**ADR-001：Mika 产品集成方式**
+
+采用 B：深度合并为一个 Android App。
+
+统一产品入口、导航、任务体系和权限管理；Mika 保留独立运行时边界，通过 Adapter 与 Gateway 接入。
+
+**ADR-002：手机数据采集策略**
+
+采用 A：分级、按需采集。
+
+每个数据源独立授权，读取、上传、分析、心理推断、长期记忆和角色使用分别控制。
+
+**ADR-003：心理学专家与角色成长关系**
+
+心理学专家独立运行，初期使用 Shadow Mode。用户理解引擎负责筛选和转换信息，角色自身状态由 Character State Coordinator 管理。
+
+**ADR-004：v3 基线继承**
+
+R01–R12 原样保留为强制修订基线。V3.1 新增 R13–R24，不允许以新增功能为由绕过既有状态、记忆、安全和 Replay 约束。
+
+**ADR-005：部署与模型架构**
+
+初期使用 Windows/WSL2 开发，个人本地服务器部署；模型接口保持可替换，后续迁移独立服务器时不改变核心业务契约。
+
+## **17. 下一阶段：V3.1-01**
+
+我建议下一份文件不是立即写心理学 Prompt，也不是先写 Android 页面，而是：
+
+**V3.1-01《现有 v3 与 Mika 源码结构审计及模块迁移映射规范》**
+
+需要完成四项工作：
+
+1. 审计现有 v3 的 R01–R12 对应代码、状态模型和测试。
+2. 审计 Mika 的 Android 模块、Agent Loop、Accessibility、任务执行、权限和网络通信。
+3. 制定 Mika 深度合并后的模块迁移表：原样保留、Adapter 包装、需要修改、禁止迁移。
+4. 制定统一 App 的模块依赖图和第一阶段实施任务。
+
+**我建议先做 M0 源码审计，再开始迁移。** 尤其不能因为我们确定了 Mika 深度合并，就直接把 Mika 的 Agent Loop 和原有权限体系并入现有角色 Agent；这会破坏本规范最重要的系统边界。
+
+V3.1-00 的总体架构决策至此形成。后续所有设计文件都应以本规范和 R01–R12 为上位约束。

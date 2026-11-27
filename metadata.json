@@ -1,0 +1,8 @@
+{
+  "name": "Emotion-AI",
+  "description": "Interactive valence-arousal affect mapping and AI emotion analysis workspace.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
