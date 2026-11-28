@@ -14,7 +14,7 @@ const scoped = (body: string) => `
   FOREIGN KEY (${scopeColumns}) REFERENCES scopes (${scopeColumns})
 `;
 
-export const SQLITE_SCHEMA_VERSION = 2;
+export const SQLITE_SCHEMA_VERSION = 3;
 export const BUSY_TIMEOUT = 5000;
 
 export function openDatabase(path: string): DatabaseSync {
@@ -145,6 +145,29 @@ export function openDatabase(path: string): DatabaseSync {
           insert.run(row.owner_id, row.env, row.character_id, row.session_id, kind, term, row.entity_id);
         }
       }
+    }
+    if (version < 3) {
+      db.exec(`
+        CREATE TABLE task_controls (${scoped(`
+          task_id TEXT NOT NULL, goal_id TEXT NOT NULL, due_at INTEGER NOT NULL, body TEXT NOT NULL,
+          PRIMARY KEY (${scopeColumns}, task_id),
+          FOREIGN KEY (${scopeColumns}, task_id) REFERENCES task_records (${scopeColumns}, task_id)
+        `)});
+        CREATE INDEX task_controls_due ON task_controls (due_at, ${scopeColumns}, task_id);
+        CREATE INDEX task_controls_goal ON task_controls (${scopeColumns}, goal_id, task_id);
+        CREATE TABLE task_transitions (${scoped(`
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL, body TEXT NOT NULL, reason TEXT NOT NULL,
+          FOREIGN KEY (${scopeColumns}, task_id) REFERENCES task_records (${scopeColumns}, task_id)
+        `)});
+        CREATE INDEX transitions_scope ON task_transitions (${scopeColumns}, sequence);
+        CREATE TABLE sandbox_task_receipts (${scoped(`
+          execution_key TEXT NOT NULL, task_id TEXT NOT NULL, body TEXT NOT NULL,
+          PRIMARY KEY (${scopeColumns}, execution_key),
+          UNIQUE (${scopeColumns}, task_id),
+          FOREIGN KEY (${scopeColumns}, task_id) REFERENCES task_records (${scopeColumns}, task_id)
+        `)});
+        INSERT INTO schema_migrations VALUES (3);
+      `);
     }
     db.exec('COMMIT');
     return db;

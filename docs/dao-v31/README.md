@@ -8,7 +8,9 @@
 
 M1 已启用健康、授权列表与更新、手动记录、观察列表、溯源、状态快照、事件日志、运行时 SSE 和备份导出与恢复，共 11 个 REST/SSE 操作。其它操作按 OpenAPI 的 `x-dao-milestone` 交付。服务端已具备内部删除栅栏，公用四类 `ForgetRequest` 接口安排在 M3。
 
-M2a 的情绪投影、调节状态、情绪溯源以及 A/B1/B2/C/D 指标由现有 `GET /api/dao/state/snapshot` 返回。实时进度仍走 `track_update`。SQLite 健康检查的 `schemaVersion` 已升至 `2`，HTTP 契约继续使用 `3.1.0`。B1 冷启动或查询超时可返回空召回并标记降级，前端按现有轨道字段显示。四轨运行时为服务端内部入口，公开对话按计划在 M3 接入。 [M2a 验收](V3.1-M2a.md)
+M2a 的情绪投影、调节状态、情绪溯源以及 A/B1/B2/C/D 指标由现有 `GET /api/dao/state/snapshot` 返回。实时进度走 `track_update`。B1 冷启动或查询超时可返回空召回并标记降级，前端按现有轨道字段显示。四轨运行时为服务端内部入口，公开对话按计划在 M3 接入。 [M2a 验收](V3.1-M2a.md)
+
+M2b 启用任务提交、列表、审批、取消和责任账本查询。累计上线 16 个 REST/SSE 操作，任务实时进度使用既有 `task_status` 帧。SQLite 健康检查的 `schemaVersion` 为 `3`，HTTP 契约保持 `3.1.0`。 [M2b 验收](V3.1-M2b.md)
 
 在项目根目录打开 PowerShell，使用 Node 22.20 或该大版本的更新补丁。设置会话签名密钥与本地所有者，再签发 15 分钟的限定作用域令牌并启动开发服务。
 
@@ -34,6 +36,45 @@ const health = await fetch('/api/dao/health', { headers }).then((response) => re
 ```
 
 使用 `PUT /api/dao/consents/UserProvided` 提交生活记录来源的授权，首次将 `expectedConsentVersion` 设为 `0`。写入附带每次操作唯一的 `Idempotency-Key`，网络重试沿用原键。取得新版本后，将它放入 `POST /api/dao/data/records` 的 `expectedConsentVersion`。记录所用的 `sourceId`、类别、敏感度与用途必须匹配授权。手动记录需要读取和上传权限，生成和查看观察还需要分析权限。未授权的数据视图返回 403。
+
+## M2b 任务沙箱联调
+
+官方 API、Android 原生和 Mika 三种路线在本阶段都使用本地模拟适配器，成功结果含 `simulated: true`。用上面的 Bearer 令牌和作用域标头建立订阅，然后提交任务。以草稿为例，先对 `sandbox.notes` 写入两条授权，路径依次为 `PUT /api/dao/consents/DeviceUsage` 和 `PUT /api/dao/consents/UserProvided`。两条授权的 `sourceId` 均为 `sandbox.notes`，`sensitivity` 为 `Personal`，`collectionMode` 为 `on_demand`，`purposes` 为 `["task-execution"]`。应用授权开启 `allowRead`，草稿数据授权开启 `allowRead` 和 `allowUpload`。每次写入使用上一次返回的授权版本和新的幂等键。
+
+若当前 `consentVersion` 为 `2`，向 `POST /api/dao/tasks` 提交以下 JSON。
+
+```json
+{
+  "request": {
+    "intent": "draft.prepare",
+    "targetApp": "sandbox.notes",
+    "inputs": { "title": "周计划" }
+  },
+  "expectedConsentVersion": 2
+}
+```
+
+| 操作 | 使用方式 |
+|---|---|
+| `POST /api/dao/tasks` | 返回 HTTP 202 与 `TaskRecord`。读取 `data.status` 区分 `QUEUED`、`WAITING_APPROVAL`、`BLOCKED` 等状态。 |
+| `GET /api/dao/tasks` | 可按 `status` 筛选，以 `limit` 和 `cursor` 翻页。 |
+| `POST /api/dao/tasks/{taskId}/approve` | 对 `WAITING_APPROVAL` 的任务提交最新的 `expectedConsentVersion` 和新的幂等键。 |
+| `POST /api/dao/tasks/{taskId}/cancel` | 提交最新的 `expectedConsentVersion` 和新的幂等键。已经派发的任务可能先进入 `UNKNOWN_RESULT`，服务端会独立核对模拟副作用。 |
+| `GET /api/dao/orchestrator/ledger` | 可按 `taskId`、`goalId` 或两者组合筛选并翻页。账本记录角色、证据引用及已评估结果。 |
+
+在 `GET /api/dao/stream` 中按 `task_status` 消费各阶段的 `TaskRecord`。断线后携带 `Last-Event-ID` 恢复，服务端按当前授权过滤结果。遇到 `UNKNOWN_RESULT` 时继续观察现有任务，维持原提交键以防重放产生新任务。无法确定结果时显示 `WAITING_USER_INPUT`。应用授权撤销后，已完成任务可显示历史状态，结果和状态帧中的证据引用会隐藏。
+
+| 意图 | 沙箱应用及默认路线 | 任务数据范围 |
+|---|---|---|
+| `app.open` | `sandbox.notes`，原生优先 | `DeviceUsage / Personal` 读取 |
+| `app.read` | `sandbox.notes`，Mika | `UserProvided / Personal` 读取，支持 `section: "overview"` |
+| `draft.prepare` | `sandbox.notes`，Mika | `UserProvided / Personal` 读取和上传 |
+| `calendar.create`、`calendar.update` | `sandbox.calendar`，官方 API 优先 | `CalendarTask / Personal` 读取和上传 |
+| `reminder.create` | `sandbox.reminders`，原生 | `CalendarTask / Personal` 读取和上传 |
+| `message.send`、`content.delete` | `sandbox.messages`、`sandbox.notes`，Mika | 分别为 `CommunicationSocial / Sensitive` 和 `UserProvided / Sensitive` 读取和上传 |
+| `payment.execute`、`transfer.execute`、`account.change_credentials` | `sandbox.payments`、`sandbox.accounts` | Critical，始终进入 `BLOCKED` |
+
+每个可执行动作都需要对应 App 的 `DeviceUsage / Personal` 读取权限。若授权用 `dataScope` 限制动作，须包含该意图。Low 可自动进入队列，Medium 和 High 需所有者审批。R25 的目标分解由服务端内部入口提供。Web Console 可通过任务状态和账本展示进度，并按 `goalId` 汇总。
 
 ## 鉴权与通用行为
 
@@ -79,7 +120,7 @@ location = /api/dao/stream {
 | 授权 | 授权以作用域、数据源、类别、敏感度、采集模式及适用设备来限定。类别与敏感度是独立字段。读取是其余五维的前提，心理推断还依赖分析。长期记忆另经治理审批，角色使用只接收筛选摘要。派发前、外部调用前和写事务内核对版本与用途。 |
 | 溯源与遗忘 | 独立 `ProvenanceRecord` 用上游实体引用串联来源、处理主体、版本、派生、消费与失效。四种治理动作各用独立判别值，删除沿依赖图传播，墓碑保留最小标识和必要审计字段。 |
 | 角色与画像 | 快照分别返回 `userProfile`、`characterPersonality`、`relationshipState`、`characterEmotion`，另有调节状态、情绪溯源和轨道指标。心理分析默认 Shadow，候选附证据、替代解释、置信度或未知，以及有效期限。只有授权、证据通过的受限摘要可以进入角色上下文。 |
-| 任务与账本 | 客户端请求意图和数据，服务端签发 `MikaTaskContract` 并裁决路由、风险、动作及数据范围。官方 API 或 Android 原生接口优先。Critical 任务禁止自主执行。遇 `UNKNOWN_RESULT` 先核验副作用再决定重试；由独立主体验收并记入 `AgentAccountabilityLedger`。 |
+| 任务与账本 | 客户端请求意图和数据，服务端签发 `MikaTaskContract` 并裁决路由、风险、动作及数据范围。依次优先官方 API、Android 原生接口和 Mika 沙箱。Critical 任务一律拦截。遇 `UNKNOWN_RESULT` 先核验副作用再决定重试。单独的核验与验收主体写入 `AgentAccountabilityLedger`。 |
 | 实验与导出 | 实验用独立存储及只读授权快照。提升需人工审批与独立评估，发布对象为获批配置。备份校验覆盖完整原始快照与作用域元数据，保留当前撤销与删除约束，写入失败则整笔回滚。Obsidian 导出含七个固定分区，默认排除高敏原始记录。 |
 
 Node 22 的 SQLite 权威存储通过 `DaoPersistencePort` 屏蔽具体驱动。数据库启用 WAL、外键和 5000 ms 忙等待，写事务采用 `BEGIN IMMEDIATE`。生产与实验使用分别持久化的 SQLite 文件，仓储操作再绑定完整作用域。事件、投影、业务记录和 Outbox 同事务提交，模型及工具处理在事务之外执行。

@@ -86,7 +86,7 @@ describe('M1 Android-compatible bearer and scoped HTTP API', () => {
     expect(valid.status).toBe(200);
     expect(await valid.json()).toMatchObject({
       ok: true, data: { env: 'prod', contractVersion: '3.1.0', sqlite: {
-        journalMode: 'wal', foreignKeys: true, busyTimeoutMs: 5000, fts5: true, schemaVersion: 2,
+        journalMode: 'wal', foreignKeys: true, busyTimeoutMs: 5000, fts5: true, schemaVersion: 3,
       } },
       meta: { consentVersion: 0, projectionVersion: '1.0.0' },
     });
@@ -224,5 +224,91 @@ describe('M1 Android-compatible bearer and scoped HTTP API', () => {
     } finally {
       await live.stop();
     }
+  }));
+});
+
+describe('M2b task routes over the authenticated HTTP and SSE contracts', () => {
+  it('submits, approves, cancels, verifies and lists scoped tasks using the frozen API', async () => withClient(async ({ call, stream }) => {
+    const taskGrant = { ...grant, sourceId: 'sandbox.notes', collectionMode: 'on_demand', purposes: ['task-execution'] };
+    expect((await call('/consents/DeviceUsage', write('PUT', taskGrant, 'task-app'))).status).toBe(200);
+    expect((await call('/consents/UserProvided', write('PUT', { ...taskGrant, expectedConsentVersion: 1 }, 'task-data'))).status).toBe(200);
+    const expectedConsentVersion = 2;
+    const live = await stream();
+    try {
+      expect(await live.next()).toBe(': connected');
+      const critical = { request: { intent: 'payment.execute', inputs: {} }, expectedConsentVersion };
+      const blocked = await call('/tasks', write('POST', critical, 'critical-task'));
+      expect(blocked.status).toBe(202);
+      const initial = (await blocked.json()).data;
+      expect(initial).toMatchObject({ status: 'BLOCKED', contract: { riskLevel: 'critical' } });
+      expect((await (await call('/tasks', write('POST', critical, 'critical-task'))).json()).data).toEqual(initial);
+      expect((await call('/tasks', write('POST', { ...critical, request: { intent: 'transfer.execute', inputs: {} } }, 'critical-task'))).status).toBe(409);
+
+      const submit = (title: string, key: string) => call('/tasks', write('POST', {
+        request: { intent: 'draft.prepare', targetApp: 'sandbox.notes', goalId: 'http-goal', inputs: { title } }, expectedConsentVersion,
+      }, key));
+      const created = await submit('Approved draft', 'create-draft');
+      expect(created.status).toBe(202);
+      const pending = (await created.json()).data;
+      expect(pending).toMatchObject({ status: 'WAITING_APPROVAL', contract: { route: 'mika_sandbox' } });
+      expect(pending.contract.inputs).toBeUndefined();
+      const { taskId } = pending.contract;
+      const draft2 = (await (await submit('Cancelled draft', 'other-draft')).json()).data;
+      const canceled = await call('/tasks/' + draft2.contract.taskId + '/cancel', write('POST', { expectedConsentVersion }, 'cancel-draft'));
+      expect(canceled.status).toBe(200);
+      expect((await canceled.json()).data.status).toBe('CANCELLED');
+      const approved = await call('/tasks/' + taskId + '/approve', write('POST', { expectedConsentVersion }, 'approve-draft'));
+      expect(approved.status).toBe(200);
+      expect((await approved.json()).data.status).toBe('QUEUED');
+
+      let completed: { frame: string; id?: string } | undefined;
+      let beforeCompletion: string | undefined;
+      for (let i = 0; i < 60; i++) {
+        const frame = await live.next();
+        if (!frame.includes('event: task_status') || !frame.includes(taskId)) continue;
+        const id = frame.match(/^id: (.+)$/m)?.[1];
+        if (frame.includes('"status":"COMPLETED"')) { completed = { frame, id }; break; }
+        beforeCompletion = id;
+      }
+      expect(completed?.frame).toContain('"simulated":true');
+      expect(completed?.id).toBeTruthy();
+      expect(beforeCompletion).toBeTruthy();
+
+      const listing = (await (await call('/tasks?limit=1')).json()).data;
+      expect(listing.items).toHaveLength(1);
+      expect(listing.nextCursor).toBeTruthy();
+      const next = (await (await call('/tasks?limit=1&cursor=' + encodeURIComponent(listing.nextCursor))).json()).data;
+      expect(next.items[0].contract.taskId).not.toBe(listing.items[0].contract.taskId);
+      expect((await call('/tasks?status=COMPLETED&cursor=' + encodeURIComponent(listing.nextCursor))).status).toBe(400);
+      const done = (await (await call('/tasks?status=COMPLETED')).json()).data;
+      expect(done.items).toMatchObject([{ status: 'COMPLETED', contract: { taskId }, result: { simulated: true } }]);
+      expect((await call('/tasks', { headers: { 'X-Dao-Session-Id': 'another-session' } })).status).toBe(403);
+
+      const ledger = '/orchestrator/ledger?taskId=' + taskId + '&goalId=http-goal';
+      const first = (await (await call(ledger + '&limit=1')).json()).data;
+      expect(first.items).toMatchObject([{ phase: 'proposed', taskId }]);
+      const page = (await (await call(ledger + '&cursor=' + encodeURIComponent(first.nextCursor))).json()).data;
+      expect(page.items).toContainEqual(expect.objectContaining({ phase: 'accepted', goalId: 'http-goal',
+        executedBy: 'sandbox-mika-adapter', reviewedBy: 'dao-independent-verifier', acceptedBy: 'dao-policy-acceptance' }));
+      expect(page.items).toContainEqual(expect.objectContaining({ phase: 'evaluated', finalOutcome: 'COMPLETED' }));
+
+      expect((await call('/consents/DeviceUsage', write('PUT', {
+        ...taskGrant, expectedConsentVersion, permissions: { ...grant.permissions, allowRead: false, allowUpload: false, allowAnalysis: false },
+      }, 'revoke-task-app'))).status).toBe(200);
+      const masked = (await (await call('/tasks?status=COMPLETED')).json()).data.items[0];
+      expect(masked).toMatchObject({ status: 'COMPLETED', evidenceRefs: [] });
+      expect(masked.result).toBeUndefined();
+      const resumed = await stream(beforeCompletion);
+      try {
+        expect(await resumed.next()).toBe(': connected');
+        let replay = '';
+        for (let i = 0; i < 60; i++) {
+          const frame = await resumed.next();
+          if (frame.includes(taskId) && frame.includes('"status":"COMPLETED"')) { replay = frame; break; }
+        }
+        expect(replay).toContain('"evidenceRefs":[]');
+        expect(replay).not.toContain('"result":');
+      } finally { await resumed.stop(); }
+    } finally { await live.stop(); }
   }));
 });

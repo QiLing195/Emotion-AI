@@ -1,10 +1,11 @@
 import type {
-  CollectionMode, CommitRecord, ConsentDimension, DaoEnv, DaoPersistencePort, DaoReadTransaction,
+  AgentAccountabilityLedger, CollectionMode, CommitRecord, ConsentDimension, DaoEnv, DaoPersistencePort, DaoReadTransaction,
   DaoRequestBody, DaoResponseData, DaoScope, DaoStreamFrames, DaoWriteTransaction, DataCategory, EntityRef, JsonObject,
-  ProvenanceRecord, SensitivityLevel, SystemEvent,
+  ProvenanceRecord, SensitivityLevel, SystemEvent, TaskRecord, TaskStatus,
 } from '../contracts/dao-v31/index.ts';
 import type { EmotionCommand, EmotionRuntimeState } from './emotionModel.ts';
 import type { AppraisalJob, CircuitState, MemoryQuery, MemoryCandidate, TrackMetrics } from './trackTypes.ts';
+import type { TaskControl, TaskReceipt, TaskTransition } from './taskTypes.ts';
 
 export type GrantIdentity = Readonly<{
   sourceId: string;
@@ -62,6 +63,7 @@ export type Tombstone = Readonly<{
 export type RuntimeNotification =
   | { readonly event: 'system_event' | 'commit_record'; readonly eventId: string }
   | { readonly event: 'track_update'; readonly data: DaoStreamFrames['track_update']['data'] }
+  | { readonly event: 'task_status'; readonly transition: number }
   | { readonly event: 'consent_revoked'; readonly data: {
     readonly category: DataCategory; readonly sensitivity: SensitivityLevel;
     readonly sourceId: string; readonly consentVersion: number;
@@ -103,6 +105,12 @@ export interface M1ReadTransaction extends DaoReadTransaction {
   getAppraisalJob(jobId: string): AppraisalJob | null;
   appraisalJobs(): readonly AppraisalJob[];
   appraisalCircuit(): CircuitState;
+  taskControl(taskId: string): TaskControl | null;
+  taskControlsDue(now: number, limit: number): readonly TaskControl[];
+  taskRecords(after: string, limit: number, status?: TaskStatus, goalId?: string): readonly TaskRecord[];
+  ledgerPage(after: { taskId: string; sequence: number }, limit: number, taskId?: string, goalId?: string): readonly AgentAccountabilityLedger[];
+  taskReceipt(executionKey: string): TaskReceipt | null;
+  taskTransition(sequence: number): TaskTransition | null;
 }
 
 export interface M1WriteTransaction extends M1ReadTransaction, DaoWriteTransaction {
@@ -115,12 +123,16 @@ export interface M1WriteTransaction extends M1ReadTransaction, DaoWriteTransacti
   setTrackMetrics(value: TrackMetrics): void;
   setAppraisalJob(value: AppraisalJob): void;
   setAppraisalCircuit(value: CircuitState): void;
+  saveTaskControl(control: TaskControl): void;
+  appendTaskTransition(task: TaskRecord, reason: string): number;
+  insertTaskReceipt(receipt: TaskReceipt): void;
 }
 
 export interface M1PersistencePort extends DaoPersistencePort {
   read<T>(scope: DaoScope, operation: (tx: M1ReadTransaction) => Promise<T> | T): Promise<T>;
   write<T>(scope: DaoScope, operation: (tx: M1WriteTransaction) => Promise<T> | T): Promise<T>;
   health(env: DaoEnv): Promise<DaoResponseData<'getHealth'>['sqlite']>;
+  dueTaskScopes(env: DaoEnv, now: number, limit: number): Promise<readonly DaoScope[]>;
 }
 
 export type ManualRecord = DaoRequestBody<'createDataRecord'>;

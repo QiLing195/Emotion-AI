@@ -1,6 +1,6 @@
 import { DAO_PROJECTION_VERSION } from '../contracts/dao-v31/index.ts';
-import type { DaoResponseData, DaoScope } from '../contracts/dao-v31/index.ts';
-import type { M1PersistencePort } from './m1Types.ts';
+import type { DaoResponseData, DaoScope, TaskRecord } from '../contracts/dao-v31/index.ts';
+import type { M1PersistencePort, M1ReadTransaction } from './m1Types.ts';
 import { initialRuntime } from './projection.ts';
 import { eventView, PersonalDataHub } from './dataHub.ts';
 import { initialEmotion } from './emotionModel.ts';
@@ -9,10 +9,12 @@ import { emptyTrack, tracks } from './trackTypes.ts';
 export class DaoViews {
   readonly #store: M1PersistencePort;
   readonly #hub: PersonalDataHub;
+  readonly #taskView?: (tx: M1ReadTransaction, task: TaskRecord) => Promise<TaskRecord>;
 
-  constructor(store: M1PersistencePort, hub: PersonalDataHub) {
+  constructor(store: M1PersistencePort, hub: PersonalDataHub, taskView?: (tx: M1ReadTransaction, task: TaskRecord) => Promise<TaskRecord>) {
     this.#store = store;
     this.#hub = hub;
+    this.#taskView = taskView;
   }
 
   snapshot(scope: DaoScope) {
@@ -64,10 +66,15 @@ export class DaoViews {
       const outbox = tx.outbox(after, 64);
       if (!outbox.length) return { lastId: after, frames: [] };
       const { entities, proofIds } = await this.#hub.visible(tx);
-      const frames: { id: number; name: 'system_event' | 'commit_record' | 'consent_revoked' | 'track_update'; data: unknown }[] = [];
+      const frames: { id: number; name: 'system_event' | 'commit_record' | 'consent_revoked' | 'track_update' | 'task_status'; data: unknown }[] = [];
       for (const { id, notification } of outbox) {
         if (notification.event === 'consent_revoked') {
           frames.push({ id, name: notification.event, data: notification.data });
+          continue;
+        }
+        if (notification.event === 'task_status') {
+          const transition = tx.taskTransition(notification.transition);
+          if (transition && this.#taskView) frames.push({ id, name: notification.event, data: await this.#taskView(tx, transition.task) });
           continue;
         }
         if (notification.event === 'track_update') {

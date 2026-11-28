@@ -21,6 +21,7 @@ import { BackupService } from './backupService.ts';
 import { bodyFor, paramsFor, queryFor } from './validation.ts';
 import { createTrackRuntime } from './trackRuntime.ts';
 import { MemoryWorker } from './memoryWorker.ts';
+import { createTaskRuntime } from './taskRuntime.ts';
 
 export interface DaoRouterOptions {
   readonly secret: string;
@@ -29,6 +30,8 @@ export interface DaoRouterOptions {
   readonly now?: () => number;
   readonly heartbeatMs?: number;
   readonly pollMs?: number;
+  readonly autoRunTasks?: boolean;
+  readonly taskPollMs?: number;
 }
 
 export type RouteContext = {
@@ -68,7 +71,9 @@ export function createDaoRouter(options: DaoRouterOptions) {
   const coordinator = new StateCoordinator(store, now);
   const consent = new ConsentManager(store, coordinator, now);
   const hub = new PersonalDataHub(store, consent, coordinator, now);
-  const views = new DaoViews(store, hub);
+  const tasks = createTaskRuntime(store, consent, { now, automatic: options.autoRunTasks, pollMs: options.taskPollMs });
+  const gateway = tasks.gateway;
+  const views = new DaoViews(store, hub, (tx, task) => gateway.publicView(tx, task));
   const cursors = new DaoCursors(options.secret);
   const backups = new BackupService(store, consent, coordinator, now);
   const memoryWorker = new MemoryWorker(options.directory);
@@ -119,6 +124,8 @@ export function createDaoRouter(options: DaoRouterOptions) {
     const body = bodyFor('putConsent', req.body);
     const grant = await consent.replace(context(req).scope, category, body,
       writeKey(req, 'putConsent', '/consents/' + category, body));
+    await gateway.reconcileConsent(context(req).scope);
+    tasks.kick(context(req).scope);
     await success(req, res, 200, grant);
   });
 
@@ -182,6 +189,52 @@ export function createDaoRouter(options: DaoRouterOptions) {
     await success(req, res, 200, restored);
   });
 
+  router.post('/tasks', async (req, res) => {
+    const { scope } = context(req);
+    const body = bodyFor('createTask', req.body);
+    const task = await gateway.submit(scope, body.request, body.expectedConsentVersion, writeKey(req, 'createTask', '/tasks', body));
+    await success(req, res, 202, task);
+    tasks.kick(scope);
+  });
+
+  router.get('/tasks', async (req, res) => {
+    const { scope } = context(req);
+    const { status, cursor, limit = 50 } = queryFor('listTasks', numericQuery(req));
+    const purpose = 'task-page:' + (status ?? '');
+    const after = cursor ? cursors.open(scope, purpose, cursor) : '';
+    if (typeof after !== 'string') throw invalid('Invalid task cursor');
+    const { items, next, version } = await gateway.list(scope, after, limit, status);
+    await success(req, res, 200, { items, ...(next && { nextCursor: cursors.seal(scope, purpose, next) }) }, version);
+  });
+
+  router.post('/tasks/:taskId/approve', async (req, res) => {
+    const { scope } = context(req);
+    const { taskId } = paramsFor('approveTask', req.params);
+    const body = bodyFor('approveTask', req.body);
+    const task = await gateway.approve(scope, taskId, body.expectedConsentVersion, writeKey(req, 'approveTask', '/tasks/' + taskId + '/approve', body));
+    await success(req, res, 200, task);
+    tasks.kick(scope);
+  });
+
+  router.post('/tasks/:taskId/cancel', async (req, res) => {
+    const { scope } = context(req);
+    const { taskId } = paramsFor('cancelTask', req.params);
+    const body = bodyFor('cancelTask', req.body);
+    const task = await gateway.cancel(scope, taskId, body.expectedConsentVersion, writeKey(req, 'cancelTask', '/tasks/' + taskId + '/cancel', body));
+    await success(req, res, 200, task);
+    tasks.kick(scope);
+  });
+
+  router.get('/orchestrator/ledger', async (req, res) => {
+    const { scope } = context(req);
+    const { taskId, goalId, cursor, limit = 50 } = queryFor('listAccountabilityEntries', numericQuery(req));
+    const purpose = 'accountability:' + JSON.stringify([taskId ?? null, goalId ?? null]);
+    const after = cursor ? cursors.open(scope, purpose, cursor) : ['', 0];
+    if (!Array.isArray(after) || typeof after[0] !== 'string' || typeof after[1] !== 'number') throw invalid('Invalid accountability cursor');
+    const { items, next, version } = await gateway.ledger(scope, { taskId: after[0], sequence: after[1] }, limit, taskId, goalId);
+    await success(req, res, 200, { items, ...(next && { nextCursor: cursors.seal(scope, purpose, [next.taskId, next.sequence]) }) }, version);
+  });
+
   router.use(() => { throw new DaoError(404, 'NOT_FOUND', 'DAO operation is not available at this milestone'); });
   const errors: ErrorRequestHandler = async (error: unknown, req, res, next) => {
     if (res.headersSent) { next(error); return; }
@@ -203,7 +256,7 @@ export function createDaoRouter(options: DaoRouterOptions) {
     res.status(issue.status).json(payload);
   };
   router.use(errors);
-  return { router, store, runtime, close: async () => { await memoryWorker.close(); await store.close(); } };
+  return { router, store, runtime, tasks, close: async () => { await tasks.close(); await memoryWorker.close(); await store.close(); } };
 }
 
 export function daoMount(env: NodeJS.ProcessEnv) {

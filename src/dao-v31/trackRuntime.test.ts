@@ -75,17 +75,20 @@ describe('M2a runtime, replay and track acceptance', () => {
       try {
         // The fixture contains only M1 domain writes. Remove M2a schema objects to reopen it as v1.
         disk.exec(`
+          DROP TABLE sandbox_task_receipts;
+          DROP TABLE task_transitions;
+          DROP TABLE task_controls;
           DROP TABLE appraisal_circuit;
           DROP TABLE appraisal_jobs;
           DROP TABLE track_metrics;
           DROP TABLE memory_terms;
           ALTER TABLE scopes DROP COLUMN memory_version;
-          DELETE FROM schema_migrations WHERE version = 2;
+          DELETE FROM schema_migrations WHERE version IN (2, 3);
         `);
       } finally { disk.close(); }
       const reopened = createDaoRouter({ secret, ownerId: scope.ownerId, directory: fixture.temp.directory, now: fixture.now });
       try {
-        expect((await reopened.store.health('prod')).schemaVersion).toBe(2);
+        expect((await reopened.store.health('prod')).schemaVersion).toBe(3);
         expect(await new StateCoordinator(reopened.store).replay(scope)).toEqual(old);
         const result = await reopened.runtime.retrieval.quick(scope, { text: '', tags: ['PRIOR'] }, 1000);
         expect(result.hits[0]?.entity.ref.entityId).toBe('m1-memory');

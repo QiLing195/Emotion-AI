@@ -1,10 +1,10 @@
-import { mkdirSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from 'node:sqlite';
 import { DAO_PROJECTION_VERSION } from '../contracts/dao-v31/index.ts';
 import type {
   AgentAccountabilityLedger, CommitRecord, DaoEnv, DaoOperationId, DaoScope, DataConsent,
-  IdempotencyResult, ProjectionCheckpoint, ProvenanceRecord, SystemEvent, TaskRecord,
+  IdempotencyResult, ProjectionCheckpoint, ProvenanceRecord, SystemEvent, TaskRecord, TaskStatus,
 } from '../contracts/dao-v31/index.ts';
 import type {
   ConsentedEntity, DataLayer, HistoryEntry, M1PersistencePort, M1ReadTransaction,
@@ -16,6 +16,8 @@ import { openDatabase, scopeColumns, SQLITE_SCHEMA_VERSION } from './sqliteSchem
 import { grantKey } from './m1Types.ts';
 import { memoryTerms } from './trackTypes.ts';
 import type { AppraisalJob, CircuitState, MemoryCandidate, MemoryQuery, TrackMetrics } from './trackTypes.ts';
+import type { TaskControl, TaskReceipt, TaskTransition } from './taskTypes.ts';
+import { matchesReceipt, TASK_ACCEPTOR, TASK_REVIEWER } from './taskPolicy.ts';
 
 const filter = 'owner_id = ? AND env = ? AND character_id = ? AND session_id = ?';
 const scopeValues = (scope: DaoScope) => [scope.ownerId, scope.env, scope.characterId, scope.sessionId] as const;
@@ -320,6 +322,23 @@ class ScopedTransaction implements M1WriteTransaction {
 
   async saveTask(task: TaskRecord) {
     this.#verify(task.contract.scope);
+    if (task.status === 'COMPLETED') {
+      const receipt = this.taskReceipt(task.contract.execution.idempotencyKey);
+      const control = this.taskControl(task.contract.taskId);
+      const ledger = await this.getAccountabilityEntries(task.contract.taskId);
+      const reviews = ledger.filter((entry) => entry.reviewedBy === TASK_REVIEWER
+        && entry.executedBy === receipt?.executedBy && entry.consentVersion === task.contract.consentVersion
+        && entry.reviewedBy !== entry.executedBy && receipt && entry.evidenceRefs.includes(receipt.evidenceId));
+      const accepted = reviews.find((entry) => entry.phase === 'accepted' && entry.acceptedBy === TASK_ACCEPTOR
+        && entry.acceptedBy !== entry.executedBy && entry.acceptedBy !== entry.reviewedBy);
+      if (!receipt || !control || !matchesReceipt(receipt, task.contract, control.requestHash)
+        || !reviews.some((entry) => entry.phase === 'reviewed' && entry.sequence < (accepted?.sequence ?? 0))
+        || task.evidenceRefs.length !== 1 || task.evidenceRefs[0] !== receipt.evidenceId
+        || JSON.stringify(task.result) !== JSON.stringify(receipt.output)
+        || await this.getConsentVersion() !== task.contract.consentVersion) {
+        throw conflict('Task completion requires current independent acceptance evidence');
+      }
+    }
     this.#run(`INSERT INTO task_records (${scopeColumns}, task_id, body) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT (${scopeColumns}, task_id) DO UPDATE SET body = excluded.body`,
     task.contract.taskId, JSON.stringify(task));
@@ -333,6 +352,54 @@ class ScopedTransaction implements M1WriteTransaction {
     this.#verify(entry.scope);
     this.#run(`INSERT INTO accountability (${scopeColumns}, entry_id, task_id, sequence, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       entry.entryId, entry.taskId, entry.sequence, JSON.stringify(entry));
+  }
+
+  taskControl(taskId: string) {
+    return this.#oneBody<TaskControl>(`SELECT body FROM task_controls WHERE ${filter} AND task_id = ?`, taskId);
+  }
+
+  taskControlsDue(now: number, limit: number) {
+    return this.#bodies<TaskControl>(`SELECT body FROM task_controls WHERE ${filter} AND due_at <= ?
+      ORDER BY due_at, task_id LIMIT ?`, now, limit);
+  }
+
+  taskRecords(after: string, limit: number, status?: TaskStatus, goalId?: string) {
+    return this.#bodies<TaskRecord>(`SELECT task_records.body FROM task_records JOIN task_controls USING (${scopeColumns}, task_id)
+      WHERE ${filter} AND task_id > ? AND (? IS NULL OR goal_id = ?)
+        AND (? IS NULL OR json_extract(task_records.body, '$.status') = ?) ORDER BY task_id LIMIT ?`,
+    after, goalId ?? null, goalId ?? null, status ?? null, status ?? null, limit);
+  }
+
+  ledgerPage(after: { taskId: string; sequence: number }, limit: number, taskId?: string, goalId?: string) {
+    return this.#bodies<AgentAccountabilityLedger>(`SELECT accountability.body FROM accountability JOIN task_controls USING (${scopeColumns}, task_id)
+      WHERE ${filter} AND (task_id, sequence) > (?, ?) AND (? IS NULL OR task_id = ?) AND (? IS NULL OR goal_id = ?)
+      ORDER BY task_id, sequence LIMIT ?`, after.taskId, after.sequence, taskId ?? null, taskId ?? null, goalId ?? null, goalId ?? null, limit);
+  }
+
+  saveTaskControl(control: TaskControl) {
+    this.#run(`INSERT INTO task_controls (${scopeColumns}, task_id, goal_id, due_at, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (${scopeColumns}, task_id) DO UPDATE SET due_at=excluded.due_at, body=excluded.body`,
+    control.taskId, control.goalId, control.dueAt, JSON.stringify(control));
+  }
+
+  appendTaskTransition(task: TaskRecord, reason: string) {
+    this.#verify(task.contract.scope);
+    return Number(this.#run(`INSERT INTO task_transitions (${scopeColumns}, task_id, body, reason) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      task.contract.taskId, JSON.stringify(task), reason).lastInsertRowid);
+  }
+
+  taskTransition(sequence: number): TaskTransition | null {
+    const row = this.#one(`SELECT body, reason FROM task_transitions WHERE ${filter} AND sequence = ?`, sequence);
+    return row ? { sequence, task: parse<TaskRecord>(row.body), reason: String(row.reason) } : null;
+  }
+
+  taskReceipt(executionKey: string) {
+    return this.#oneBody<TaskReceipt>(`SELECT body FROM sandbox_task_receipts WHERE ${filter} AND execution_key = ?`, executionKey);
+  }
+
+  insertTaskReceipt(receipt: TaskReceipt) {
+    this.#run(`INSERT INTO sandbox_task_receipts (${scopeColumns}, execution_key, task_id, body) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      receipt.executionKey, receipt.taskId, JSON.stringify(receipt));
   }
 
   enqueue(notification: RuntimeNotification) {
@@ -466,6 +533,17 @@ export class SqliteDaoStore implements M1PersistencePort {
       }
       return { journalMode: 'wal' as const, foreignKeys: true as const, busyTimeoutMs, schemaVersion, fts5 };
     });
+  }
+
+  dueTaskScopes(env: DaoEnv, now: number, limit: number) {
+    const path = this.#path(env);
+    if (!existsSync(path)) return Promise.resolve([]);
+    return serial(path, () => this.#connection(env).prepare(`
+      SELECT ${scopeColumns} FROM task_controls WHERE due_at <= ?
+      GROUP BY ${scopeColumns} ORDER BY MIN(due_at), ${scopeColumns} LIMIT ?
+    `).all(now, limit).map((row): DaoScope => ({
+      ownerId: String(row.owner_id), env, characterId: String(row.character_id), sessionId: String(row.session_id),
+    })));
   }
 
   async close() {
