@@ -3,6 +3,7 @@ import { projectionHash } from './determinism.ts';
 import { isIdentifier } from './sessionAuth.ts';
 import { invalid, conflict } from './errors.ts';
 import type { WriteKind } from '../contracts/dao-v31/index.ts';
+import { initialEmotion, projectEmotion, validateEmotionCommand } from './emotionModel.ts';
 
 export const initialProjection: RuntimeProjection = {
   sequence: 0, stateVersion: 0, counters: {}, derived: {}, slots: {},
@@ -17,6 +18,11 @@ const compatible: Record<WriteKind, ProjectionChange['kind']> = {
 };
 
 export function validateChange(kind: WriteKind, change: ProjectionChange) {
+  if (change.kind === 'emotion' || change.kind === 'settle') {
+    if (kind !== 'exclusive') throw invalid('Emotion and time changes require ordered exclusive writes');
+    validateEmotionCommand(change);
+    return;
+  }
   if (change.kind === 'mark' || change.kind === 'restore') {
     if (kind !== 'governed') throw invalid('Only governed commits can mark or restore a boundary');
     if (change.kind === 'restore' && (!Number.isSafeInteger(change.manualRecords) || change.manualRecords < 0)) {
@@ -41,7 +47,7 @@ export function validateChange(kind: WriteKind, change: ProjectionChange) {
 
 /** Projection depends only on the previous state, the persisted change, and sequence. */
 export function project(previous: RuntimeProjection, change: ProjectionChange, sequence: number): RuntimeRecord {
-  let { counters, derived, slots } = previous;
+  let { counters, derived, slots, emotion } = previous;
   switch (change.kind) {
     case 'increment': {
       const next = count(counters, change.key) + change.amount;
@@ -77,7 +83,11 @@ export function project(previous: RuntimeProjection, change: ProjectionChange, s
       break;
     case 'mark':
       break;
+    case 'emotion':
+    case 'settle':
+      emotion = projectEmotion(emotion ?? initialEmotion, change);
+      break;
   }
-  const state = { sequence, stateVersion: previous.stateVersion + 1, counters, derived, slots };
+  const state = { sequence, stateVersion: previous.stateVersion + 1, counters, derived, slots, ...(emotion && { emotion }) };
   return { state, hash: projectionHash(state) };
 }

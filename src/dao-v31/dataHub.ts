@@ -106,6 +106,29 @@ export class PersonalDataHub {
     return { entities, proofIds: new Set(proofs.filter((proof) => entities.has(proof.entity.entityId)).map((proof) => proof.recordId)) };
   }
 
+  async authorizedEvidence(tx: M1ReadTransaction, references: readonly EntityRef[], use?: ConsentDimension) {
+    const view = await this.#consent.view(tx);
+    const now = this.#now();
+    const available = new Map<string, boolean>();
+    async function permits(ref: EntityRef): Promise<boolean> {
+      const key = ref.kind + ':' + ref.entityId;
+      if (available.has(key)) return available.get(key)!;
+      available.set(key, false);
+      const item = tx.entity(ref.entityId);
+      if (!item || item.ref.kind !== ref.kind || !readRequirements(view, item, now)) return false;
+      for (const proof of await tx.getProvenance(ref.entityId)) {
+        for (const parent of proof.upstream) if (!await permits(parent)) return false;
+      }
+      available.set(key, true);
+      return true;
+    }
+    const visible = new Set<string>();
+    for (const ref of references) {
+      if (await permits(ref) && (!use || view.resolve(tx.entity(ref.entityId)!.use, use))) visible.add(ref.entityId);
+    }
+    return visible;
+  }
+
   ingest(scope: DaoScope, input: ManualRecord, key?: IdempotencyKey) {
     return this.#store.write(scope, async (tx) => {
       const use = dataUse({ ...input, collectionMode: 'manual', dataScope: [input.type] });

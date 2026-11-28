@@ -3,6 +3,8 @@ import type { DaoResponseData, DaoScope } from '../contracts/dao-v31/index.ts';
 import type { M1PersistencePort } from './m1Types.ts';
 import { initialRuntime } from './projection.ts';
 import { eventView, PersonalDataHub } from './dataHub.ts';
+import { initialEmotion } from './emotionModel.ts';
+import { emptyTrack, tracks } from './trackTypes.ts';
 
 export class DaoViews {
   readonly #store: M1PersistencePort;
@@ -16,17 +18,22 @@ export class DaoViews {
   snapshot(scope: DaoScope) {
     return this.#store.read(scope, async (tx) => {
       const { state, hash } = tx.runtime() ?? initialRuntime;
+      const emotion = state.emotion ?? initialEmotion;
+      const metrics = new Map(tx.trackMetrics().map((metric) => [metric.track, metric]));
+      const latest = emotion.provenance;
+      const evidence = latest ? (await this.#hub.visible(tx)).entities : new Set<string>();
       const data: DaoResponseData<'getStateSnapshot'> = {
         scope, sequence: state.sequence, stateVersion: state.stateVersion, stateHash: hash,
         userProfile: { version: 0, items: [] },
         characterPersonality: { version: 0, constitutionId: 'baseline', traits: {}, interactionObservationIds: [] },
         relationshipState: { version: 0, affinity: 0, trust: 0 },
-        characterEmotion: { version: 0, valence: 0, arousal: 0, A: 0, B: 0, layers: {} },
-        regulationState: { regulation: 0, recoveryRate: 0, resilience: 0, stressLoad: 0, adaptation: 0 },
-        emotionProvenance: null,
-        trackMetrics: (['A', 'B1', 'B2', 'C', 'D'] as const).map((track) => ({
-          track, pending: 0, completed: 0, failures: 0, degraded: false,
-        })),
+        characterEmotion: {
+          version: emotion.version, valence: emotion.valence, arousal: emotion.arousal, A: emotion.yi.A, B: emotion.yi.B,
+          layers: { ...emotion.basic, ...emotion.cognitive, ...emotion.relationship },
+        },
+        regulationState: emotion.yi.regulation,
+        emotionProvenance: latest && latest.evidenceIds.every((id) => evidence.has(id)) ? latest : null,
+        trackMetrics: tracks.map((track) => metrics.get(track) ?? emptyTrack(track)),
       };
       return { data, version: await tx.getConsentVersion() };
     });
@@ -57,10 +64,16 @@ export class DaoViews {
       const outbox = tx.outbox(after, 64);
       if (!outbox.length) return { lastId: after, frames: [] };
       const { entities, proofIds } = await this.#hub.visible(tx);
-      const frames: { id: number; name: 'system_event' | 'commit_record' | 'consent_revoked'; data: unknown }[] = [];
+      const frames: { id: number; name: 'system_event' | 'commit_record' | 'consent_revoked' | 'track_update'; data: unknown }[] = [];
       for (const { id, notification } of outbox) {
         if (notification.event === 'consent_revoked') {
           frames.push({ id, name: notification.event, data: notification.data });
+          continue;
+        }
+        if (notification.event === 'track_update') {
+          const reference = notification.data.eventId;
+          const event = reference && await tx.getEvent(reference);
+          if (!reference || (event && eventView(event, entities, proofIds))) frames.push({ id, name: notification.event, data: notification.data });
           continue;
         }
         const event = await tx.getEvent(notification.eventId);

@@ -11,6 +11,7 @@ import { isIdentifier } from './sessionAuth.ts';
 export interface StateProposal {
   readonly eventId: string;
   readonly eventType: string;
+  readonly turnId?: string;
   readonly source: string;
   readonly occurredAt: string;
   readonly baseVersion: number;
@@ -45,12 +46,18 @@ export function replayEntry(current: ReturnType<typeof project>, entry: HistoryE
     || commit.projectionVersion !== DAO_PROJECTION_VERSION || commit.outcome !== 'COMMITTED'
     || commit.consentVersion !== event.consentVersion) throw conflict('Event log sequence or commit integrity mismatch');
   const change = (event.payload as JsonObject).change as unknown as ProjectionChange;
+  checkRuntimeEvent(change, event.eventId, event.scope.env);
   validateChange(commit.writeKind, change);
   const next = project(current.state, change, event.sequence);
   if (next.hash !== commit.stateHash || next.state.stateVersion !== commit.stateVersion) {
     throw conflict('Replayed state does not match the committed projection');
   }
   return next;
+}
+
+function checkRuntimeEvent(change: ProjectionChange, eventId: string, env: DaoScope['env']) {
+  if ((change.kind === 'emotion' || change.kind === 'settle') && change.eventId !== eventId
+      || change.kind === 'settle' && change.env !== env) throw invalid('Runtime command does not match its event scope');
 }
 
 export class StateCoordinator {
@@ -70,10 +77,12 @@ export class StateCoordinator {
     const { eventId, eventType, source, occurredAt, baseVersion, consentVersion, writeKind, change, parentEventId } = proposal;
     if (![eventId, eventType, source].every(isIdentifier) || !Number.isSafeInteger(baseVersion) || baseVersion < 0
         || !Number.isSafeInteger(consentVersion) || consentVersion < 0 || !Number.isFinite(Date.parse(occurredAt))
+        || (proposal.turnId !== undefined && !isIdentifier(proposal.turnId))
         || (proposal.deadlineMs !== undefined && !Number.isFinite(proposal.deadlineMs))) {
       throw invalid('Invalid event proposal');
     }
     validateChange(writeKind, change);
+    checkRuntimeEvent(change, eventId, tx.scope.env);
     if (await tx.getConsentVersion() !== consentVersion) throw staleConsent('pre_commit');
     const fingerprint = integrityHash(jsonValue(proposal));
     const prior = await tx.getCommit(eventId, DAO_PROJECTION_VERSION);
@@ -96,6 +105,7 @@ export class StateCoordinator {
     const event: SystemEvent = {
       eventId, eventType, scope: tx.scope, occurredAt, receivedAt: time, sequence,
       source: { module: source }, ...(parentEventId ? { parentEventId } : {}),
+      ...(proposal.turnId && { turnId: proposal.turnId }),
       schemaVersion: DAO_CONTRACT_VERSION, consentVersion, payload: { change },
       provenance: proposal.provenance ?? { evidenceIds: [], recordIds: [] },
     };

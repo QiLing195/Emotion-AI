@@ -1,8 +1,10 @@
 import type {
   CollectionMode, CommitRecord, ConsentDimension, DaoEnv, DaoPersistencePort, DaoReadTransaction,
-  DaoRequestBody, DaoResponseData, DaoScope, DaoWriteTransaction, DataCategory, EntityRef, JsonObject,
+  DaoRequestBody, DaoResponseData, DaoScope, DaoStreamFrames, DaoWriteTransaction, DataCategory, EntityRef, JsonObject,
   ProvenanceRecord, SensitivityLevel, SystemEvent,
 } from '../contracts/dao-v31/index.ts';
+import type { EmotionCommand, EmotionRuntimeState } from './emotionModel.ts';
+import type { AppraisalJob, CircuitState, MemoryQuery, MemoryCandidate, TrackMetrics } from './trackTypes.ts';
 
 export type GrantIdentity = Readonly<{
   sourceId: string;
@@ -26,7 +28,8 @@ export type ProjectionChange =
   | Readonly<{ kind: 'set'; key: string; value: number }>
   | Readonly<{ kind: 'remove'; keys: readonly string[]; decrement?: Readonly<{ key: string; amount: number }> }>
   | Readonly<{ kind: 'restore'; manualRecords: number }>
-  | Readonly<{ kind: 'mark' }>;
+  | Readonly<{ kind: 'mark' }>
+  | EmotionCommand;
 
 export interface RuntimeProjection {
   readonly sequence: number;
@@ -34,6 +37,7 @@ export interface RuntimeProjection {
   readonly counters: Readonly<Record<string, number>>;
   readonly derived: Readonly<Record<string, number>>;
   readonly slots: Readonly<Record<string, number>>;
+  readonly emotion?: EmotionRuntimeState;
 }
 export interface RuntimeRecord {
   readonly state: RuntimeProjection;
@@ -57,6 +61,7 @@ export type Tombstone = Readonly<{
 
 export type RuntimeNotification =
   | { readonly event: 'system_event' | 'commit_record'; readonly eventId: string }
+  | { readonly event: 'track_update'; readonly data: DaoStreamFrames['track_update']['data'] }
   | { readonly event: 'consent_revoked'; readonly data: {
     readonly category: DataCategory; readonly sensitivity: SensitivityLevel;
     readonly sourceId: string; readonly consentVersion: number;
@@ -92,6 +97,12 @@ export interface M1ReadTransaction extends DaoReadTransaction {
   hasOutbox(id: number): boolean;
   latestOutbox(): number;
   searchMemory(terms: string, limit: number): readonly ConsentedEntity[];
+  memoryCandidates(query: MemoryQuery, limit: number): readonly MemoryCandidate[];
+  memoryIndexVersion(): number;
+  trackMetrics(): readonly TrackMetrics[];
+  getAppraisalJob(jobId: string): AppraisalJob | null;
+  appraisalJobs(): readonly AppraisalJob[];
+  appraisalCircuit(): CircuitState;
 }
 
 export interface M1WriteTransaction extends M1ReadTransaction, DaoWriteTransaction {
@@ -101,6 +112,9 @@ export interface M1WriteTransaction extends M1ReadTransaction, DaoWriteTransacti
   removeEntities(tombstones: readonly Tombstone[]): void;
   enqueue(notification: RuntimeNotification): void;
   keepBackup(sha256: string, stateVersion: number, createdAt: string): void;
+  setTrackMetrics(value: TrackMetrics): void;
+  setAppraisalJob(value: AppraisalJob): void;
+  setAppraisalCircuit(value: CircuitState): void;
 }
 
 export interface M1PersistencePort extends DaoPersistencePort {

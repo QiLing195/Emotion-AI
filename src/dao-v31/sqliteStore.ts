@@ -14,6 +14,8 @@ import { conflict, DaoError } from './errors.ts';
 import { sameScope } from './sessionAuth.ts';
 import { openDatabase, scopeColumns, SQLITE_SCHEMA_VERSION } from './sqliteSchema.ts';
 import { grantKey } from './m1Types.ts';
+import { memoryTerms } from './trackTypes.ts';
+import type { AppraisalJob, CircuitState, MemoryCandidate, MemoryQuery, TrackMetrics } from './trackTypes.ts';
 
 const filter = 'owner_id = ? AND env = ? AND character_id = ? AND session_id = ?';
 const scopeValues = (scope: DaoScope) => [scope.ownerId, scope.env, scope.characterId, scope.sessionId] as const;
@@ -175,9 +177,16 @@ class ScopedTransaction implements M1WriteTransaction {
     if (this.tombstone(entity.ref.entityId)) throw conflict('Entity was permanently deleted');
     this.#run(`INSERT INTO entities (${scopeColumns}, entity_id, layer, sequence, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       entity.ref.entityId, entity.layer, entity.sequence, JSON.stringify(entity));
-    if (entity.layer === 'memory' && typeof entity.body.summary === 'string') {
-      this.#writeStatement('INSERT INTO memory_search (scope_id, entity_id, content) VALUES (?, ?, ?)')
-        .run(JSON.stringify(this.#keys), entity.ref.entityId, entity.body.summary);
+    if (entity.layer === 'memory') {
+      if (typeof entity.body.summary === 'string') {
+        this.#writeStatement('INSERT INTO memory_search (scope_id, entity_id, content) VALUES (?, ?, ?)')
+          .run(JSON.stringify(this.#keys), entity.ref.entityId, entity.body.summary);
+      }
+      for (const { kind, term } of memoryTerms(entity.body)) {
+        this.#run(`INSERT INTO memory_terms (${scopeColumns}, kind, term, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          kind, term, entity.ref.entityId);
+      }
+      this.#incrementMemoryVersion();
     }
   }
 
@@ -190,6 +199,61 @@ class ScopedTransaction implements M1WriteTransaction {
         const found = this.entity(String(row.entity_id));
         return found ? [found] : [];
       });
+  }
+
+  memoryIndexVersion() {
+    return Number(this.#one(`SELECT memory_version FROM scopes WHERE ${filter}`)?.memory_version ?? 0);
+  }
+
+  #incrementMemoryVersion() {
+    this.#run(`UPDATE scopes SET memory_version = memory_version + 1 WHERE ${filter}`);
+  }
+
+  memoryCandidates(query: MemoryQuery, limit: number): readonly MemoryCandidate[] {
+    type Hit = { textRank: number | null; metadataMatches: number };
+    const hits = new Map<string, Hit>();
+    const words = query.text.split(/\s+/u).filter(Boolean).slice(0, 8);
+    const terms = words.filter((term) => [...term].length >= 3);
+    const phrase = terms.map((term) => '"' + term.replaceAll('"', '""') + '"').join(' OR ');
+    if (phrase) {
+      const rows = this.#statement(`SELECT entity_id, bm25(memory_search) AS rank FROM memory_search
+        WHERE scope_id = ? AND memory_search MATCH ? ORDER BY rank, entity_id LIMIT ?`).all(JSON.stringify(this.#keys), phrase, limit);
+      for (const row of rows) hits.set(String(row.entity_id), { textRank: Number(row.rank), metadataMatches: 0 });
+    }
+    // Trigram FTS cannot match one- or two-character queries (e.g. “睡眠”).
+    const short = words.filter((term) => [...term].length < 3);
+    if (short.length) {
+      const predicates = short.map(() => 'instr(lower(content), ?) > 0').join(' OR ');
+      const rows = this.#statement(`SELECT entity_id FROM memory_search WHERE scope_id = ? AND (${predicates})
+        ORDER BY rowid DESC LIMIT ?`).all(JSON.stringify(this.#keys), ...short, limit);
+      for (const row of rows) {
+        const id = String(row.entity_id);
+        if (!hits.has(id)) hits.set(id, { textRank: 0, metadataMatches: 0 });
+      }
+    }
+    const tags = query.tags ?? [];
+    const entities = query.entities ?? [];
+    const placeholder = (values: readonly string[]) => values.map(() => '?').join(',') || 'NULL';
+    if (tags.length || entities.length) {
+      const rows = this.#rows(`SELECT entity_id, COUNT(*) AS count FROM memory_terms WHERE ${filter}
+        AND ((kind = 'tag' AND term IN (${placeholder(tags)})) OR (kind = 'entity' AND term IN (${placeholder(entities)})))
+        GROUP BY entity_id ORDER BY count DESC, entity_id LIMIT ?`, ...tags, ...entities, limit);
+      for (const row of rows) {
+        const id = String(row.entity_id);
+        hits.set(id, { textRank: hits.get(id)?.textRank ?? null, metadataMatches: Number(row.count) });
+      }
+    }
+    const unevaluated = [...hits].filter(([, hit]) => hit.textRank === null).map(([id]) => id);
+    if (phrase && unevaluated.length) {
+      const rows = this.#statement(`SELECT entity_id, bm25(memory_search) AS rank FROM memory_search
+        WHERE scope_id = ? AND memory_search MATCH ? AND entity_id IN (${placeholder(unevaluated)})`)
+        .all(JSON.stringify(this.#keys), phrase, ...unevaluated);
+      for (const row of rows) hits.get(String(row.entity_id))!.textRank = Number(row.rank);
+    }
+    return Array.from(hits).flatMap(([id, hit]) => {
+      const entity = this.entity(id);
+      return entity ? [{ entity, ...hit }] : [];
+    });
   }
 
   descendants(entityId: string) {
@@ -215,10 +279,12 @@ class ScopedTransaction implements M1WriteTransaction {
   removeEntities(tombstones: readonly Tombstone[]) {
     for (const marker of tombstones) {
       const id = marker.ref.entityId;
+      const wasMemory = this.entity(id)?.layer === 'memory';
       this.#run(`INSERT INTO tombstones (${scopeColumns}, entity_id, body) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (${scopeColumns}, entity_id) DO NOTHING`, id, JSON.stringify(marker));
       this.#writeStatement('DELETE FROM memory_search WHERE scope_id = ? AND entity_id = ?').run(JSON.stringify(this.#keys), id);
       this.#run(`DELETE FROM entities WHERE ${filter} AND entity_id = ?`, id);
+      if (wasMemory) this.#incrementMemoryVersion();
     }
   }
 
@@ -299,6 +365,38 @@ class ScopedTransaction implements M1WriteTransaction {
   keepBackup(sha256: string, stateVersion: number, createdAt: string) {
     this.#run(`INSERT INTO backups (${scopeColumns}, sha256, state_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (${scopeColumns}, sha256) DO NOTHING`, sha256, stateVersion, createdAt);
+  }
+
+  trackMetrics() {
+    return this.#bodies<TrackMetrics>(`SELECT body FROM track_metrics WHERE ${filter} ORDER BY track`);
+  }
+
+  setTrackMetrics(value: TrackMetrics) {
+    this.#run(`INSERT INTO track_metrics (${scopeColumns}, track, body) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (${scopeColumns}, track) DO UPDATE SET body = excluded.body`, value.track, JSON.stringify(value));
+  }
+
+  getAppraisalJob(jobId: string) {
+    return this.#oneBody<AppraisalJob>(`SELECT body FROM appraisal_jobs WHERE ${filter} AND job_id = ?`, jobId);
+  }
+
+  appraisalJobs() {
+    return this.#bodies<AppraisalJob>(`SELECT body FROM appraisal_jobs WHERE ${filter} ORDER BY available_at, job_id`);
+  }
+
+  setAppraisalJob(value: AppraisalJob) {
+    this.#run(`INSERT INTO appraisal_jobs (${scopeColumns}, job_id, status, available_at, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (${scopeColumns}, job_id) DO UPDATE SET body=excluded.body, status=excluded.status, available_at=excluded.available_at`,
+      value.jobId, value.status, value.availableAt, JSON.stringify(value));
+  }
+
+  appraisalCircuit() {
+    return this.#oneBody<CircuitState>(`SELECT body FROM appraisal_circuit WHERE ${filter}`) ?? { failures: 0, opensUntil: 0 };
+  }
+
+  setAppraisalCircuit(value: CircuitState) {
+    this.#run(`INSERT INTO appraisal_circuit (${scopeColumns}, body) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (${scopeColumns}) DO UPDATE SET body=excluded.body`, JSON.stringify(value));
   }
 }
 

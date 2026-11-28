@@ -19,6 +19,8 @@ import { DaoCursors } from './cursors.ts';
 import { serveRuntimeStream } from './runtimeStream.ts';
 import { BackupService } from './backupService.ts';
 import { bodyFor, paramsFor, queryFor } from './validation.ts';
+import { createTrackRuntime } from './trackRuntime.ts';
+import { MemoryWorker } from './memoryWorker.ts';
 
 export interface DaoRouterOptions {
   readonly secret: string;
@@ -69,6 +71,8 @@ export function createDaoRouter(options: DaoRouterOptions) {
   const views = new DaoViews(store, hub);
   const cursors = new DaoCursors(options.secret);
   const backups = new BackupService(store, consent, coordinator, now);
+  const memoryWorker = new MemoryWorker(options.directory);
+  const runtime = createTrackRuntime(store, consent, hub, coordinator, { now }, memoryWorker.lookup);
   const contexts = new WeakMap<Request, RouteContext>();
 
   router.use((req, res, next) => {
@@ -199,7 +203,7 @@ export function createDaoRouter(options: DaoRouterOptions) {
     res.status(issue.status).json(payload);
   };
   router.use(errors);
-  return { router, store, close: () => store.close() };
+  return { router, store, runtime, close: async () => { await memoryWorker.close(); await store.close(); } };
 }
 
 export function daoMount(env: NodeJS.ProcessEnv) {

@@ -1,4 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
+import { memoryTerms } from './trackTypes.ts';
+import type { ConsentedEntity } from './m1Types.ts';
 
 export const scopeColumns = 'owner_id, env, character_id, session_id';
 const scopeDefinition = `
@@ -12,7 +14,7 @@ const scoped = (body: string) => `
   FOREIGN KEY (${scopeColumns}) REFERENCES scopes (${scopeColumns})
 `;
 
-export const SQLITE_SCHEMA_VERSION = 1;
+export const SQLITE_SCHEMA_VERSION = 2;
 export const BUSY_TIMEOUT = 5000;
 
 export function openDatabase(path: string): DatabaseSync {
@@ -110,6 +112,39 @@ export function openDatabase(path: string): DatabaseSync {
         INSERT INTO memory_search(memory_search, rank) VALUES ('secure-delete', 1);
         INSERT INTO schema_migrations VALUES (1);
       `);
+    }
+    if (version < 2) {
+      db.exec(`
+        ALTER TABLE scopes ADD COLUMN memory_version INTEGER NOT NULL DEFAULT 0;
+        CREATE TABLE memory_terms (${scoped(`
+          kind TEXT NOT NULL CHECK(kind IN ('tag', 'entity')),
+          term TEXT NOT NULL, entity_id TEXT NOT NULL,
+          PRIMARY KEY (${scopeColumns}, kind, term, entity_id),
+          FOREIGN KEY (${scopeColumns}, entity_id) REFERENCES entities (${scopeColumns}, entity_id) ON DELETE CASCADE
+        `)});
+        CREATE INDEX memory_terms_entity ON memory_terms (${scopeColumns}, entity_id);
+        CREATE TABLE track_metrics (${scoped(`
+          track TEXT NOT NULL, body TEXT NOT NULL,
+          PRIMARY KEY (${scopeColumns}, track)
+        `)});
+        CREATE TABLE appraisal_jobs (${scoped(`
+          job_id TEXT NOT NULL, status TEXT NOT NULL, available_at INTEGER NOT NULL, body TEXT NOT NULL,
+          PRIMARY KEY (${scopeColumns}, job_id)
+        `)});
+        CREATE INDEX appraisal_ready ON appraisal_jobs (${scopeColumns}, status, available_at);
+        CREATE TABLE appraisal_circuit (${scoped(`
+          body TEXT NOT NULL,
+          PRIMARY KEY (${scopeColumns})
+        `)});
+        INSERT INTO schema_migrations VALUES (2);
+      `);
+      const insert = db.prepare(`INSERT INTO memory_terms (${scopeColumns}, kind, term, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      for (const row of db.prepare(`SELECT ${scopeColumns}, entity_id, body FROM entities WHERE layer = 'memory'`).iterate()) {
+        const { body } = JSON.parse(String(row.body)) as ConsentedEntity;
+        for (const { kind, term } of memoryTerms(body)) {
+          insert.run(row.owner_id, row.env, row.character_id, row.session_id, kind, term, row.entity_id);
+        }
+      }
     }
     db.exec('COMMIT');
     return db;

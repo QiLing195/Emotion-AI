@@ -17,6 +17,7 @@ const record = {
 };
 
 async function withClient(work: (client: {
+  runtime: ReturnType<typeof createDaoRouter>['runtime'];
   call: (path: string, options?: RequestInit) => Promise<Response>;
   stream: (lastId?: string) => Promise<{ response: Response; next: () => Promise<string>; stop: () => Promise<void> }>;
 }) => Promise<void>, directory?: string, leaseSeconds = 60) {
@@ -37,7 +38,7 @@ async function withClient(work: (client: {
       ...opts, headers: { ...headers, ...opts.headers }, signal: AbortSignal.timeout(5000),
     });
     await work({
-      call,
+      call, runtime: dao.runtime,
       stream: async (lastId?: string) => {
         const response = await call('/stream', lastId ? { headers: { 'Last-Event-ID': lastId } } : undefined);
         if (!response.body) throw new Error('Missing stream body');
@@ -85,7 +86,7 @@ describe('M1 Android-compatible bearer and scoped HTTP API', () => {
     expect(valid.status).toBe(200);
     expect(await valid.json()).toMatchObject({
       ok: true, data: { env: 'prod', contractVersion: '3.1.0', sqlite: {
-        journalMode: 'wal', foreignKeys: true, busyTimeoutMs: 5000, fts5: true, schemaVersion: 1,
+        journalMode: 'wal', foreignKeys: true, busyTimeoutMs: 5000, fts5: true, schemaVersion: 2,
       } },
       meta: { consentVersion: 0, projectionVersion: '1.0.0' },
     });
@@ -203,5 +204,25 @@ describe('M1 Android-compatible bearer and scoped HTTP API', () => {
     expect(await reset.next()).toBe(': connected');
     expect(await reset.next()).toContain('event: stream_reset');
     await reset.stop();
+  }));
+
+  it('publishes M2a track updates through the existing SSE and snapshot contracts', async () => withClient(async ({ call, stream, runtime }) => {
+    const live = await stream();
+    try {
+      expect(await live.next()).toBe(': connected');
+      await runtime.affect.settle(scope, 'http-clock', 0);
+      let update = '';
+      for (let i = 0; i < 40; i++) {
+        const frame = await live.next();
+        if (frame.includes('event: track_update')) { update = frame; break; }
+      }
+      expect(update).toContain('"track":"D"');
+      expect(update).toContain('"status":"completed"');
+      const { data } = await (await call('/state/snapshot')).json();
+      expect(data.emotionProvenance.eventId).toBe('http-clock');
+      expect(data.trackMetrics.find((metric: { track: string }) => metric.track === 'D')).toMatchObject({ completed: 1 });
+    } finally {
+      await live.stop();
+    }
   }));
 });

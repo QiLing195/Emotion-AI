@@ -14,6 +14,8 @@ import { conflict, denied, invalid } from './errors.ts';
 import { idempotent } from './idempotency.ts';
 import type { IdempotencyKey } from './idempotency.ts';
 import { validateSchema } from './validation.ts';
+import { appraisalInput } from './appraisal.ts';
+import type { AppraisalInput } from './appraisal.ts';
 
 const BACKUP_VERSION = '1.0.0';
 const MAX_BACKUP_BYTES = 7 * 1024 * 1024;
@@ -95,7 +97,8 @@ function entityFrom(value: unknown): ConsentedEntity {
 }
 
 function changeShape(event: SystemEvent) {
-  const change = row(row(event.payload, ['change']).change, ['kind'], ['key', 'amount', 'inputs', 'value', 'keys', 'decrement', 'manualRecords']);
+  const change = row(row(event.payload, ['change']).change, ['kind'], ['key', 'amount', 'inputs', 'value', 'keys',
+    'decrement', 'manualRecords', 'eventId', 'appraisal', 'relationshipSignal', 'rules', 'env', 'clock']);
   switch (change.kind) {
     case 'increment': row(change, ['kind', 'key', 'amount']); break;
     case 'sum': row(change, ['kind', 'key', 'inputs']); if (!Array.isArray(change.inputs)) throw invalid('Invalid backup projection'); break;
@@ -107,6 +110,15 @@ function changeShape(event: SystemEvent) {
       break;
     case 'mark': row(change, ['kind']); break;
     case 'restore': row(change, ['kind', 'manualRecords']); break;
+    case 'emotion': {
+      row(change, ['kind', 'eventId', 'appraisal', 'relationshipSignal', 'rules']);
+      if (!exactEqual(change.appraisal, appraisalInput(change.appraisal as unknown as AppraisalInput))) throw invalid('Invalid backup appraisal fields');
+      break;
+    }
+    case 'settle':
+      row(change, ['kind', 'eventId', 'rules', 'env', 'clock']);
+      row(change.clock, ['settlementId', 'source', 'targetMs']);
+      break;
     default: throw invalid('Invalid backup projection');
   }
 }
@@ -253,6 +265,9 @@ export class BackupService {
           await this.#restoreData(tx, archive);
           restoredVersion = runtime.state.stateVersion;
         } else {
+          if (archive.history.some(({ event }) => event.eventType === 'TimeSettled' || event.eventType === 'RoleAppraisalApplied')) {
+            throw conflict('Emotion and clock history require a matching committed prefix');
+          }
           if (tx.entities().length || tx.tombstones().length
               || !history.every(({ event }) => event.eventType === 'ConsentUpdated' || event.eventType === 'ConsentRevoked')) {
             throw conflict('Backup would overwrite a different active history');
