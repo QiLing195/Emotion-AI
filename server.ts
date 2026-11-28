@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DAO_API_PREFIX, daoMount } from './src/dao-v31/router.ts';
 
 const DEEPSEEK_API_ENDPOINT = 'https://api.deepseek.com/chat/completions';
 const ALLOWED_DEEPSEEK_MODELS = new Set(['deepseek-chat', 'deepseek-reasoner']);
@@ -769,6 +770,7 @@ function handleUpstreamError(res: express.Response, error: unknown) {
 async function createApp() {
   const app = express();
   app.disable('x-powered-by');
+  app.use(DAO_API_PREFIX, daoMount(process.env));
   app.use(express.json({ limit: '64kb' }));
 
   app.get('/api/health', (_req, res) => {
