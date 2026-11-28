@@ -83,3 +83,18 @@ location = /api/dao/stream {
 Node 22 的 SQLite 权威存储通过 `DaoPersistencePort` 屏蔽具体驱动。数据库启用 WAL、外键和 5000 ms 忙等待，写事务采用 `BEGIN IMMEDIATE`。生产与实验使用分别持久化的 SQLite 文件，仓储操作再绑定完整作用域。事件、投影、业务记录和 Outbox 同事务提交，模型及工具处理在事务之外执行。
 
 M1 的备份限于调用者的完整作用域，包含事件与提交、可见数据与溯源、当前授权审计和删除墓碑。单份可移植备份最多 7 MiB。恢复前验证 SHA-256、事件重放哈希、作用域和当前授权，并保留已有删除栅栏。当前历史与备份前缀一致时可续接后续事件。仅初始化授权的全新作用域可以在重新授权后恢复数据，恢复作为新治理事件入账，源历史保留在备份文件中。恢复将历史授权记录作为审计资料，当前生效授权由服务端保留。
+
+## 协作与里程碑发布
+
+- Codex 维护 `server.ts`、`src/dao-v31/`、`src/contracts/dao-v31/` 和 `docs/`。前端维护 `src/components/dao/`、`src/services/dao*` 和 `src/App.tsx`。合并时使用 Codex 冻结的共享契约及配套 OpenAPI 和 JSON Schema。
+- 把授权备份放在仓库外，或写入已忽略的 `.dao-backups/`。保存单个备份时使用 `dao-backup-<日期>.json`。环境变量模板 `.env.example` 只填写变量名及非敏感示例，实际 `DAO_SESSION_SECRET` 通过本地环境或主机密钥配置注入。
+- 推送前核对待提交路径，检查受忽略规则覆盖的文件是否已被 Git 跟踪，再检查暂存内容是否含实际密钥。Git 已跟踪的文件会绕过忽略规则，发现本地数据库、测试库、备份或密钥时应先从待发布内容移除。
+
+```sh
+git check-ignore --no-index -- .env .env.production local.sqlite local.sqlite-wal test.db test.db-shm .dao-backups/export.json dao-backup-example.json
+git ls-files -ci --exclude-standard
+git diff --cached --name-only
+git grep --cached -l -E 'DAO_SESSION_SECRET[[:space:]]*=[[:space:]]*[[:xdigit:]]{64}|DEEPSEEK_API_KEY[[:space:]]*=[[:space:]]*sk-' -- .
+```
+
+每个里程碑先跑本阶段验收门禁、`npm test` 和 `npm run lint`。通过后提交代码与验收报告，同步到 GitHub，再用 `v3.1-m1`、`v3.1-m2a` 等标签标记已核验的提交。发布后核对远端标签指向。需要复现旧版本时，从对应标签建立本地分支。

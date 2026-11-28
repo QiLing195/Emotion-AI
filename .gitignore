@@ -6,10 +6,26 @@ dist/
 
 # Environment variables
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+.envrc
+
+# Local databases, SQLite sidecars and snapshots
+.dao-data/
+*.sqlite*
+*.db
+*.db-*
+*-wal
+*-shm
+
+# Local backup exports
+.dao-backups/
+backups/
+backup*.json
+*-backup*.json
+*.backup.json
+*.bak.json
 
 # Logs and OS files
 *.log
 .DS_Store
-Thumbs.db

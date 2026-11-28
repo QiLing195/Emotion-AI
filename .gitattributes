@@ -1,0 +1,3 @@
+# Generated DAO contracts are checked byte-for-byte.
+docs/dao-v31/openapi.json text eol=lf
+docs/dao-v31/schemas.json text eol=lf
